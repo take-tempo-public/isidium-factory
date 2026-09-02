@@ -1,0 +1,2714 @@
+[
+ {
+  "name": "crlf-vs-lf",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\r\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\r\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "key-order",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "priority": "P1",
+    "effort": "default",
+    "shape": "bdd",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "source": "suggestion",
+    "status": "ratified",
+    "kind": "story",
+    "id": 42,
+    "schema": 1
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "comment",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "slug-rename",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "tending-edit",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P0",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "summary": "a tending edit"
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "updates-append",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "history-append",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "nfc-vs-nfd-value",
+  "expect": "equal",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "café check refuses",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "café check refuses",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "nfc-vs-nfd-key",
+  "expect": "equal",
+  "gated_x": [
+   "é"
+  ],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "x": {
+     "é": 1
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "x": {
+     "é": 1
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "one-scenario-char",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptancE"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "one-depends-on-element",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "depends_on": [
+     7
+    ]
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "depends_on": [
+     8
+    ]
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "one-scope-word",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), not a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "one-gated-x-value",
+  "expect": "differ",
+  "gated_x": [
+   "tier"
+  ],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "x": {
+     "tier": "gold"
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "x": {
+     "tier": "silver"
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "empty-vs-absent-array",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "depends_on": []
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "rules-edit",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning!"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "questions-entry",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "questions": [
+     {
+      "id": "Q1",
+      "text": "which runner?"
+     }
+    ]
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "effort-explicit-vs-absent",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ },
+ {
+  "name": "scope-mark-owner-vs-absent",
+  "expect": "differ",
+  "gated_x": [],
+  "a": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    }
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  },
+  "b": {
+   "head": {
+    "schema": 1,
+    "id": 42,
+    "kind": "story",
+    "status": "ratified",
+    "source": "suggestion",
+    "title": "cards check refuses a ratified card with no acceptance block",
+    "shape": "bdd",
+    "effort": "default",
+    "priority": "P1",
+    "surfaces": [
+     "client/cards/validator.py",
+     "client/tests/test_validator.py"
+    ],
+    "refs": [
+     "client/cards/validator.py::validate_profile",
+     "docs/dev/work/items/0060-cards-check-no-acceptance.md"
+    ],
+    "see": [
+     "legacy:sartor/0060",
+     "s12"
+    ],
+    "narrative": {
+     "feature": "cards check refuses a ratified card with no acceptance block"
+    },
+    "rules": [
+     {
+      "id": "R1",
+      "text": "A ratified story without a runnable-shaped scenario is a validation error, not a warning"
+     }
+    ],
+    "acceptance": {
+     "scenarios": [
+      {
+       "id": "S1",
+       "kind": "command",
+       "rule": "R1",
+       "title": "cards check refuses a ratified card with no acceptance block",
+       "context": {
+        "fixture": "client/tests/fixtures/no-acceptance"
+       },
+       "action": {
+        "run": [
+         "python",
+         "-m",
+         "cards",
+         "check"
+        ]
+       },
+       "observable": {
+        "exit_code": 1,
+        "stdout_matches": "S-3\\.story\\.acceptance"
+       },
+       "tests": [
+        "client/tests/test_validator.py::test_refuses_missing_acceptance"
+       ]
+      },
+      {
+       "id": "S2",
+       "kind": "test-marker",
+       "rule": "R1",
+       "title": "build hash is key-order independent",
+       "observable": {
+        "test": "client/tests/test_hasher.py::test_key_order_invariant"
+       }
+      }
+     ]
+    },
+    "scope_mark": "owner"
+   },
+   "scope": "`cards check` must treat a ratified story with no runnable-shaped\nscenario as an error (`S-3.story.acceptance`), never a warning. Legacy\ncontext: sartor item 0060 (see `refs`)."
+  }
+ }
+]

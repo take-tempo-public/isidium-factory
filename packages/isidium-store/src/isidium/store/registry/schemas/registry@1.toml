@@ -1,0 +1,257 @@
+name = "registry"
+version = 1
+form = "toml"
+footer = "none"
+
+[[scalars]]
+name = "name"
+type = "string"
+required_when = []
+pattern = "[a-z][a-z0-9-]*"
+
+[[scalars]]
+name = "version"
+type = "int"
+required_when = []
+range = { min = 1 }
+
+[[scalars]]
+name = "form"
+type = "string"
+required_when = []
+enum = ["markdown", "toml", "jsonl", "json"]
+
+[[scalars]]
+name = "footer"
+type = "string"
+default = { value = "none" }
+enum = ["none", "history"]
+
+[[tables]]
+name = "scalars"
+array-of-tables = true
+
+[[tables.keys]]
+name = "name"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "type"
+type = "string"
+required_when = []
+enum = ["string", "int", "bool", "date", "array", "table"]
+
+[[tables.keys]]
+name = "class"
+type = "string"
+enum = ["gated", "tending", "log", "claims", "meta"]
+
+[[tables.keys]]
+name = "required_when"
+type = "array"
+
+[[tables.keys]]
+name = "default"
+type = "table"
+
+[[tables.keys]]
+name = "enum"
+type = "array"
+
+[[tables.keys]]
+name = "pattern"
+type = "string"
+
+[[tables.keys]]
+name = "range"
+type = "table"
+
+[[tables.keys]]
+name = "subset-of"
+type = "table"
+
+[[tables.keys]]
+name = "dynamic-table"
+type = "table"
+
+[[tables.keys]]
+name = "immutable"
+type = "bool"
+
+[[tables.keys]]
+name = "reserved"
+type = "table"
+
+[[tables]]
+name = "tables"
+array-of-tables = true
+
+[[tables.keys]]
+name = "name"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "keys"
+type = "array"
+
+[[tables.keys]]
+name = "array-of-tables"
+type = "bool"
+
+[[tables.keys]]
+name = "dynamic-table"
+type = "table"
+
+[[tables.keys]]
+name = "default"
+type = "table"
+
+[[tables.keys]]
+name = "reserved"
+type = "table"
+
+[[tables]]
+name = "head"
+array-of-tables = true
+
+[[tables.keys]]
+name = "name"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "type"
+type = "string"
+required_when = []
+enum = ["string", "int", "bool", "date", "array", "table"]
+
+[[tables.keys]]
+name = "class"
+type = "string"
+enum = ["gated", "tending", "log", "claims", "meta"]
+
+[[tables.keys]]
+name = "required_when"
+type = "array"
+
+[[tables.keys]]
+name = "default"
+type = "table"
+
+[[tables.keys]]
+name = "enum"
+type = "array"
+
+[[tables.keys]]
+name = "pattern"
+type = "string"
+
+[[tables.keys]]
+name = "range"
+type = "table"
+
+[[tables.keys]]
+name = "subset-of"
+type = "table"
+
+[[tables.keys]]
+name = "dynamic-table"
+type = "table"
+
+[[tables.keys]]
+name = "immutable"
+type = "bool"
+
+[[tables.keys]]
+name = "reserved"
+type = "table"
+
+[[tables]]
+name = "sections"
+array-of-tables = true
+
+[[tables.keys]]
+name = "name"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "kind"
+type = "string"
+required_when = []
+enum = ["prose", "record"]
+
+[[tables.keys]]
+name = "max_bytes"
+type = "int"
+range = { min = 1 }
+
+[[tables.keys]]
+name = "headings_allowed"
+type = "bool"
+
+[[tables.keys]]
+name = "fence"
+type = "string"
+
+[[tables.keys]]
+name = "key"
+type = "string"
+
+[[tables]]
+name = "record"
+array-of-tables = true
+
+[[tables.keys]]
+name = "name"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "type"
+type = "string"
+required_when = []
+enum = ["string", "int", "bool", "date", "array", "table"]
+
+[[tables.keys]]
+name = "class"
+type = "string"
+enum = ["gated", "tending", "log", "claims", "meta"]
+
+[[tables.keys]]
+name = "required_when"
+type = "array"
+
+[[tables.keys]]
+name = "default"
+type = "table"
+
+[[tables.keys]]
+name = "enum"
+type = "array"
+
+[[tables.keys]]
+name = "pattern"
+type = "string"
+
+[[tables.keys]]
+name = "range"
+type = "table"
+
+[[tables.keys]]
+name = "subset-of"
+type = "table"
+
+[[tables.keys]]
+name = "dynamic-table"
+type = "table"
+
+[[tables.keys]]
+name = "immutable"
+type = "bool"
+
+[[tables.keys]]
+name = "reserved"
+type = "table"

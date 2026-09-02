@@ -1,0 +1,349 @@
+name = "config"
+version = 1
+form = "toml"
+footer = "history"
+
+[[scalars]]
+name = "schema"
+type = "int"
+required_when = []
+
+[[scalars]]
+name = "tenant"
+type = "string"
+required_when = []
+pattern = "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+immutable = true
+
+[[scalars]]
+name = "root"
+type = "string"
+default = { value = "docs/work/" }
+
+[[scalars]]
+name = "time_skew"
+type = "int"
+default = { value = 600 }
+range = { min = 30, max = 86400 }
+
+[[scalars]]
+name = "wip"
+type = "int"
+default = { value = 1 }
+range = { min = 1 }
+
+[[scalars]]
+name = "batch_boundary"
+type = "string"
+default = { value = "epic" }
+enum = ["epic", "milestone", "sprint", "on-demand"]
+
+[[scalars]]
+name = "window_reserve"
+type = "int"
+reserved = {  }
+
+[[tables]]
+name = "toolkit"
+
+[[tables.keys]]
+name = "client"
+type = "string"
+required_when = []
+pattern = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+
+[[tables.keys]]
+name = "registry"
+type = "string"
+required_when = []
+pattern = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+
+[[tables.keys]]
+name = "unidata"
+type = "string"
+required_when = []
+pattern = "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+[[tables.keys]]
+name = "object_id"
+type = "string"
+required_when = []
+enum = ["sha1", "sha256"]
+
+[[tables]]
+name = "ratification"
+
+[[tables.keys]]
+name = "mode"
+type = "string"
+default = { value = "signed" }
+enum = ["signed", "declared"]
+reserved = { values = ["declared"] }
+
+[[tables.keys]]
+name = "software_key_ack"
+type = "string"
+
+[[tables.keys]]
+name = "path"
+type = "string"
+default = { value = "main" }
+
+[[tables.keys]]
+name = "verdicts_required"
+type = "bool"
+default = { value = true }
+
+[[tables.keys]]
+name = "pin"
+type = "string"
+pattern = "^(ed25519|ecdsa-p256):[0-9a-f]+$"
+
+[[tables]]
+name = "signer"
+dynamic-table = { over = ["remote-totp", "tpm-hello", "yubikey", "signal-approve", "software_key_ack"], members = { remote-totp = [{ name = "poll_interval_ms", type = "int", default = { value = 2000 }, range = { min = 250, max = 60000 } }], tpm-hello = [], yubikey = [], signal-approve = [], software_key_ack = [] }, member-keys = [] }
+
+[[tables.keys]]
+name = "backends"
+type = "array"
+default = { value = ["remote-totp"] }
+range = { min = 1 }
+subset-of = { of = ["remote-totp", "tpm-hello", "yubikey", "signal-approve", "software_key_ack"] }
+
+[[tables]]
+name = "effort"
+
+[[tables.keys]]
+name = "tiers"
+type = "array"
+default = { value = ["default"] }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "budgets"
+type = "table"
+
+[[tables]]
+name = "ladder"
+
+[[tables.keys]]
+name = "levels"
+type = "array"
+default = { value = [] }
+
+[[tables]]
+name = "profiles"
+
+[[tables.keys]]
+name = "enabled"
+type = "array"
+default = { value = [] }
+subset-of = { of = ["sprint", "milestone"] }
+
+[[tables]]
+name = "shapes"
+dynamic-table = { key-grammar = "^[a-z][a-z0-9-]*$", declares = "shape", members = { ears = [{ name = "weak_words", type = "array", default = { value = ["should", "may", "might", "could", "quickly", "easily", "efficiently", "appropriate", "adequate", "sufficient"] } }], bdd = [], classic = [], task = [], spike = [] }, member-keys = [] }
+
+[[tables.keys]]
+name = "allowed"
+type = "array"
+default = { value = ["bdd", "task", "spike"] }
+subset-of = { ref = "shape-enum" }
+
+[[tables.keys]]
+name = "default"
+type = "string"
+default = { value = "bdd" }
+subset-of = { ref = "shapes.allowed" }
+
+[[tables]]
+name = "surfaces"
+
+[[tables.keys]]
+name = "deny"
+type = "array"
+default = { value = [".github/", ".gitlab/", ".gitlab-ci.yml", ".githooks/", ".git/", ".isidium/"] }
+
+[[tables]]
+name = "payload.context"
+
+[[tables.keys]]
+name = "depth"
+type = "int"
+default = { value = 2 }
+range = { min = 0, max = 8 }
+
+[[tables.keys]]
+name = "max_bytes"
+type = "int"
+default = { value = 16384 }
+range = { min = 1024, max = 1048576 }
+
+[[tables]]
+name = "runners"
+dynamic-table = { key-grammar = "^[a-z][a-z0-9-]*$", declares = "scenario-kind", value-type = "string" }
+
+[[tables.keys]]
+name = "test"
+type = "string"
+default = { value = "pytest" }
+
+[[tables.keys]]
+name = "command"
+type = "string"
+default = { value = "shell" }
+
+[[tables.keys]]
+name = "http"
+type = "string"
+default = { value = "http" }
+
+[[tables.keys]]
+name = "file"
+type = "string"
+default = { value = "file" }
+
+[[tables]]
+name = "board"
+
+[[tables.keys]]
+name = "commit"
+type = "bool"
+default = { value = true }
+
+[[tables]]
+name = "inbox"
+
+[[tables.keys]]
+name = "max_per_run"
+type = "int"
+default = { value = 10 }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "max_per_actor_per_day"
+type = "int"
+range = { min = 1 }
+
+[[tables]]
+name = "prioritization"
+
+[[tables.keys]]
+name = "time_criticality"
+type = "int"
+default = { value = 350 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "unblocking"
+type = "int"
+default = { value = 300 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "resume"
+type = "int"
+default = { value = 150 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "aging"
+type = "int"
+default = { value = 100 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "batch"
+type = "int"
+default = { value = 100 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "risk"
+type = "int"
+default = { value = 0 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "expedite_limit"
+type = "int"
+default = { value = 1 }
+range = { min = 0 }
+
+[[tables.keys]]
+name = "expedite_bump"
+type = "int"
+default = { value = 1 }
+range = { min = 0 }
+
+[[tables.keys]]
+name = "aging_horizon_days"
+type = "int"
+default = { value = 30 }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "job_size"
+type = "int"
+reserved = {  }
+
+[[tables]]
+name = "origin"
+
+[[tables.keys]]
+name = "card"
+type = "array"
+default = { value = ["session", "review", "planner", "suggestion", "digest"] }
+subset-of = { ref = "origin-enum" }
+
+[[tables.keys]]
+name = "inbox"
+type = "array"
+default = { value = ["run", "planner", "session", "review", "digest"] }
+subset-of = { ref = "origin-enum" }
+
+[[tables]]
+name = "extensions"
+dynamic-table = { key-grammar = "[a-zA-Z0-9_-]+", member-keys = [{ name = "type", type = "string", required_when = [], enum = ["string", "int", "bool", "date", "array", "table"] }, { name = "class", type = "string", required_when = [], enum = ["gated", "tending", "log"] }, { name = "required_when", type = "array" }, { name = "enum", type = "array" }] }
+keys = []
+
+[[tables]]
+name = "governed"
+default = { value = [{ path = "cards/*.md", schema = "card@1", write = ["owner", "contributor"] }, { path = "suggestions.jsonl", schema = "inbox@1", write = ["owner", "contributor", "lander"] }, { path = "state.json", schema = "sidecar@1", write = ["lander"] }, { path = "state/history.jsonl", schema = "sidecar-events@1", write = ["lander"] }, { path = "BOARD.md", schema = "board@1", write = ["lander"] }, { path = "config.toml", schema = "config@1", write = ["owner"] }] }
+array-of-tables = true
+
+[[tables.keys]]
+name = "path"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "schema"
+type = "string"
+required_when = []
+pattern = "^[a-z][a-z0-9-]*@[1-9][0-9]*$"
+
+[[tables.keys]]
+name = "write"
+type = "array"
+required_when = []
+range = { min = 1 }
+subset-of = { of = ["owner", "contributor", "lander"] }
+
+[[tables.keys]]
+name = "read"
+type = "array"
+subset-of = { of = ["owner", "contributor", "lander"] }
+
+[[tables]]
+name = "grants"
+reserved = {  }
+keys = []
+
+[[tables]]
+name = "history"
+
+[[tables.keys]]
+name = "entries"
+type = "array"
+required_when = []

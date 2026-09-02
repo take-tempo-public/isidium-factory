@@ -1,0 +1,244 @@
+name = "card"
+version = 1
+form = "markdown"
+footer = "history"
+
+# 03 §2.1 — the card head, one row per field: type, class (03 §1.7), and required_when as a typed membership table
+# (L2-5). The profile cells of 03 §3 and the shape layer rules of §1.11 are code keyed to these rows (registry/card.py).
+
+[[head]]
+name = "schema"
+type = "int"
+class = "meta"
+required_when = []
+
+[[head]]
+name = "id"
+type = "int"
+class = "meta"
+required_when = []
+range = { min = 1 }
+
+[[head]]
+name = "kind"
+type = "string"
+class = "meta"
+default = { value = "story" }
+enum = ["story", "epic", "sprint", "milestone"]
+
+[[head]]
+name = "status"
+type = "string"
+class = "meta"
+required_when = []
+enum = ["draft", "ratified", "closed", "withdrawn"]
+
+[[head]]
+name = "source"
+type = "string"
+class = "meta"
+required_when = []
+default = { value = "session" }
+subset-of = { ref = "origin.card" }
+
+[[head]]
+name = "scope_mark"
+type = "string"
+class = "gated"
+default = { value = "owner-ratified" }
+enum = ["owner", "owner-ratified"]
+
+[[head]]
+name = "title"
+type = "string"
+class = "gated"
+required_when = []
+
+[[head]]
+name = "shape"
+type = "string"
+class = "gated"
+required_when = [{ field = "status", in = ["ratified", "closed"] }, { field = "kind", in = ["story"] }]
+subset-of = { ref = "shapes.allowed" }
+
+[[head]]
+name = "narrative"
+type = "table"
+class = "gated"
+
+[[head]]
+name = "rules"
+type = "array"
+class = "gated"
+required_when = [{ field = "shape", in = ["ears"] }]
+
+[[head]]
+name = "questions"
+type = "array"
+class = "gated"
+
+[[head]]
+name = "answers"
+type = "array"
+class = "gated"
+
+[[head]]
+name = "parent"
+type = "int"
+class = "gated"
+range = { min = 1 }
+
+[[head]]
+name = "depends_on"
+type = "array"
+class = "gated"
+
+[[head]]
+name = "goal"
+type = "int"
+class = "gated"
+required_when = [{ field = "kind", in = ["sprint"] }]
+range = { min = 1 }
+
+[[head]]
+name = "effort"
+type = "string"
+class = "gated"
+subset-of = { ref = "effort.tiers" }
+
+[[head]]
+name = "source_narrative"
+type = "table"
+class = "gated"
+
+[[head]]
+name = "refs"
+type = "array"
+class = "gated"
+
+[[head]]
+name = "surfaces"
+type = "array"
+class = "gated"
+required_when = [{ field = "status", in = ["ratified", "closed"] }, { field = "kind", in = ["story"] }]
+
+[[head]]
+name = "acceptance"
+type = "table"
+class = "gated"
+required_when = [{ field = "status", in = ["ratified", "closed"] }, { field = "kind", in = ["story"] }]
+
+[[head]]
+name = "guidance"
+type = "table"
+class = "gated"
+
+[[head]]
+name = "closures"
+type = "array"
+class = "claims"
+required_when = [{ field = "status", in = ["closed"] }]
+
+[[head]]
+name = "reopens"
+type = "array"
+class = "claims"
+
+[[head]]
+name = "priority"
+type = "string"
+class = "tending"
+required_when = [{ field = "status", in = ["ratified", "closed"] }, { field = "kind", in = ["story"] }]
+enum = ["P0", "P1", "P2", "P3"]
+
+[[head]]
+name = "class_of_service"
+type = "string"
+class = "tending"
+default = { value = "standard" }
+enum = ["expedite", "fixed-date", "standard", "intangible"]
+
+[[head]]
+name = "due"
+type = "date"
+class = "tending"
+
+[[head]]
+name = "starts"
+type = "date"
+class = "tending"
+
+[[head]]
+name = "ends"
+type = "date"
+class = "tending"
+
+[[head]]
+name = "sprint"
+type = "int"
+class = "tending"
+range = { min = 1 }
+
+[[head]]
+name = "milestone"
+type = "int"
+class = "tending"
+range = { min = 1 }
+
+[[head]]
+name = "lane"
+type = "string"
+class = "tending"
+enum = ["hotfix"]
+
+[[head]]
+name = "hold"
+type = "table"
+class = "tending"
+
+[[head]]
+name = "summary"
+type = "string"
+class = "tending"
+range = { max = 120 }
+
+[[head]]
+name = "tags"
+type = "array"
+class = "tending"
+
+[[head]]
+name = "withdrawn_reason"
+type = "string"
+class = "tending"
+required_when = [{ field = "status", in = ["withdrawn"] }]
+
+[[head]]
+name = "see"
+type = "array"
+class = "log"
+
+[[head]]
+name = "renumbered_from"
+type = "int"
+class = "log"
+immutable = true
+
+[[head]]
+name = "x"
+type = "table"
+dynamic-table = { key-grammar = "[a-zA-Z0-9_-]+" }
+
+# 03 §2.2 — the body sections in their pinned order; the footer is `## History` (form-level, footer = "history").
+
+[[sections]]
+name = "Scope"
+kind = "prose"
+max_bytes = 1048576
+headings_allowed = true
+
+[[sections]]
+name = "Updates"
+kind = "prose"
+max_bytes = 1048576
+headings_allowed = true

@@ -1,0 +1,7 @@
+# Bytes as-is: the docs are CRLF by convention; the schema's governed paths are -text.
+* -text
+# The container's own files run in Linux and must be LF whatever the checkout does.
+deploy/entrypoint.sh text eol=lf
+deploy/Containerfile.store text eol=lf
+deploy/healthcheck.py text eol=lf
+deploy/compose.yaml text eol=lf

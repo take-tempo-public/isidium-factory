@@ -1,0 +1,46 @@
+schema = 1
+tenant = "lone-wolf"
+
+[toolkit]
+client = "0.4.2"
+registry = "0.4.2"
+unidata = "16.0.0"
+object_id = "sha1"
+
+[ratification]
+pin = "ed25519:5af3c5d6fc9dac8d"
+
+[[governed]]
+path = "cards/*.md"
+schema = "card@1"
+write = ["owner", "contributor"]
+
+[[governed]]
+path = "suggestions.jsonl"
+schema = "inbox@1"
+write = ["owner", "contributor", "lander"]
+
+[[governed]]
+path = "state.json"
+schema = "sidecar@1"
+write = ["lander"]
+
+[[governed]]
+path = "state/history.jsonl"
+schema = "sidecar-events@1"
+write = ["lander"]
+
+[[governed]]
+path = "BOARD.md"
+schema = "board@1"
+write = ["lander"]
+
+[[governed]]
+path = "config.toml"
+schema = "config@1"
+write = ["owner"]
+
+[history]
+entries = [
+  { seq = 1, at = "2026-08-26T09:00:07Z", by = "owner@lone-wolf.example", act = "created", fields = ["governed", "ratification", "schema", "tenant", "toolkit"], build = "sha256:f23352d7bc775b5ad2f0f15b083d845730f7023eb0cad70ae10c3f33d115559b", h = "sha256:c37e3131ff27ec8a51073508c663b9be8ef30020a3d6136d09347a70ecef34e9", sig = "ed25519:5af3c5d6fc9dac8d:0OL88I2BaUyrP8XCQPpdU7g4gcxo76uo7FR0bCgkWY4=" },
+]

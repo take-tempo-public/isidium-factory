@@ -1,0 +1,116 @@
+name = "inbox"
+version = 1
+form = "jsonl"
+
+# 03a / 03 §1.18 — `suggestions.jsonl`: one record per line, chained (genesis `schema:1\ninbox:<tenant>`), two record
+# types sharing the file. Per-type presence rules (intake vs disposition) are code (the record-slot `write`, 03b §3):
+# `required_when` only ranges over kind/status/shape (L2-5) — a declared limit of the nine-member vocabulary.
+
+[[record]]
+name = "type"
+type = "string"
+required_when = []
+enum = ["intake", "disposition"]
+
+[[record]]
+name = "seq"
+type = "int"
+required_when = []
+range = { min = 1 }
+
+[[record]]
+name = "at"
+type = "string"
+required_when = []
+pattern = "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"
+
+[[record]]
+name = "id"
+type = "string"
+required_when = []
+pattern = "[sd][1-9][0-9]*"
+
+[[record]]
+name = "by"
+type = "string"
+required_when = []
+
+[[record]]
+name = "for"
+type = "string"
+
+[[record]]
+name = "source"
+type = "string"
+subset-of = { ref = "origin.inbox" }
+
+[[record]]
+name = "kind"
+type = "string"
+enum = ["card", "guidance", "debt", "docs", "test", "risk", "question"]
+
+[[record]]
+name = "title"
+type = "string"
+range = { max = 120 }
+
+[[record]]
+name = "body"
+type = "string"
+range = { max = 2048 }
+
+[[record]]
+name = "refs"
+type = "array"
+
+[[record]]
+name = "surfaces_touched"
+type = "array"
+
+[[record]]
+name = "from"
+type = "table"
+
+[[record]]
+name = "proposed_for"
+type = "int"
+range = { min = 1 }
+
+[[record]]
+name = "on"
+type = "string"
+pattern = "s[1-9][0-9]*"
+
+[[record]]
+name = "outcome"
+type = "string"
+enum = ["accepted", "declined", "deferred"]
+
+[[record]]
+name = "as"
+type = "string"
+enum = ["card", "guidance", "note"]
+
+[[record]]
+name = "card"
+type = "int"
+range = { min = 1 }
+
+[[record]]
+name = "guidance_id"
+type = "string"
+
+[[record]]
+name = "reason"
+type = "string"
+range = { max = 500 }
+
+[[record]]
+name = "until"
+type = "string"
+
+[[record]]
+name = "h"
+type = "string"
+required_when = []
+pattern = "sha256:[0-9a-f]{64}"

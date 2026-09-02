@@ -1,0 +1,370 @@
+"""`isidium` — one command (7bf.3, ruled (b)): the store's verbs at the top level, because every tenant has the store
+and nothing else is guaranteed; every other isidium part is a group that dispatches to `isidium-<part>` on PATH (the
+`git-*` / `cargo-*` convention), so the umbrella never knows which language a part is written in.
+
+    isidium init | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
+    isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
+
+Output is JSON by default (agents and scripts read it); `--text` renders the human forms the design pins — the board,
+the queue, a card. A refusal prints its rule id and exits non-zero.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Annotated, Any
+
+import typer
+
+from ..core.refusal import Refusal
+from .config import ClientConfig
+from .transport import Transport
+
+app = typer.Typer(
+    add_completion=False,
+    no_args_is_help=True,
+    help="The governed store: every structured document through one typed write. `isidium <part>` runs another part.",
+)
+
+
+def _out(value: Any, text: bool = False) -> None:
+    if text and isinstance(value, str):
+        typer.echo(value)
+    else:
+        typer.echo(json.dumps(value, indent=2, default=str, ensure_ascii=False))
+
+
+def _transport() -> tuple[Transport, ClientConfig, Path]:
+    cfg, workdir = ClientConfig.find()
+    return Transport(cfg, workdir), cfg, workdir
+
+
+def _run(name: str, args: Mapping[str, Any], text: bool = False) -> None:
+    try:
+        transport, _cfg, _wd = _transport()
+        _out(transport.call(name, args), text)
+    except Refusal as r:
+        typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it (the other three sites already)
+        raise typer.Exit(code=2) from None
+
+
+# ---- the ten verbs ----------------------------------------------------------------------------------------------
+
+
+@app.command()
+def init(
+    tenant: Annotated[str, typer.Option(help="the registered tenant name")],
+    address: Annotated[str, typer.Option(help="the store container's address")],
+    ca: Annotated[str, typer.Option(help="the CA the registration pins")],
+    cert: Annotated[str, typer.Option(help="this client's certificate")],
+    key: Annotated[str, typer.Option(help="this client's private key")],
+    root: Annotated[str | None, typer.Option(help="the tracking root; default: the adopted schema version's")] = None,
+    ack: Annotated[str, typer.Option(help="the owner's own words accepting software-grade signatures")] = "",
+) -> None:
+    """Install the client, the hook and the registry schemas here, then open the tenant's policy chain (04 §3).
+
+    **The four channel options have no defaults and are required** (7bg.2, K3). There is one shape, so there is no
+    arrangement in which a checkout has no address: `init` writes the hook and the schemas *and* opens the policy
+    chain over the channel, and an `init` that could not reach the store would leave a checkout half-registered —
+    a hook refusing commits with no store to make them. Refusing four missing arguments up front is the cheaper
+    failure. `--principal`, `--grant` and `--signer` are gone with local mode: who the caller is comes off the
+    certificate, and the signing key is the store's, in its own container.
+    """
+    from .install import init as do_init
+
+    cfg = ClientConfig(
+        tenant=tenant,
+        root=root or "",  # blank means "unset"; `install.resolve_root` fills it from the adopted version (C-1)
+        address=address,
+        ca=ca,
+        cert=cert,
+        key=key,
+    )
+    repo = Path.cwd()
+    try:
+        _out(do_init(repo, cfg, {"software_key_ack": ack} if ack else {}))
+    except Refusal as r:
+        typer.echo(str(r), err=True)
+        raise typer.Exit(code=2) from None
+
+
+@app.command()
+def write(
+    card: Annotated[int, typer.Argument(help="the card id; omit with --new")] = 0,
+    set_: Annotated[
+        list[str] | None, typer.Option("--set", help="key=value (a tending gesture); key= clears; updates+=title|body")
+    ] = None,
+    new: Annotated[str, typer.Option(help="create a card with this slug — the store allocates the id")] = "",
+    document: Annotated[Path | None, typer.Option(help="a JSON file: {head, scope?, updates?}")] = None,
+    ref: Annotated[str, typer.Option(help="a judging ref c<n>:sha256:<hex>")] = "",
+) -> None:
+    """The one writer (03 §1.2): validate, compare-and-swap, derive the act from the diff, sign if the predicate says
+    so, journal, write, commit."""
+    if document is not None:
+        payload = json.loads(document.read_text(encoding="utf-8"))
+        args: dict[str, Any] = {"document": payload}
+        if new:
+            args["new_slug"] = new
+        else:
+            args["card"] = card
+            if "base" in payload:
+                args["base"] = payload["base"]
+        _run("write", args | ({"ref": ref} if ref else {}))
+        return
+    if not set_:
+        typer.echo("nothing to write: pass --set key=value or --document file.json", err=True)
+        raise typer.Exit(code=2)
+    _run("write_set", {"card": card, "set": set_} | ({"ref": ref} if ref else {}))
+
+
+@app.command()
+def show(
+    target: Annotated[str, typer.Argument(help="card | board | queue | inbox | schema")] = "board",
+    id: Annotated[int, typer.Argument(help="the card id, for `card`")] = 0,
+    name: Annotated[str, typer.Option(help="name@version, for `schema`")] = "",
+    text: Annotated[bool, typer.Option("--text", help="render the human form")] = False,
+) -> None:
+    """The one typed read (03 §1.2)."""
+    args: dict[str, Any] = {"target": target}
+    if target == "card":
+        args["id"] = id
+    if target == "schema":
+        args["name"] = name
+    try:
+        transport, _cfg, _wd = _transport()
+        result = transport.call("show", args)
+        if text and target == "board":
+            _out(result["markdown"], text=True)
+        else:
+            _out(result)
+    except Refusal as r:
+        typer.echo(str(r), err=True)
+        raise typer.Exit(code=2) from None
+
+
+@app.command()
+def check(id: Annotated[int, typer.Argument(help="the card id")]) -> None:
+    """Chain, recompute, signatures and bindings, the journal reconciliation, the whole-set rules (03 §9.6)."""
+    try:
+        transport, _cfg, _wd = _transport()
+        result = transport.call("check", {"id": id})
+        _out(result)
+        if result["integrity"] or result.get("profile"):
+            raise typer.Exit(code=1)
+    except Refusal as r:
+        typer.echo(str(r), err=True)
+        raise typer.Exit(code=2) from None
+
+
+@app.command()
+def ratify(
+    ids: Annotated[list[int] | None, typer.Argument(help="the cards to ratify")] = None,
+    writes: Annotated[Path | None, typer.Option(help="a JSON file: [{card|new_slug, document, base?, ref?}]")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run/--sign", help="the dry run is the default (round 48)")] = True,
+) -> None:
+    """The sitting (03 §1.12): the batch is a list of typed writes under ONE signature. Always dry-run first."""
+    args: dict[str, Any] = {"ids": list(ids or []), "dry_run": dry_run}
+    if writes is not None:
+        args["writes"] = json.loads(writes.read_text(encoding="utf-8"))
+    _run("ratify", args)
+
+
+@app.command()
+def suggest(
+    kind: Annotated[str, typer.Argument(help="card | guidance | debt | docs | test | risk | question")],
+    title: Annotated[str, typer.Argument()],
+    body: Annotated[str, typer.Argument()],
+    ref: Annotated[list[str] | None, typer.Option("--ref", help="a path (optionally :lines) at base_sha")] = None,
+    for_card: Annotated[int, typer.Option("--for", help="the card a guidance suggestion is proposed for")] = 0,
+) -> None:
+    """Hand something noticed back to the tenant (03a) — never a card, never guidance until the owner says so."""
+    args: dict[str, Any] = {"kind": kind, "title": title, "body": body, "refs": ref or []}
+    if for_card:
+        args["proposed_for"] = for_card
+    _run("suggest", args)
+
+
+@app.command()
+def disposition(
+    suggestion: Annotated[str, typer.Argument(help="s<n>")],
+    outcome: Annotated[str, typer.Option(help="accepted | declined | deferred")],
+    as_: Annotated[str, typer.Option("--as", help="card | guidance | note")] = "",
+    reason: Annotated[str, typer.Option(help="declined: why (≤ 500)")] = "",
+    until: Annotated[str, typer.Option(help="deferred: a date or a condition")] = "",
+    slug: Annotated[str, typer.Option(help="the slug when accepting as a card")] = "from-suggestion",
+) -> None:
+    """Disposition one suggestion — with the owner, every time (round 28)."""
+    args: dict[str, Any] = {"suggestion": suggestion, "outcome": outcome, "slug": slug}
+    for k, v in (("as", as_), ("reason", reason), ("until", until)):
+        if v:
+            args[k] = v
+    _run("disposition", args)
+
+
+@app.command()
+def repair(
+    history: Annotated[int, typer.Option(help="repair a card's chain")] = 0,
+    restart_from: Annotated[int, typer.Option(help="the seq whose h the chain resumes from")] = 0,
+    journal: Annotated[str, typer.Option(help="explain a commit made outside the store")] = "",
+) -> None:
+    """The owner's signed repair (03 §1.15, §9.6): appends, never rewrites."""
+    args: dict[str, Any] = {}
+    if history:
+        args["history"] = history
+    if restart_from:
+        args["restart_from"] = restart_from
+    if journal:
+        args["journal"] = journal
+    _run("repair", args)
+
+
+# ---- the tenant-side commands ------------------------------------------------------------------------------------
+
+
+@app.command()
+def hook() -> None:
+    """The pre-commit check (03 §9.6): a governed path changed here? refuse. That is the whole hook.
+
+    **This is the human's door, not the installed one** (7bh.2, built by K3b). The hook `init` writes runs
+    `python -m isidium.store.client.hook`, which never loads this module; typing `isidium hook` reaches the same
+    `check` through here, one behaviour with two doors, and `tests/store/test_walk.py` holds them to one function.
+    The deferred import stays — it is now the only thing keeping `hook.py` out of `--help`'s cost, since the module
+    that used to pull the store in from the top of this file is gone (K3).
+    """
+    from .hook import check as hook_check
+
+    raise typer.Exit(code=hook_check(Path.cwd()))
+
+
+@app.command()
+def serve(
+    tenant: Annotated[str, typer.Option(help="the tenant namespace this store serves (one store per tenant)")],
+    repo: Annotated[Path, typer.Option(help="the store's own partial bare clone of the tenant repository")],
+    journal: Annotated[Path, typer.Option(help="the journal database, in the store's container, outside any repo")],
+    root: Annotated[str, typer.Option(help="the tracking root this tenant adopted")],
+    registration: Annotated[Path, typer.Option(help="a JSON file: {certificate-subject: [principal, grant]}")],
+    certificate: Annotated[Path, typer.Option(help="the store's own certificate")],
+    key: Annotated[Path, typer.Option(help="the store's own private key")],
+    ca: Annotated[Path, typer.Option(help="the registration's CA — every caller's certificate must chain to it")],
+    host: Annotated[str, typer.Option(help="the address to listen on, e.g. 0.0.0.0 or 127.0.0.1")],
+    port: Annotated[int, typer.Option()] = 8443,
+    signer: Annotated[Path | None, typer.Option(help="a software key file — the waiver path")] = None,
+    max_connections: Annotated[int | None, typer.Option(help="the connection ceiling, all peers together")] = None,
+    max_per_caller: Annotated[
+        int | None, typer.Option(help="concurrent connections one registered caller may hold")
+    ] = None,
+    max_per_probe: Annotated[
+        int | None, typer.Option(help="concurrent connections one CA-issued peer the registration does not name")
+    ] = None,
+) -> None:
+    """Run the store for this tenant (03b §2: one store container per tenant).
+
+    **The store terminates its own mTLS** (ruled 7bg.8). It answers the connection itself, requires a client
+    certificate this CA issued, and reads that certificate off the connection it is authorizing — there is no proxy,
+    no forwarded header and no trusted hop. h11 parses; the accept-and-dispatch loop is the store's own.
+
+    `--host` has no default: what a store listens on is a deployment's decision, and `0.0.0.0` arrived at silently
+    is the wrong kind of quiet. The three admission numbers are `None` here and resolved from `server.http.Limits`,
+    which carves itself out of C-1 with a stated reason and is their one home (Q4: supplied values with a named
+    home, never constants in the binary) — writing them again here would be the second copy C-1 exists to prevent.
+    `--port` keeps its default because the registration pins it.
+
+    Every `server.` import is inside this function on purpose: the client half installs without the `[server]`
+    extra, and h11 is only in that extra.
+    """
+    import asyncio
+    import time
+
+    from ..core import telemetry
+    from ..registry.loader import Registry
+    from ..server.api import Api
+    from ..server.gitrepo import GitCli
+    from ..server.http import LIMITS, Limits, serve_forever, tls_context
+    from ..server.journal import Journal
+    from ..server.service import Registration, Service
+    from ..server.signer import Signer, SoftwareKey, SoftwareKeyAck
+    from ..server.store import Store
+
+    # Before anything is built, so the store's own start-up is inside the trace when a deployment asked for one
+    # (C-11). It installs nothing unless `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` are set, and `console` —
+    # what K2's container uses for its first start — needs no collector and no network at all.
+    telemetry.configure()
+    principals = json.loads(registration.read_text(encoding="utf-8"))
+    ack: Signer | None = SoftwareKeyAck(SoftwareKey.load(signer)) if signer else None
+    store = Store(
+        tenant,
+        GitCli(repo, "isidium-store", f"store@{tenant}", root=root),
+        Journal(journal, tenant),
+        # **The store's own installed registry, never the checkout's** (K4's second half, built 2026-08-31).
+        # `Registry.for_checkout` reads `.isidium/schemas/` from a *working tree*, and `init` writes `.isidium/`
+        # into `.gitignore` — so under the bare clone `--repo` now names, it would find nothing and fall back to the
+        # shipped documents while looking like it had read the tenant's. That silent fallback is what would undo the
+        # WP3 review's C5 (*the checkout's installed registry is what it validates against*): a store on a newer
+        # toolkit would validate against the toolkit's schemas and never say so. The tracked source of the adopted
+        # versions is the manifest in `config.toml`, which is governed and readable from the bare clone; the store
+        # resolves each path's `schema@version` against what it has installed and refuses `config.schema-unknown`
+        # when a named version is absent. `Registry.for_checkout` stays the **client's** offline path (`check`, the
+        # hook), which is the half that actually has a working tree.
+        Registry.shipped(),
+        lambda: int(time.time()),
+        ack,
+        root=root,
+        software_fprs=frozenset({ack.key_fpr}) if ack is not None else frozenset(),
+    )
+    service = Service(Api(store), Registration({k: (v[0], v[1]) for k, v in principals.items()}), tenant)
+    limits = Limits(
+        max_connections=LIMITS.max_connections if max_connections is None else max_connections,
+        max_per_caller=LIMITS.max_per_caller if max_per_caller is None else max_per_caller,
+        max_per_probe=LIMITS.max_per_probe if max_per_probe is None else max_per_probe,
+    )
+    asyncio.run(serve_forever(service, host, port, tls_context(certificate, key, ca), limits))
+
+
+@app.command()
+def mcp() -> None:
+    """Serve this tenant's store as MCP tools over stdio — the surface agents are meant to use (03 §1.2)."""
+    from .mcp import main as mcp_main
+
+    raise typer.Exit(code=mcp_main())
+
+
+# ---- `isidium <part>` — PATH dispatch (7bf.3) ----------------------------------------------------------------------
+
+
+def dispatch_part(argv: Sequence[str]) -> int | None:
+    """`isidium memory recall …` → exec `isidium-memory recall …` from PATH. Returns None when the first argument is
+    not a part (typer handles it), else the part's exit code. The umbrella never knows the part's language."""
+    if not argv:
+        return None
+    name = argv[0]
+    if name.startswith("-") or name in {
+        c.name or (c.callback.__name__ if c.callback else "") for c in app.registered_commands
+    }:
+        return None
+    known = {(c.name or (c.callback.__name__ if c.callback else "")).replace("_", "-") for c in app.registered_commands}
+    if name in known:
+        return None
+    exe = shutil.which(f"isidium-{name}")
+    if exe is None:
+        return None
+    return subprocess.run([exe, *argv[1:]], check=False).returncode
+
+
+def main() -> int:
+    code = dispatch_part(sys.argv[1:])
+    if code is not None:
+        return code
+    try:
+        app()
+    except SystemExit as e:  # typer's own exit
+        return int(e.code or 0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,156 @@
+<!-- provenance: schema=1 project=the-factory(working-label) session=e2b0ba9f-40d2-4bee-aa18-685ce2c8f428 actor=amodal1 agent=anthropic/claude-fable-5 generated_at=2026-08-26 status=draft-1 -->
+
+> **Assumes:** `03-card-schema.md` draft-6 (complete in first draft; its section 10 is this doc's mandate), `03b-governed-store.md` (the governed-document grammar, the schema registry, the store as a service — one container per tenant), `02-prioritization.md` (its weights are keys here), the transition catalog.
+> **Descends from:** the schema principle (round 57 — every governed document in a registry schema's form; `config.toml` is one); the policy-surface ruling (V5, round 45 — every change a signed `config-policy` act); W8 (one file: tenant config + the `[governed]` manifest + the `[history]` policy chain); the round-6 pins (`[ratification].pin` one home; `board.commit` the one board key; the `Origin` subsets; `[history].entries`).
+> **Expected reader:** the owner (shape checkpoint), then the store-server implementer (the config validator is the same `write` path as every document), `init`'s author, the registry's author, the config-schema's own adversarial review.
+> **Does not cover:** the tenant registration's storage (factory-side, out of the repo — section 5 names its keys only); the registry schemas for cards/inbox/sidecar (03 owns the card; 03b the grammar); the wiki/recall page schemas (T-B12); the grant *system* (isidium G7).
+> **Status:** **draft-1** (2026-08-26; shape-draft 2026-08-24) — **shape checkpoint RULED 2026-08-26 (sync 7bc.2–7bc.5, one call per turn):** the reserved-key treatment (grants shaped for G7; `declared` reserved with `software_key_ack` the path; `remote-totp` only for now, swappable with return information), the lean default config (`show`/`check` as discovery; key documentation in the wiki/memory tier — T-B12), and the prioritization defaults (350/300/150/100/100/0). **Adversarial round RULED 2026-08-26 (sync 7bc.7–7bc.9, one call per turn):** Y1 = (c) defaults live in the adopted schema version (section 4.1); Y2 = (a) ext-enum declarations once, locally (section 2.2); Y3 = (a) the nine-member closed constraint vocabulary in `registry@1` (section 4) — the 34 review fills (K-series, L2-series) applied in place as **draft-1**; **Closing re-run DONE 2026-08-26 — 104/104, no contradiction, no shape-changing finding** (`../../review-artifacts/2026-08-26-04-review/closing-check.md`); its six pins (D1-1–D1-6) applied in place. **The config schema is complete in first draft.** Remaining mechanics **[proposed]**; marks as in 03.
+
+# Config schema — `config.toml`, the registry, and the registration (the factory, working label)
+
+## 0. What this doc must fit (inherited, not re-decided)
+
+- **One file** (W8): tenant config + the governed-path manifest + the policy chain. No `toolkit.lock`, no `governed.toml`, no second policy file.
+- **Every key is policy** (V5): a change is a `config-policy` act in `[history]`, signed under the **parent commit's** policy; an unsigned change does not take effect.
+- **Grants, never keys; no address, no pin, no secret in the repo** (rounds 24, 33; 03 §10). The registration holds what the repo must not.
+- **A governed document of the TOML type** (03b §3): scalars first in the schema's inventory order, tables in the pinned order, `[history]` last with `entries = [ … ]`, one inline table per line, `]` alone on its line. Written only by `write`; the chain genesis is `b"schema:<n>\npolicy:<tenant>"` with `<n>` = this schema's own version.
+- **Efficiency** (round 42): an absent key is its default — read from the tenant's **adopted** `config@<n>` schema version, never from the binary (section 4.1, Y1) — the default config `init` writes is minimal, not exhaustive; the validator never requires a key whose default serves.
+- **"Not now" is never "never"** (round 43): reserved keys are named with their seam, never deleted.
+
+## 1. The document type
+
+`config.toml` at the tracking root. Registry schema **`config@1`**. Pinned table order: scalars → `[toolkit]` → `[ratification]` → `[signer]` → `[effort]` → `[ladder]` → `[profiles]` → `[shapes]` → `[surfaces]` → `[payload.context]` → `[runners]` → `[board]` → `[inbox]` → `[prioritization]` → `[origin]` → `[extensions]` → `[[governed]]` → `[history]`. Unknown top-level keys are `head.unknown-key`; unknown keys inside a table are refused by that table's schema — uniformly `config.enum` on the key, for every closed-key-set table (D1-5). No floats anywhere (weights are integer per-mille, 5.3's no-float rule); no key may hold an address, a pin or a key fingerprint except `ratification.pin` (its one home, and only when identity is disabled) — enforced mechanically as per-table key whitelists, never string inspection: each `[signer.*]` backend schema names its behavioral keys and anything else is `config.registration-only` (K-7). **The effective config** is the tenant's file overlaid on the defaults of its **adopted** schema version — the `config@<n>` the file's own `[[governed]]` row names (section 4.1, Y1); resolution is one parse + one overlay pass, 0 store calls.
+
+## 2. Key inventory — [proposed]
+
+Class: every key is **policy** (signed change). **Consumer** = who reads it. Defaults make the empty table legal and **live in the adopted schema version** (Y1): every default below is `config@1`'s, carried by the schema document, not the binary. `Ext` name grammar everywhere (shapes, ladder levels, origins, scenario kinds): `[a-z][a-z0-9-]*`, no collision with the core enum members (L2-6/L2-8).
+
+### 2.1 Scalars
+
+| Key | Type | Default | Consumer | Note |
+|---|---|---|---|---|
+| `schema` | int | required | validator | `config@<n>`; must equal the version the file's own matching `[[governed]]` row names — `config.schema-self-mismatch`; a migration write changes both in the one `write` (one document, one act — L2-13) |
+| `tenant` | string `[a-z0-9-]{1,63}`, no leading/trailing `-` (L2-15) | required | verifier | read-only mirror of the registered name (1.12) — `write` refuses a change (`config.tenant-immutable`); standalone `check --verify` forms `tenant ‖ h` from it |
+| `root` | path | `"docs/work/"` | store, hook | the tracking root, relative to the repo root; grammar: relative, `/`-separated, no `.`/`..` segments, trailing `/` (L2-15); **config is its one home** — supersedes 03 §1.3's "and in the tenant registration" (L2-12; recorded in section 5) |
+| `time_skew` | int seconds | `600` | signer | the human-sized window (03 §11.6); in [30, 86400] (L2-15) |
+| `wip` | int ≥ 1 | `1` | readiness (T-A4) | owner-ratified WIP 1 (round 16) |
+| `batch_boundary` | `epic` \| `milestone` \| `sprint` \| `on-demand` | `"epic"` | factory (T-C3) | naming a disabled profile (`"sprint"` with the sprint profile off) is `config.profile-required` (L2-15) |
+
+### 2.2 Tables
+
+| Table | Keys (type = default) | Consumer | Note |
+|---|---|---|---|
+| `[toolkit]` | `client = "<semver>"` (required) · `registry = "<semver>"` (required) · `unidata = "<version>"` (required — asserted at start-up, `canon.unicode-db`) · `object_id = "sha1" \| "sha256"` (required) | every component | the four pins 03 §5.3/9.6 read; `init` writes them. **A compatibility floor, not exact-assert [owner-ratified 2026-08-26 (7bc.7, Y1)]:** a running binary older than `client`/`registry` refuses at start-up (`config.toolkit-incompatible`); a newer one runs — defaults come from the adopted schema version, so a toolkit release never changes effective policy (section 4.1). Grammars (L2-6): `client`/`registry` exact semver core `MAJOR.MINOR.PATCH`, digits only, no ranges, no pre-release/build metadata; `unidata` `\d+\.\d+\.\d+` (the UCD version form). `object_id` is checked against the repo once at store start-up — one `rev-parse`, O(1) — `config.object-id-mismatch` (L2-19) |
+| `[ratification]` | `mode = "signed"` (\| `"declared"` — reserved, refused in v1 with the seam named) · `software_key_ack = "<the owner's own words>"` (absent = none) · `path = "main"` (a git branch name, validated by git ref-name rules; the key name is a recorded misnomer, kept — 03 §10 names it — L2-15) · `verdicts_required = true` (bool, default `true` — the standalone dial, S7/G13; consumer: the standalone `accept`/`close` path — L2-9) · `pin = "<alg>:<key_fpr>"` (only when identity is disabled — present while identity is enabled is `config.pin-identity-enabled`, K-12; must equal the registration's fingerprint when a factory is present) | verifier, ingest, factory | `pin`'s one home (§1) |
+| `[signer]` | `backends = ["remote-totp"]` (⊆ the closed set of 03 §1.12; a set, ≥ 1, duplicates refused) · per-backend tables **typed per backend** (L2-10): `[signer.remote-totp]` `poll_interval_ms` (int ms in [250, 60000], default `2000` — K-16); the four unbuilt backends have **empty** inventories (any key refused) until built; each backend schema whitelists its behavioral keys — never an address or pin (registration's), anything else `config.registration-only` (K-7) | store → signer seam | every signature records its backend; `backends` containing `software_key_ack` requires `ratification.software_key_ack` present (L2-10); a declared-but-unbuilt or unreachable backend refuses **at signing time** — `signer.backend-unavailable`, naming the backend and the available set (the 7bc.3 ruling; K-6 — write-time `config.backend-unknown` stays for a name outside the closed set) |
+| `[effort]` | `tiers = ["default"]` (a set, ≥ 1) · `budgets = { default = <int tokens> }` (keys ⊆ `tiers`, values ≥ 1 — L2-15; absent = factory default) | planner, factory (T-B3) | single tier owner-ratified; budgets in config (round 16) |
+| `[ladder]` | `levels = []` (ordered kind names above `epic`; a set — duplicates `canon.set-duplicate`) | validator | `Kind::Ext` validation (1.8); **the one home for ladder `Ext` declarations [owner-ratified 2026-08-26 (7bc.8, Y2)]** — never hashed; adding a level never re-hashes a card |
+| `[profiles]` | `enabled = []` (⊆ `["sprint", "milestone"]`, a set) | validator, board | off by default (S8) |
+| `[shapes]` | `allowed = ["bdd", "task", "spike"]` (a set, ⊆ the core five + declared `Ext`) · `default = "bdd"` (∈ `allowed` — L2-15) · sub-tables `[shapes.<name>]` over the shape enum (K-13): a core name (`bdd`/`ears`/`classic`/`task`/`spike`) holds that shape's lint options, any other name **is** the tenant shape declaration (`Shape::Ext`) — **their one home [owner-ratified 2026-08-26 (7bc.8, Y2)]**, never hashed; a declaration sub-table is empty in v1, any key refusing `config.enum` until tenant lint options are schematized (D1-4) · `[shapes.ears].weak_words` default enumerated (K-15/L2-16), whole-word, case-insensitive, lint-only — not hashed: `["should", "may", "might", "could", "quickly", "easily", "efficiently", "appropriate", "adequate", "sufficient"]` | validator, planner | the Take Tempo default (rounds 23–25) |
+| `[surfaces]` | `deny = […]` — repo-root-relative globs in the `surfaces` dialect (03 §1.14); default **[owner-ratified 2026-08-27 (7be.2)]**: the forge workflow dirs (e.g. `.github/`), the hook paths, the vendored validator/toolkit, the config-adjacent scripts — exact default members pinned at build with the vendoring layout | validator (card `write`), dry run | a card's `surfaces` intersecting the list is refused — `surfaces.intersects-deny-set`, hard, the same mechanism as the tracking-root refusal (03 §1.14); the per-card explicit override is shown by the dry-run/signer display before signing; the builder's half of living-off-the-land (`../research/isidium-review-2026-08-27.md` §2) |
+| `[payload.context]` | `depth = 2` (in [0, 8]) · `max_bytes = 16384` (in [1024, 1048576]) — L2-15 | dispatcher (1.17) | |
+| `[runners]` | `test = "pytest"` · `command = "shell"` · `http = "http"` · `file = "file"` — kind → binding; keys ∈ the scenario-kind enum: the core four + tenant `Ext` kinds **declared here** — the kind key with its binding is the declaration (Y2's one-home rule applied to the fourth `Ext` enum; K-14), any other key `config.enum`; values ∈ the closed set of runner ids the toolkit ships per kind, `Ext` runner ids the named seam (L2-17); a missing binding makes that scenario kind uncompilable, and a binding naming an unshipped runner is the same typed error at dry run — `config.runner-unshipped` | `accept`, factory close | defaults bind all four (S7) |
+| `[board]` | `commit = true` | store (land) | the one key (round 6); caps pinned in 03 §1.16 |
+| `[inbox]` | `max_per_run = 10` (≥ 1) · `max_per_actor_per_day` (absent = unbounded, present ≥ 1 — no 0 sentinel, Option-typed in all three targets, L2-15; reserved consumer) | `land`, `suggest` | bounds are the anti-stash rule (03a) |
+| `[prioritization]` | integer per-mille weights, defaults **[owner-ratified 2026-08-26 (7bc.5)]**: `time_criticality = 350` · `unblocking = 300` · `resume = 150` · `aging = 100` · `batch = 100` · `risk = 0`; plus `expedite_limit = 1` (≥ 0), `expedite_bump = 1` (≥ 0), `aging_horizon_days = 30` (≥ 1) (02 §2–3); closed key set; each weight an int in [0, 1000] — per-mille is a **unit, not a budget**: weights are relative, **no sum constraint** (a one-weight tune never forces renormalization; the score vector carries explainability — K-10/L2-7); `job_size` reserved — refused in v1, `config.reserved-key`, arrives with effort telemetry (L2-7) | queue projection | within-class ordering only; every rank emits its score vector; tuned from telemetry by signed edit; the intangible class's owner-set trigger is a **per-card tending key** (02), not a config key — homed there (L2-7) |
+| `[origin]` | `card = ["session", "review", "planner", "suggestion", "digest"]` · `inbox = ["run", "planner", "session", "review", "digest"]` — allowed subsets of the one `Origin` enum; tenants may extend with `Ext` names declared here — **their one home [owner-ratified 2026-08-26 (7bc.8, Y2)]**, never hashed (resolves K-9); **presence in either subset list is the declaration** (D1-2), a grammar-violating member refuses `config.enum`; the subsets must contain what the built-in flows write — card ⊇ {`suggestion`, `planner`} (`disposition --as card`; the planner), inbox ⊇ {`run`, `planner`} (`land`) — `config.origin-missing-builtin` (L2-8) | validator | round 6 (one enum, two subsets); shrinkage bounded, extension free |
+| `[extensions]` | **`x.*` field schemas only [owner-ratified 2026-08-26 (7bc.8, Y2)]** (03 §7 as amended): per-key `type`, `class`, `required_when` (a typed membership table, never a string expression — L2-5, section 4), enums. Shape/ladder/origin/scenario-kind `Ext` declarations live in their own tables (`[shapes]`/`[ladder]`/`[origin]`/`[runners]`) — adding an enum member is a signed config edit that **never re-hashes a card**; an undeclared name fails validation | validator, hasher | its canonical hash is `ext_schema_hash` — covering only the `x.*` schemas; an `x.*` reclassification keeps the signed re-hash (`ext-schema-changed`) |
+| `[[governed]]` | rows `{ path = "<pattern>", schema = "<name>@<version>", write = ["owner", "contributor"] }` — plus an **optional `read` grant member [owner-ratified 2026-08-27 (7be.2)]**: absent = reads ungoverned (today's posture); present = the read posture for the path — what wiki/recall pages land with (03b §2; `../research/isidium-review-2026-08-27.md` §2) — **first match wins** is the resolution rule; `config.governed-overlap` is the duplicate-pattern check only: two rows with byte-identical `path` refused, overlapping-but-different patterns legal by design — specific row before general (L2-3, resolving K-4). `path` dialect, a three-target v1 subset (L2-4 — the 03 §5.3 `Pattern` move): `/`-separated literal segments, `*` within a segment only, no `**`, no `!`, no character classes, no escapes; case-sensitive; relative to the tracking root — validated at write (`config.pattern-dialect`); widening is one schema bump, the named seam. `schema` ref grammar `[a-z][a-z0-9-]*@[1-9][0-9]*` (L2-6). The default manifest (section 3) covers every 03 §1.3 row; tenants append wiki/recall rows — "declared now" = the dialect and grammar admit such rows; the append itself lands with T-B12 when `wiki@1` enters the registry, until which the row refuses `config.schema-unknown` (D1-6) | store, hook, CI | patterns are root-relative with no `..`, so a row can never reach the archive, which lives outside the root — the overlap ban is structural, not checked (K-17) |
+| `[history]` | `entries = [ … ]` — the policy chain: the first entry `created` (the recompute table's first row — K-1, section 3), then `config-policy`, `batch-manifest`, `binding` entries (03 §1.15); `fields` on a policy entry = the **top-level** key names (scalars and tables) whose canonical value changed, sorted — never dotted leaves (K-23: the granularity is inside the chain hash, so one reading, one `h`) | verifier, ingest | tool-only; last table in the file |
+
+**Reserved, refused in v1 — [owner-ratified 2026-08-26 (7bc.2–7bc.3)]:** `grants` — fixed in code for v1, but the grant check is **one function over a matrix value shaped for isidium G7 to make editable policy later** (owner: *"design with intent to be extended by isidium later"*) — the seam is structural, not a comment; `ratification.mode = "declared"` — reserved, **`software_key_ack` is the path** for a tenant that does not want signing ceremony (owner: *"keep declared reserved, software_key_ack is the path"*): zero ceremony after `init`, software-grade labels, unattended dispatch gated by the registration; signer backends — **`remote-totp` is the only built backend for now** (owner: *"default shape. can consume when ready and swappable by config, with return information. aegis/remote-totp only for now"*): the closed enum accepts declarations of the others, selecting an unbuilt or unreachable backend returns a **typed refusal naming the backend and what is available**, and swapping backends is one signed config edit. **`window_reserve` — reserved with its seam [owner-ratified 2026-08-27 (7be.3)]:** the adapter-auth note's scheduling dial (the share of the provider window held back from dispatch), arriving when the adapter wires it (`../research/isidium-review-2026-08-27.md` §3).
+
+## 3. The default config — the template `init` fills and writes — [proposed]
+
+```toml
+schema = 1
+tenant = "<registered-name>"
+
+[toolkit]
+client = "<installed>"
+registry = "<installed>"
+unidata = "<runtime>"
+object_id = "<repo>"
+
+[[governed]]
+path = "cards/*.md"
+schema = "card@1"
+write = ["owner", "contributor"]
+
+[[governed]]
+path = "suggestions.jsonl"
+schema = "inbox@1"
+write = ["owner", "contributor", "lander"]
+
+[[governed]]
+path = "state.json"
+schema = "sidecar@1"
+write = ["lander"]
+
+[[governed]]
+path = "state/history.jsonl"
+schema = "sidecar-events@1"
+write = ["lander"]
+
+[[governed]]
+path = "BOARD.md"
+schema = "board@1"
+write = ["lander"]
+
+[[governed]]
+path = "config.toml"
+schema = "config@1"
+write = ["owner"]
+
+[history]
+entries = [
+]
+```
+
+**Seven keys and the manifest** (`schema`, `tenant`, the four `[toolkit]` pins, `[history].entries` — K-3/L2-18); everything else defaults. **The file above is a template** (K-2): its placeholder grammar is angle-bracket tokens — the five substitution slots `<registered-name>`, `<installed>` (×2), `<runtime>`, `<repo>` — which `init` fills from the registration and the installation before the write; the written file contains no `<`, and only the filled file validates under the section-2 inventory. `init` appends the first entry as it writes the file — **act = `created`** (K-1: no `before`, so the recompute table's first row wins; the full recompute table is the derive table on this file too, and `created` opens the policy chain exactly as it opens a card's — 03 §1.12's "as a `config-policy` act" reads as "as a policy-chain act"), `fields` = every key present, sorted — **every key the build hash covers; `[history]` never names itself** (D1-1); signed — the first signature verifies against the registration when a factory is present, or against the pin the same write carries when identity is disabled (K-21: the bootstrap is the registration or the self-carried pin, stated). The `BOARD.md` row is grant-only (no caller submits a board document; the store renders it). No default row carries the optional `read` member (2.2, 7be.2) — absent = reads ungoverned, today's posture; the wiki/recall rows tenants append are where it first appears.
+
+## 4. The registry, and the schema of schemas — [proposed]
+
+- **A registry schema is one TOML document** `name@version`, **discriminated on a `form` key** (L2-11): `markdown` {head, sections, footer} · `toml` {scalars, tables, footer} · `jsonl` {record} · `json` {record} — a JSONL schema *cannot* declare sections; sections stay `##` names in order, each a prose slot `{max_bytes, headings_allowed}` or a record slot `{fence, key}`, unchanged inside the `markdown` arm; footer `none` \| `history`. Each key row carries: name, type from the closed type set (the 5.3 canonical forms), class for card-like documents, and constraints from the **closed constraint vocabulary — exactly nine members [owner-ratified 2026-08-26 (7bc.9, Y3)]: `default` · `enum` · `pattern` · `range` · `subset-of` · `dynamic-table` · `array-of-tables` · `immutable` · `reserved`** — serialized one way (D1-3): a constraint rides its key row as inline-table values in the vocabulary's own order — `default = {value}` · `enum = {values}` · `pattern = {re}` · `range = {min, max}` · `subset-of = {of}` or `{ref}` · `dynamic-table = {key_pattern, row}` · `array-of-tables = {row}` · `immutable = {}` · `reserved = {}` or `{values}` — and a table row nests its key-spec rows under `keys`; schemas are content-addressed, so two authors of the same schema must emit the same bytes. What the nine cannot say, a schema cannot require (the seam is a registry version bump); `config@1`'s own rules (defaults, enums, patterns, ranges, subset-of, the `[signer.<backend>]`/`[shapes.<name>]` dynamic tables, `[[governed]]` array-of-tables semantics, `tenant` immutable, the reserved keys) are expressible — closing K-11, far short of JSON-Schema sprawl. `required_when` is a **typed membership table, never a string expression** (L2-5): an AND of `{ field, in = […] }` tests over the closed field set `kind`/`status`/`shape`, values from those enums — evaluation is a loop and a set lookup in all three targets, nothing to parse; an OR-of-ANDs (array of arrays) is the named seam. The card's profile cells (03 §3) are exactly such tables.
+- **One schema, three consumers** (round 57): the validator inside `write`; the planner's tool-call input schema (generated); the Rust/Python/TypeScript types (generated). One source; drift impossible by construction.
+- **Versioned and signed:** schemas are content-addressed artifacts; adopting `card@2` for a path is one `[[governed]]` edit = one signed `config-policy` act; a document records the version it validated under (`schema` in its head). The store serves `show Schema(name@version)`; `init` installs the referenced versions locally — same bytes either way, so local `check` and the store cannot disagree.
+- **The registry's own schema** (`registry@1`) is the fixed point: a schema document validates against it; it validates against itself — **re-proved over the full constraint-bearing form**, the nine-member vocabulary included, never the stripped shape (Y3). Shipped with the toolkit, not fetched.
+- **Migration between schema versions is an interactive session** (round 40's rule generalized): no auto-upgrade; a path may not reference a version the installed registry lacks (`config.schema-unknown`).
+
+### 4.1 Defaults live in the adopted schema version — [owner-ratified 2026-08-26 (7bc.7, Y1)]
+
+Owner: *"c"* — after asking to walk the implications: *"it seems C offers downstream users the best safety from disruption and requiring a ceremony for behavior altering transitions"*. The mechanism, whole:
+
+- **`config@<n>` carries every declared key's default** (the `default` member of the Y3 vocabulary); the effective-config resolver overlays the tenant's file over the defaults of the **adopted** version — the one the file's own `[[governed]]` row names — never over the binary's built-ins.
+- **The binary ships schema copies but consults only the adopted version.** A toolkit release never changes effective policy; "every key is policy" (V5) holds with no hole the width of the built-ins.
+- **Adopting `config@<n+1>` is one signed `[[governed]]` manifest edit** — the mechanism that already exists — with the **default diff shown at signing**, so a behavior-altering transition always passes the ceremony.
+- **A new key introduced by a newer schema version is invisible until adoption** — stated: a tenant on `config@1` cannot set, and is not affected by, a `config@2` key.
+- **Old versions stay resolvable forever:** schemas are content-addressed and installed locally, so a tenant pinned to `config@1` resolves identically on every future binary.
+- **The `[toolkit]` pins relax to a compatibility floor** with the one mismatch rule `config.toolkit-incompatible` (section 2.2).
+
+This closes L2-1 (the review's Y1) with zero new ceremony and no new mechanism.
+
+## 5. The tenant registration — factory-side, out of the repo (keys by name only)
+
+Per tenant: the registered `tenant` name · the store container's address and TLS pin (one store per tenant, 7ba.6) · the identity realm's address · the signing service's address and pin · the ratifier key fingerprints · `allowed_backends` · `allow_software_grade_until` · the build container's **egress allowlist [owner-ratified 2026-08-27 (7be.2)]** — declared here now, enforced by the container when agent-station wires it (by pointer); the network half of living-off-the-land (`../research/isidium-review-2026-08-27.md` §2) · the archive freeze ref (bridge). The registration is the factory's input; nothing in a tenant repo names it. The tracking `root` is **not** here — `config.toml` is its one home (L2-12): the store serves the tenant's config to the factory, so the registration needs no copy; this supersedes 03 §1.3's "named in the factory's tenant registration and in `config.toml`". Where the registration itself lives (agent-station, by pointer) is not this doc's to design.
+
+## 6. Validation and change semantics — [proposed]
+
+**The `config.*` rule-id inventory — complete (K-5, K-6, K-8, K-12, L2-14), one list, each id at its site** (a list that mixes write-time and dispatch-time rules without saying so gets implemented in the wrong process — L2-14):
+
+- **At `write` (the store), fifteen:** `config.type` · `config.enum` · `config.range` · `config.pattern` — the four generic refusals, each carrying the offending key path (K-5; an unknown `[shapes.<name>]` or `[runners]` key is `config.enum` on that key) · `config.tenant-immutable` · `config.schema-unknown` · `config.schema-self-mismatch` (head `schema` ≠ the version its own matching `[[governed]]` row names — L2-13) · `config.governed-overlap` (byte-identical duplicate `path` patterns only — L2-3) · `config.pattern-dialect` (L2-4) · `config.reserved-key` (`grants`, `declared`, `prioritization.job_size`, `window_reserve`) · `config.backend-unknown` (a name outside the closed set) · `config.registration-only` (K-7) · `config.pin-identity-enabled` (K-12) · `config.origin-missing-builtin` (L2-8) · `config.profile-required` (L2-15).
+- **At store start-up, two:** `config.toolkit-incompatible` (Y1) · `config.object-id-mismatch` (L2-19).
+- **At dispatch (the factory, against the registration), two:** `config.pin-mismatch` (pin ≠ the registration's fingerprint) · `config.backend-not-allowed` (a declared backend outside the registration's `allowed_backends` — L2-14).
+- **At dry run, one:** `config.runner-unshipped` (L2-17). **At signing:** `signer.backend-unavailable` (declared but unbuilt/unreachable, carrying the available set — L2-10; deliberately not a `config.*` id — it fires in the signer seam).
+- **Shared regimes:** `head.*`/`canon.*` as everywhere, plus the bare-TOML order and footer ids this file needs, minted in the `head.*` regime (K-8): `head.scalar-order` · `head.table-order` · `head.history-position` · `head.history-shape`; set-ness reuses `canon.set-duplicate`.
+
+Twenty `config.*` ids; the shape-draft's six were a third of what its own inventory implies (K-5).
+
+**Change semantics.** Every `write` to this file derives by the **full recompute table** — the first write `created` (K-1, section 3), then `config-policy` (or `batch-manifest`/`binding`, by `ref`); `fields` = top-level key names, sorted (K-23). An `[extensions]` (`x.*`) reclassification without a signed act sends affected cards `unratified` (`ext-schema-changed`, 03 §5.4); an enum-member addition in `[shapes]`/`[ladder]`/`[origin]`/`[runners]` is a signed config edit that never re-hashes a card (Y2); a `[[governed]]` row change never re-hashes cards. **The binding entry's `realm` bytes, pinned (K-20):** the signed value is `by ‖ h` — the binding entry's own `by` is the realm's service principal (email-shaped, lower-cased, NFC), `‖` as in 03 §5.6; the verify key is the registration's; a standalone tenant (no realm) has no binding entries — the pin is the whole authority. The validator runs on the same one `derive`-including-refusals path as every governed document — a config bypass is `integrity:unjournaled`/`tampered` like any other.
+
+## 7. Open — for the owner (shape checkpoint)
+
+1. ~~The reserved keys~~ — **ruled (7bc.2–7bc.3):** as section 2's ratified paragraph.
+2. ~~The default config's size~~ — **ruled (7bc.4):** lean; `show Schema(config@1)` and `check`'s effective-config print are the discovery surface; key documentation lives in the wiki/memory documentation tier (T-B12), not in the file.
+3. ~~Prioritization weight defaults~~ — **ruled (7bc.5):** shipped as section 2's values; tuned from telemetry by signed edit.
+4. ~~After this checkpoint: one adversarial review round~~ — **done (2026-08-26):** `docs/reviews/2026-08-26-config-schema-review.md`; its Y1–Y3 **ruled (7bc.7–7bc.9)** — Y1 (c) defaults in the adopted schema version (4.1), Y2 (a) ext-enums once, locally (2.2), Y3 (a) the nine-member constraint vocabulary (4) — and the 34 fills applied as this draft-1. **Next:** the closing implementer re-run, then the catalog follow-ups.

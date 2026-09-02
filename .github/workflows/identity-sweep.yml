@@ -1,0 +1,20 @@
+# The identity gate, standing (ruled 2026-09-02): the private identity never enters this repository's content.
+# Same idiom as the C-1 sweep — a property enforced by a check, not a convention remembered. The tokens are
+# split so this file cannot trip its own gate.
+name: identity-sweep
+on: [push, pull_request]
+permissions: {}
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
+      - name: forbid the private identity
+        run: |
+          set -eu
+          p1='take''tempo'; p2='robert''cooksey'; p3='amodal1''@gmail'; p4='Users[/\]''iam'
+          if grep -rInE "$p1|$p2|$p3|$p4" --exclude-dir=.git .; then
+            echo "private identity token found — the lines above name it" >&2
+            exit 1
+          fi
+          echo "clean"

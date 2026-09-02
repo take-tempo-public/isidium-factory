@@ -1,0 +1,72 @@
+{
+ "genesis": "sha256:c5e5f285e23677f51049d992db7eb19f6d18bc0c4cdd57de02f88cea2d1c711a",
+ "entries": [
+  {
+   "seq": 1,
+   "at": "2026-08-20T14:02:11Z",
+   "by": "amodal1@example",
+   "act": "created",
+   "fields": [
+    "id",
+    "schema",
+    "scope",
+    "status",
+    "title"
+   ],
+   "build": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+   "h": "sha256:ac56ae95c70f4d6d37dc6cebaf7932eff1e07491dbd005ce4cb47e6ed169a169"
+  },
+  {
+   "seq": 2,
+   "at": "2026-08-20T14:03:40Z",
+   "by": "planner@agents",
+   "for": "amodal1@example",
+   "act": "noted",
+   "fields": [
+    "updates"
+   ],
+   "build": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+   "h": "sha256:235e5e9dd74e265b055fe6b4b0389d1aa1979e0882bc65929939b09afa86a0a1"
+  },
+  {
+   "seq": 3,
+   "at": "2026-08-20T14:05:03Z",
+   "by": "amodal1@example",
+   "act": "ratified",
+   "fields": [
+    "status"
+   ],
+   "build": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+   "h": "sha256:6ff9a67a6293924c197a0954f520c361b5503b2144290591be87ce2c5eedb2da",
+   "batch": 412
+  },
+  {
+   "seq": 4,
+   "at": "2026-08-23T09:30:00Z",
+   "by": "amodal1@example",
+   "act": "accepted",
+   "fields": [],
+   "ref": "c1:sha256:a2b6e9a1c22b8f0560eb7221b2fb19da8a40b9dff6c09f36c94a4ae6a6c00ffb",
+   "build": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+   "h": "sha256:92849e537b12acd4ce86aff652ddaab625f433db6a1b16f26374be939b8780c6"
+  }
+ ],
+ "closure": {
+  "id": "c1",
+  "kind": "human",
+  "outcome": "met",
+  "verdicts": {
+   "S1": "pass"
+  },
+  "evidence": [],
+  "retracted": false
+ },
+ "closure_ref": "c1:sha256:a2b6e9a1c22b8f0560eb7221b2fb19da8a40b9dff6c09f36c94a4ae6a6c00ffb",
+ "sig_bytes_single": "sartor\nsha256:6ff9a67a6293924c197a0954f520c361b5503b2144290591be87ce2c5eedb2da",
+ "batch_hash": "sha256:ed3bf2d5b275bb49f55cd8d20916d3fbe203c5153e3f4a95b8168fb1f38cb7c3",
+ "sig_bytes_batch": "sartor\nsha256:ed3bf2d5b275bb49f55cd8d20916d3fbe203c5153e3f4a95b8168fb1f38cb7c3",
+ "inbox_genesis": "sha256:f864d60ab7c19838ac25063fbefa338a47054a688400e56770b9e5accfafe5b8",
+ "policy_genesis": "sha256:083dbc1ae0805089e477ebad3c19609cc34f59961d3fdcda3bfc7794349dea29",
+ "journal_genesis": "sha256:dcc506d5c470b6c6a064e5524a68ae53ec8dae7aefc5681155350188211bc32a",
+ "page_genesis": "sha256:53647d03a4a2e0b766ed469ad90a10bcf7a1acd54393d74d50c1b6605332a3b8"
+}

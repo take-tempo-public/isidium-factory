@@ -1,0 +1,7 @@
+name = "board"
+version = 1
+form = "markdown"
+footer = "none"
+
+# 03 §1.16 / 03b §4 — `BOARD.md` is a projection the store renders at land and on demand; its manifest row is
+# grant-only (the `lander` grant): no caller submits a board document, so no rows validate one. Nothing reads it.

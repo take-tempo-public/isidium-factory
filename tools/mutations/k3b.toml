@@ -1,0 +1,61 @@
+# K3b's mutations (2026-08-31) -- the hook stops importing the store. One door for the machine, one for a human,
+# one function behind both.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `client/hook.py` or `client/cli.py`'s `hook` command should be re-run against.
+# Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k3b.toml M3
+#
+# This chunk's work is a redirection and a deletion, and neither can be mutated directly -- so each of these puts
+# back the coupling the chunk removed, or breaks the seam that replaced it, and names the test that must notice.
+# M1 and M2 are the two ways the old door comes back: pointed at the CLI, or preferred through PATH.
+
+[[mutation]]
+id = "M1"
+label = "the installed script runs the CLI again -- every commit pays for `cli.py`'s graph"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "exec {python} -m isidium.store.client.hook"
+replace = "exec {python} -m isidium.store.client.cli hook"
+
+[[mutation]]
+id = "M2"
+label = "the `isidium` on PATH arm comes back, preferred over the module -- the door that looks right and is not"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "exec {python} -m isidium.store.client.hook"
+replace = "if command -v isidium >/dev/null 2>&1; then exec isidium hook; fi\nexec {python} -m isidium.store.client.hook"
+
+[[mutation]]
+id = "M3"
+label = "`hook.py` imports the CLI at module scope -- the coupling this chunk exists to make impossible"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "from .config import ClientConfig"
+replace = "from . import cli as _cli  # noqa: F401\nfrom .config import ClientConfig"
+
+[[mutation]]
+id = "M4"
+label = "`main()` answers for a different repo than the CLI door does"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "    return check(Path.cwd())"
+replace = "    return check(Path.cwd().parent)"
+
+[[mutation]]
+id = "M5"
+label = "`main()` drops `check`'s code -- the hook runs and every commit passes"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "    return check(Path.cwd())"
+replace = "    check(Path.cwd())\n    return 0"
+
+[[mutation]]
+id = "M6"
+label = "the two doors stop being one function -- `isidium hook` grows its own copy of the check"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = "    from .hook import check as hook_check\n\n    raise typer.Exit(code=hook_check(Path.cwd()))"
+replace = "    from .hook import offending\n\n    raise typer.Exit(code=1 if offending(Path.cwd()) else 0)"
+
+[[mutation]]
+id = "M7"
+label = "the `__main__` guard drops the exit code -- `main()` is right and the commit sails through"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "    raise SystemExit(main())"
+replace = "    main()"

@@ -1,0 +1,2133 @@
+{
+  "check": {
+    "description": "Chain, recompute, signatures and bindings, the journal reconciliation, the whole-set rules.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "disposition": {
+    "description": "Disposition one suggestion — with the owner, every time (round 28).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "as": {
+          "enum": [
+            "card",
+            "guidance",
+            "note"
+          ],
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "accepted",
+            "declined",
+            "deferred"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "type": "string"
+        },
+        "slug": {
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "type": "string"
+        },
+        "suggestion": {
+          "pattern": "^s[1-9][0-9]*$",
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "suggestion",
+        "outcome"
+      ],
+      "type": "object"
+    }
+  },
+  "ratify": {
+    "description": "The sitting (03 §1.12): a list of typed writes under ONE signature. `dry_run` runs the same function minus the signature and the writes and returns the verdicts and the exact display the signer shows.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "default": true,
+          "type": "boolean"
+        },
+        "ids": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "writes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "base": {
+                "additionalProperties": false,
+                "properties": {
+                  "h": {
+                    "type": "string"
+                  },
+                  "seq": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "seq",
+                  "h"
+                ],
+                "type": "object"
+              },
+              "card": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "document": {
+                "description": "the same shape as `write`'s document; the store validates it identically. Not re-embedded here: the card schema is ~20 KB and a planner session pays `tools/list` on every invocation — the constraint that matters is at `write`, where documents are authored (03b §4; the WP3 review's E2).",
+                "type": "object"
+              },
+              "new_slug": {
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "document"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "show": {
+    "description": "The one typed read (03 §1.2): a card, the board, the queue, the inbox or a registry schema.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$",
+          "type": "string"
+        },
+        "target": {
+          "enum": [
+            "card",
+            "board",
+            "queue",
+            "inbox",
+            "schema"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "suggest": {
+    "description": "Hand something noticed back to the tenant as a suggestion (03a): never a card, never guidance — the planner dispositions it with the owner.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "card",
+            "guidance",
+            "debt",
+            "docs",
+            "test",
+            "risk",
+            "question"
+          ],
+          "type": "string"
+        },
+        "proposed_for": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 120,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "write": {
+    "description": "Write one governed document (03 §1.2): validate, compare-and-swap on the history head, derive the act from the diff, sign if the predicate says so, journal, write, commit. `new_slug` creates a card (the store allocates the id); otherwise `card` names an existing one and `base` is its head.",
+    "inputSchema": {
+      "$defs": {
+        "Acceptance": {
+          "additionalProperties": false,
+          "properties": {
+            "manual_attestation": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "interrupt",
+                    "human-closure-only"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Manual Attestation"
+            },
+            "scenarios": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "command": "#/$defs/CommandScenario",
+                    "file-assert": "#/$defs/FileAssertScenario",
+                    "http": "#/$defs/HttpScenario",
+                    "manual-evidence": "#/$defs/ManualScenario",
+                    "test-marker": "#/$defs/TestMarkerScenario"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/TestMarkerScenario"
+                  },
+                  {
+                    "$ref": "#/$defs/CommandScenario"
+                  },
+                  {
+                    "$ref": "#/$defs/HttpScenario"
+                  },
+                  {
+                    "$ref": "#/$defs/FileAssertScenario"
+                  },
+                  {
+                    "$ref": "#/$defs/ManualScenario"
+                  }
+                ]
+              },
+              "title": "Scenarios",
+              "type": "array"
+            }
+          },
+          "required": [
+            "scenarios"
+          ],
+          "title": "Acceptance",
+          "type": "object"
+        },
+        "Answer": {
+          "additionalProperties": false,
+          "properties": {
+            "question_id": {
+              "title": "Question Id",
+              "type": "string"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question_id",
+            "text"
+          ],
+          "title": "Answer",
+          "type": "object"
+        },
+        "Avoid": {
+          "additionalProperties": false,
+          "properties": {
+            "because": {
+              "title": "Because",
+              "type": "string"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "option": {
+              "title": "Option",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "option",
+            "because"
+          ],
+          "title": "Avoid",
+          "type": "object"
+        },
+        "BddNarrative": {
+          "additionalProperties": false,
+          "properties": {
+            "as_a": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "As A"
+            },
+            "feature": {
+              "title": "Feature",
+              "type": "string"
+            },
+            "i_want": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "I Want"
+            },
+            "so_that": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "So That"
+            }
+          },
+          "required": [
+            "feature"
+          ],
+          "title": "BddNarrative",
+          "type": "object"
+        },
+        "CardDocument": {
+          "additionalProperties": false,
+          "properties": {
+            "head": {
+              "$ref": "#/$defs/CardHead"
+            },
+            "scope": {
+              "description": "the `## Scope` section — the owner's words verbatim (T-B1)",
+              "type": "string"
+            },
+            "updates": {
+              "description": "append-only dated blocks (log class); the store stamps the header",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "body"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "head"
+          ],
+          "type": "object"
+        },
+        "CardHead": {
+          "additionalProperties": false,
+          "description": "A card's typed head (03 §2.1). Conditionally required keys are Optional here; the profile (03 §3) decides.",
+          "properties": {
+            "acceptance": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Acceptance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "answers": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Answer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Answers"
+            },
+            "class_of_service": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expedite",
+                    "fixed-date",
+                    "standard",
+                    "intangible"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Class Of Service"
+            },
+            "closures": {
+              "anyOf": [
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Closures"
+            },
+            "depends_on": {
+              "anyOf": [
+                {
+                  "items": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Depends On"
+            },
+            "due": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Due"
+            },
+            "effort": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Effort"
+            },
+            "ends": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Ends"
+            },
+            "goal": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Goal"
+            },
+            "guidance": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Guidance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "hold": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Hold"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "title": "Id",
+              "type": "integer"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "story",
+                    "epic",
+                    "sprint",
+                    "milestone"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Kind"
+            },
+            "lane": {
+              "anyOf": [
+                {
+                  "const": "hotfix",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lane"
+            },
+            "milestone": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Milestone"
+            },
+            "narrative": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BddNarrative"
+                },
+                {
+                  "$ref": "#/$defs/EarsNarrative"
+                },
+                {
+                  "$ref": "#/$defs/ClassicNarrative"
+                },
+                {
+                  "$ref": "#/$defs/TaskNarrative"
+                },
+                {
+                  "$ref": "#/$defs/SpikeNarrative"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Narrative"
+            },
+            "parent": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Parent"
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "P0",
+                    "P1",
+                    "P2",
+                    "P3"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Priority"
+            },
+            "questions": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Question"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Questions"
+            },
+            "refs": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Refs"
+            },
+            "renumbered_from": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Renumbered From"
+            },
+            "reopens": {
+              "anyOf": [
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reopens"
+            },
+            "rules": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Rule"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rules"
+            },
+            "schema": {
+              "title": "Schema",
+              "type": "integer"
+            },
+            "scope_mark": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "owner",
+                    "owner-ratified"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Scope Mark"
+            },
+            "see": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "See"
+            },
+            "shape": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Shape"
+            },
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "source_narrative": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SourceNarrative"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "sprint": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sprint"
+            },
+            "starts": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Starts"
+            },
+            "status": {
+              "enum": [
+                "draft",
+                "ratified",
+                "closed",
+                "withdrawn"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Summary"
+            },
+            "surfaces": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Surfaces"
+            },
+            "tags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tags"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "withdrawn_reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Withdrawn Reason"
+            },
+            "x": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "X"
+            }
+          },
+          "required": [
+            "schema",
+            "id",
+            "status",
+            "source",
+            "title"
+          ],
+          "title": "CardHead",
+          "type": "object"
+        },
+        "ClassicNarrative": {
+          "additionalProperties": false,
+          "properties": {
+            "as_a": {
+              "title": "As A",
+              "type": "string"
+            },
+            "i_want": {
+              "title": "I Want",
+              "type": "string"
+            },
+            "so_that": {
+              "title": "So That",
+              "type": "string"
+            }
+          },
+          "required": [
+            "as_a",
+            "i_want",
+            "so_that"
+          ],
+          "title": "ClassicNarrative",
+          "type": "object"
+        },
+        "CommandAction": {
+          "additionalProperties": false,
+          "properties": {
+            "run": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Run",
+              "type": "array"
+            }
+          },
+          "required": [
+            "run"
+          ],
+          "title": "CommandAction",
+          "type": "object"
+        },
+        "CommandContext": {
+          "additionalProperties": false,
+          "properties": {
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cwd"
+            },
+            "env": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Env"
+            },
+            "fixture": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fixture"
+            }
+          },
+          "title": "CommandContext",
+          "type": "object"
+        },
+        "CommandObservable": {
+          "additionalProperties": false,
+          "properties": {
+            "exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Exit Code"
+            },
+            "files": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/FileCheck"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Files"
+            },
+            "stderr_matches": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Stderr Matches"
+            },
+            "stdout_matches": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Stdout Matches"
+            }
+          },
+          "title": "CommandObservable",
+          "type": "object"
+        },
+        "CommandScenario": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/CommandAction"
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "const": "command",
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "$ref": "#/$defs/CommandObservable"
+            },
+            "rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rule"
+            },
+            "tests": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tests"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "traces": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Traces"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "action",
+            "observable"
+          ],
+          "title": "CommandScenario",
+          "type": "object"
+        },
+        "Constraint": {
+          "additionalProperties": false,
+          "properties": {
+            "because": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Because"
+            },
+            "check": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstraintCheck"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ],
+          "title": "Constraint",
+          "type": "object"
+        },
+        "ConstraintCheck": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Action"
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Context"
+            },
+            "kind": {
+              "enum": [
+                "test-marker",
+                "command",
+                "http",
+                "file-assert",
+                "manual-evidence"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "additionalProperties": true,
+              "title": "Observable",
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "observable"
+          ],
+          "title": "ConstraintCheck",
+          "type": "object"
+        },
+        "EarsNarrative": {
+          "additionalProperties": false,
+          "properties": {
+            "system": {
+              "title": "System",
+              "type": "string"
+            }
+          },
+          "required": [
+            "system"
+          ],
+          "title": "EarsNarrative",
+          "type": "object"
+        },
+        "FileAssertAction": {
+          "additionalProperties": false,
+          "properties": {
+            "run": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Run"
+            }
+          },
+          "title": "FileAssertAction",
+          "type": "object"
+        },
+        "FileAssertContext": {
+          "additionalProperties": false,
+          "properties": {
+            "fixture": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fixture"
+            }
+          },
+          "title": "FileAssertContext",
+          "type": "object"
+        },
+        "FileAssertScenario": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileAssertAction"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileAssertContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "const": "file-assert",
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "$ref": "#/$defs/FileCheck"
+            },
+            "rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rule"
+            },
+            "tests": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tests"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "traces": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Traces"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "observable"
+          ],
+          "title": "FileAssertScenario",
+          "type": "object"
+        },
+        "FileCheck": {
+          "additionalProperties": false,
+          "description": "Exactly one check beside `path` (4.2).",
+          "properties": {
+            "contains": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Contains"
+            },
+            "equals_file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Equals File"
+            },
+            "exists": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Exists"
+            },
+            "matches": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Matches"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "sha256": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sha256"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "title": "FileCheck",
+          "type": "object"
+        },
+        "Guidance": {
+          "additionalProperties": false,
+          "properties": {
+            "avoid": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Avoid"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Avoid"
+            },
+            "constraints": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Constraint"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Constraints"
+            },
+            "risks": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Risk"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Risks"
+            }
+          },
+          "title": "Guidance",
+          "type": "object"
+        },
+        "Hold": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "blocked",
+                "deferred",
+                "watching"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HoldOnOwner"
+                },
+                {
+                  "$ref": "#/$defs/HoldOnCard"
+                },
+                {
+                  "$ref": "#/$defs/HoldOnLegacy"
+                },
+                {
+                  "$ref": "#/$defs/HoldOnText"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "On"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "title": "Hold",
+          "type": "object"
+        },
+        "HoldOnCard": {
+          "additionalProperties": false,
+          "properties": {
+            "card": {
+              "minimum": 1,
+              "title": "Card",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "card"
+          ],
+          "title": "HoldOnCard",
+          "type": "object"
+        },
+        "HoldOnLegacy": {
+          "additionalProperties": false,
+          "properties": {
+            "legacy": {
+              "title": "Legacy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "legacy"
+          ],
+          "title": "HoldOnLegacy",
+          "type": "object"
+        },
+        "HoldOnOwner": {
+          "additionalProperties": false,
+          "properties": {
+            "owner": {
+              "const": true,
+              "title": "Owner",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "owner"
+          ],
+          "title": "HoldOnOwner",
+          "type": "object"
+        },
+        "HoldOnText": {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "title": "HoldOnText",
+          "type": "object"
+        },
+        "HttpAction": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Body"
+            },
+            "method": {
+              "title": "Method",
+              "type": "string"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ],
+          "title": "HttpAction",
+          "type": "object"
+        },
+        "HttpContext": {
+          "additionalProperties": false,
+          "properties": {
+            "base_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Base Url"
+            },
+            "fixture": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fixture"
+            }
+          },
+          "title": "HttpContext",
+          "type": "object"
+        },
+        "HttpObservable": {
+          "additionalProperties": false,
+          "properties": {
+            "body_matches": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Body Matches"
+            },
+            "headers": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Headers"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Status"
+            }
+          },
+          "title": "HttpObservable",
+          "type": "object"
+        },
+        "HttpScenario": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/HttpAction"
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HttpContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "const": "http",
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "$ref": "#/$defs/HttpObservable"
+            },
+            "rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rule"
+            },
+            "tests": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tests"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "traces": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Traces"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "action",
+            "observable"
+          ],
+          "title": "HttpScenario",
+          "type": "object"
+        },
+        "ManualObservable": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence": {
+              "title": "Evidence",
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidence"
+          ],
+          "title": "ManualObservable",
+          "type": "object"
+        },
+        "ManualScenario": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Action"
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Context"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "const": "manual-evidence",
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "$ref": "#/$defs/ManualObservable"
+            },
+            "rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rule"
+            },
+            "tests": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tests"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "traces": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Traces"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "observable"
+          ],
+          "title": "ManualScenario",
+          "type": "object"
+        },
+        "Question": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ],
+          "title": "Question",
+          "type": "object"
+        },
+        "Risk": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "mitigation": {
+              "title": "Mitigation",
+              "type": "string"
+            },
+            "risk": {
+              "title": "Risk",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "risk",
+            "mitigation"
+          ],
+          "title": "Risk",
+          "type": "object"
+        },
+        "Rule": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ],
+          "title": "Rule",
+          "type": "object"
+        },
+        "SourceNarrative": {
+          "additionalProperties": false,
+          "properties": {
+            "anchor": {
+              "title": "Anchor",
+              "type": "string"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "anchor"
+          ],
+          "title": "SourceNarrative",
+          "type": "object"
+        },
+        "SpikeNarrative": {
+          "additionalProperties": false,
+          "properties": {
+            "deliverable": {
+              "title": "Deliverable",
+              "type": "string"
+            },
+            "question": {
+              "title": "Question",
+              "type": "string"
+            },
+            "timebox": {
+              "title": "Timebox",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "timebox",
+            "deliverable"
+          ],
+          "title": "SpikeNarrative",
+          "type": "object"
+        },
+        "TaskNarrative": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "TaskNarrative",
+          "type": "object"
+        },
+        "TestMarkerObservable": {
+          "additionalProperties": false,
+          "properties": {
+            "marker": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Marker"
+            },
+            "test": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Test"
+            }
+          },
+          "title": "TestMarkerObservable",
+          "type": "object"
+        },
+        "TestMarkerScenario": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "const": "test-marker",
+              "title": "Kind",
+              "type": "string"
+            },
+            "observable": {
+              "$ref": "#/$defs/TestMarkerObservable"
+            },
+            "rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Rule"
+            },
+            "tests": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tests"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "traces": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Traces"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "observable"
+          ],
+          "title": "TestMarkerScenario",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "additionalProperties": false,
+          "properties": {
+            "h": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "seq",
+            "h"
+          ],
+          "type": "object"
+        },
+        "card": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "document": {
+          "$ref": "#/$defs/CardDocument"
+        },
+        "new_slug": {
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "type": "string"
+        },
+        "ref": {
+          "description": "a judging ref `c<n>:sha256:<hex>` (5.2)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document"
+      ],
+      "type": "object"
+    }
+  }
+}

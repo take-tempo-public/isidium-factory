@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "isidium-store"
+version = "0.1.0"
+description = "The governed store: every governed document in a registry schema's form, one writer, a journal, a signature."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+dependencies = [
+  "pydantic>=2.7,<3",
+  "cryptography>=42",
+  "httpx>=0.27",
+  "typer>=0.12",
+  # The OpenTelemetry **API** only, and it is a hard dependency on purpose (C-11): every path this distribution
+  # ships is instrumented, so the instrumentation cannot be optional or half the package would be uninstrumented in
+  # the configuration most people install. The API is small, pure Python, and returns no-op tracers and meters when
+  # no SDK is configured — zero egress, measured. The SDK and the exporter are `[telemetry]` below, which is the
+  # deployment's decision and never a wheel's.
+  "opentelemetry-api>=1.30,<2",
+]
+
+[project.optional-dependencies]
+# The store terminates its own mTLS (ruled 7bg.8): it answers the connection, requires a client certificate the
+# registration's CA issued, and reads that certificate off the connection it authorizes. No ASGI server can hand an
+# application a client certificate — neither uvicorn nor hypercorn 0.18 implements the ASGI TLS extension, both
+# verified 2026-08-27 by reading their source — and the store no longer asks one to.
+#
+# h11 is the parser, never ours: it is the sans-IO HTTP/1.1 parser uvicorn itself uses, and the loop around it
+# (server/http.py) holds no protocol grammar. **>= 0.16 is a floor, not a preference:** CVE-2025-43859 was a
+# chunked-terminator leniency exploitable when h11 sat behind a lenient proxy. There is no longer a proxy, and the
+# parser is current.
+server = ["h11>=0.16,<1"]
+
+# The application half of C-11's library/application split: the SDK that turns the API's no-ops into real spans and
+# counters, and the exporter that carries them out of the process. **It is an extra because it is the deployment's
+# decision.** A distribution in this namespace must never force an exporter or a network call on the process that
+# embeds it — the store's container is deliberately small (7bg.8) and its egress is allowlisted (7be.2) — and
+# `core/telemetry.configure()` still does nothing until `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` say so.
+#
+# **HTTP, not gRPC** [measured 2026-08-29, and re-checked here]: the gRPC exporter drags in a large binary wheel
+# (`grpcio`) for no gain against a collector on the same host, and a binary wheel is exactly what a small container
+# does not want. The SDK is also what the tests use — the in-memory span exporter is C-11's enforcement.
+telemetry = ["opentelemetry-sdk>=1.30,<2", "opentelemetry-exporter-otlp-proto-http>=1.30,<2"]
+
+[project.scripts]
+isidium = "isidium.store.client.cli:main"
+isidium-store-mcp = "isidium.store.client.mcp:main"
+
+# PEP 420: `isidium` is a namespace shared with isidium-factory, isidium-memory, ...
+# No src/isidium/__init__.py exists in any distribution.
+[tool.hatch.build.targets.wheel]
+only-include = ["src/isidium/store"]
+artifacts = ["src/isidium/store/registry/schemas/*.toml", "src/isidium/store/registry/generated/*"]
+sources = ["src"]

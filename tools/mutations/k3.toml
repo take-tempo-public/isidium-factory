@@ -1,0 +1,93 @@
+# K3's mutations (2026-08-30) -- delete local mode and loopback. One shape, one boundary.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `client/transport.py`, `client/config.py` or `client/install.py` should be re-run against.
+# Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k3.toml M3
+#
+# Every mutation below aims at a property this chunk CREATED. The chunk's real work is a deletion, and a deletion
+# cannot be mutated -- so each of these puts back a piece of what local mode used to do, or breaks the one door
+# that replaced it, and names the test that must notice.
+
+[[mutation]]
+id = "M1"
+label = "the client file carries an identity again -- `grant`, self-asserted, back in the dataclass"
+file = "packages/isidium-store/src/isidium/store/client/config.py"
+find = "    key: str = \"\"  # this client's private key"
+replace = "    key: str = \"\"  # this client's private key\n    grant: str = \"contributor\""
+
+[[mutation]]
+id = "M2"
+label = "a pre-K3 client file loads instead of being refused: unknown keys are ignored"
+file = "packages/isidium-store/src/isidium/store/client/config.py"
+find = "        if unknown:"
+replace = "        if False and unknown:"
+
+[[mutation]]
+id = "M3"
+label = "`init` drops the operator's chosen root again -- the defect this chunk found"
+file = "packages/isidium-store/src/isidium/store/client/install.py"
+find = "    if chosen_root is not None:\n        args[\"root\"] = chosen_root"
+replace = "    if False and chosen_root is not None:\n        args[\"root\"] = chosen_root"
+
+# M4, first attempt -- `args["root"] = cfg.root` in place of `chosen_root` -- SURVIVED, and it was an EQUIVALENT
+# mutant, not a coverage gap. Inside that branch the two are provably the same value: `chosen_root = cfg.root or
+# None` is captured before `resolve_root`, so `chosen_root is not None` means `cfg.root` was already truthy, which
+# means `resolve_root` returned `cfg` unchanged. The mutation could not alter behaviour under any input.
+#
+# Recorded rather than deleted, because the three ways a mutation survives are worth telling apart: the code has no
+# test (a gap), the test cannot see the property (K1d's lesson, met twice), or -- this one -- the mutation is not a
+# change. Only the first two are findings about the code.
+#
+# What the property actually needs is a mutation that captures the root on the WRONG SIDE of resolution, which is
+# the real defect shape: a blank root becomes the declared default and is then written into the tenant's governed
+# file as though they had chosen it.
+[[mutation]]
+id = "M4"
+label = "`init` captures the root AFTER resolution: the governed file names one the tenant never chose"
+file = "packages/isidium-store/src/isidium/store/client/install.py"
+find = "    chosen_root = cfg.root or None\n    cfg = resolve_root(cfg)"
+replace = "    cfg = resolve_root(cfg)\n    chosen_root = cfg.root or None"
+
+[[mutation]]
+id = "M5"
+label = "the channel opens with no credentials -- `client.channel` never fires"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "        if not (cfg.address and cfg.ca and cfg.cert and cfg.key):"
+replace = "        if False and not (cfg.address and cfg.ca and cfg.cert and cfg.key):"
+
+[[mutation]]
+id = "M6"
+label = "the client stops presenting its certificate: the caller has no identity to resolve"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "        ctx.load_cert_chain(str(workdir / cfg.cert), str(workdir / cfg.key))"
+replace = "        pass  # the certificate is not presented"
+
+[[mutation]]
+id = "M7"
+label = "the client stops pinning the store to the registration's CA -- any authority will do"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "        ctx = httpx.create_ssl_context(verify=str(workdir / cfg.ca))"
+replace = "        ctx = httpx.create_ssl_context(verify=False)"
+
+[[mutation]]
+id = "M8"
+label = "a validation refusal comes back off the wire as prose, not as typed verdicts (Q7)"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "    if isinstance(rows, list):"
+replace = "    if False and isinstance(rows, list):"
+
+[[mutation]]
+id = "M9"
+label = "the transport imports the store at module scope again -- K3's import win undone"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "from .config import ClientConfig"
+replace = "from ..server.api import Api  # noqa: F401\nfrom .config import ClientConfig"
+
+[[mutation]]
+id = "M10"
+label = "a refusal crossing the wire loses its status: every response reads as success"
+file = "packages/isidium-store/src/isidium/store/client/transport.py"
+find = "        if r.status_code != 200:"
+replace = "        if False and r.status_code != 200:"

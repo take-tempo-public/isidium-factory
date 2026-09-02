@@ -1,0 +1,29 @@
+name = "sidecar-events"
+version = 1
+form = "jsonl"
+
+# 03 §6 — `state/history.jsonl`: one event per line, a tagged union on `kind`; the per-kind members (`class` on
+# `failed`, `run_id`, `closure_id`, …) are code (core/events.py) — a declared limit of the nine-member vocabulary.
+
+[[record]]
+name = "id"
+type = "string"
+required_when = []
+pattern = "e[1-9][0-9]*"
+
+[[record]]
+name = "at"
+type = "string"
+required_when = []
+
+[[record]]
+name = "card"
+type = "int"
+required_when = []
+range = { min = 1 }
+
+[[record]]
+name = "kind"
+type = "string"
+required_when = []
+enum = ["dispatched", "parked", "answered", "failed", "disputed", "complete", "closed", "reverted", "demoted", "withdrawn", "acked", "accepted", "reopened", "question", "merged", "landed"]

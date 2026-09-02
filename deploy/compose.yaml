@@ -1,0 +1,82 @@
+# One store container per tenant (03b §2, ruled 7ba.6). This file stands a tenant's store up on any host with a
+# container runtime — the workstation's WSL2 today, agent-station when its base is built. Nothing in it is
+# workstation-specific: the same file runs there.
+#
+# **One process in the container** (7bg.8): the store terminates its own mTLS. There is no proxy and no socket.
+#
+# What you must provide before `podman compose up` (the deployment record's S-1…S-4, and the README's steps):
+#   ./tls/ca.pem                      the CA the tenant registration pins — it issues every client certificate
+#   ./tls/store.cert.pem, store.key.pem   the store's own certificate, issued by that CA
+#   ./tls/probe.cert.pem, probe.key.pem   the healthcheck's certificate — CA-issued, and NOT in the registration
+#   ./registration.json               {"<client certificate subject>": ["<principal>", "<grant>"]}
+#   ./signer.key.pem                  the store's own Ed25519 signing key — the software-grade waiver path
+#   ISIDIUM_ORIGIN                    the tenant repository the store clones and pushes to
+#
+# **There is no `./tenant` mount, and that is the change.** The store's clone is derived, not authored: the
+# entrypoint rebuilds it at every start from ISIDIUM_ORIGIN. That is what makes a restart the way a bypass commit
+# becomes visible — a persistent clone would serve a branch the store last saw whenever it was created. Your own
+# checkout stays yours; you pull what the store wrote, and the store never touches your working tree.
+
+services:
+  store:
+    build:
+      context: ..
+      dockerfile: deploy/Containerfile.store
+    image: isidium-store:0.1.0
+    container_name: isidium-store-${TENANT:-sartor}
+    restart: unless-stopped
+    environment:
+      # The decisions. None of them has a default in the image; the entrypoint refuses without them.
+      TENANT: ${TENANT:-sartor}
+      ISIDIUM_ORIGIN: ${ISIDIUM_ORIGIN:?set ISIDIUM_ORIGIN — the tenant repository this store clones and pushes to}
+      ISIDIUM_ROOT: ${ISIDIUM_ROOT:-docs/work/}
+      # The store fetches governed blob content from the origin while it runs (a filtered clone holds no blob it did
+      # not write), so the forge must be reachable from this container and on its egress allowlist (7be.2). A store
+      # cut off from the origin can read no governed document it did not itself write.
+      GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=yes"
+      # **Instrumentation is installed; whether it exports is decided here** (C-11). `console` writes spans to
+      # stderr — no collector, no SigNoz, no network at all — and it is what the first start should use, because a
+      # wrong CA path refuses every caller silently on both sides of the connection and the spans are how that is
+      # found in minutes instead of an afternoon. Unset means `none`: nothing is installed and nothing leaves.
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-console}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-none}
+      OTEL_SERVICE_NAME: isidium-store-${TENANT:-sartor}
+      # The waiver backend's key (`serve --signer`). **Without it a store cannot open the tenant's policy chain**:
+      # with no realm pinned, `isidium init` comes back `init.no-ratifier: identity is disabled and no ratifier key
+      # is pinned` — measured here 2026-09-01, against a container that was otherwise entirely healthy. Unset it
+      # when the tenant's ratifier is a realm rather than a key on this disk.
+      ISIDIUM_SIGNER: ${ISIDIUM_SIGNER-/etc/isidium/signer.key.pem}
+    ports:
+      - "${STORE_PORT:-8443}:8443"
+    volumes:
+      # The journal and the store's signing material. A **named volume**, not a bind mount: the container runs as an
+      # unprivileged user of its own and a host directory arrives owned by whoever made it, which is a first-start
+      # permission failure with no diagnosis in it. `podman volume inspect isidium-state-<tenant>` finds it.
+      - state:/var/lib/isidium/state
+      - ./tls:/etc/isidium/tls:ro
+      - ./registration.json:/etc/isidium/registration.json:ro
+      # Not TLS, and mounted on its own so it reads as what it is: the key the store signs the policy chain with.
+      - ./signer.key.pem:/etc/isidium/signer.key.pem:ro
+    # The store writes its clone (inside the image's own layer) and its state volume; everything else is read-only,
+    # and nothing is privileged.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      # `GET /health` over mTLS, through the front door — the store's real listener, with the same strict
+      # verification a caller uses. The old check was `test -S /run/isidium/store.sock`: after 7bg.8 that socket does
+      # not exist and the container would be permanently unhealthy, and even before, a socket file said a process
+      # opened a path, not that the store answers. The probe's certificate is CA-issued and deliberately **not** in
+      # the registration (S-4): it is not a principal, holds no grant, and reaches only `/health`.
+      test: ["CMD", "python3", "/usr/local/bin/isidium-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # The first start clones and then hydrates its governed set one object at a time, so it is slower than a
+      # steady-state start. `start_period` is what keeps that from being reported as unhealthy.
+      start_period: 60s
+
+volumes:
+  state:
+    name: isidium-state-${TENANT:-sartor}

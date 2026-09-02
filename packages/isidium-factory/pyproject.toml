@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "isidium-factory"
+version = "0.1.0"
+description = "The factory line: ledger, dispatch, execution adapters, the lander. A client of isidium-store; never installed by a tenant."
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+dependencies = [
+  "isidium-store",
+]
+
+[project.scripts]
+isidium-factory = "isidium.factory.cli:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/isidium/factory"]
+sources = ["src"]

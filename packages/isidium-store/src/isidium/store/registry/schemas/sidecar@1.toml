@@ -1,0 +1,38 @@
+name = "sidecar"
+version = 1
+form = "json"
+
+# 03 §6 — `state.json`, the current execution state per card: the fold of `state/history.jsonl` as of the ledger
+# cursor. Written only by `land` (the `lander` grant). The per-card record shape is a tagged structure the nine-member
+# vocabulary declares only at its top level; the rest is code (server/verbs/land.py).
+
+[[record]]
+name = "schema"
+type = "int"
+required_when = []
+
+[[record]]
+name = "ledger_cursor"
+type = "string"
+required_when = []
+
+[[record]]
+name = "landed_at"
+type = "string"
+required_when = []
+
+[[record]]
+name = "journal_head"
+type = "table"
+required_when = []
+
+[[record]]
+name = "batches"
+type = "table"
+required_when = []
+
+[[record]]
+name = "cards"
+type = "table"
+required_when = []
+dynamic-table = { key-grammar = "[0-9]{4,}" }

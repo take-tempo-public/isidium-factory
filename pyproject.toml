@@ -1,0 +1,52 @@
+# Root: tooling only. The distributions live under packages/ (isidium-store, isidium-factory).
+# Code is LF; the design docs under docs/ are CRLF; .gitattributes keeps bytes as-is either way.
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["packages/isidium-store/src", "packages/isidium-factory/src", "tests"]
+extend-exclude = ["review-artifacts"]
+
+[tool.ruff.format]
+line-ending = "lf"
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF", "SIM", "C4", "PIE", "RET"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # non-ASCII in comments/docstrings: the design's own characters
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["isidium"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "packages/isidium-store/src:packages/isidium-factory/src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unreachable = true
+exclude = ["review-artifacts/"]
+
+[[tool.mypy.overrides]]
+module = ["h11.*"]
+ignore_missing_imports = true
+
+# The OTLP exporter is the `[telemetry]` extra and is not installed on this workstation — the same reason `h11.*` is
+# above. This is NOT a question-hiding ignore (C-7): the two imports it covers are inside `telemetry.configure()`,
+# behind the deployment's own `OTEL_*_EXPORTER=otlp`, and every other OpenTelemetry module the package touches
+# (`opentelemetry.trace`, `.metrics`, and the SDK the tests drive) is typed and checked.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.exporter.*"]
+ignore_missing_imports = true
+
+[tool.pyright]
+extraPaths = ["packages/isidium-store/src", "packages/isidium-factory/src"]
+exclude = ["review-artifacts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["packages/isidium-store/src", "packages/isidium-factory/src"]
+addopts = "-q"

@@ -1,0 +1,85 @@
+schema = 1
+tenant = "acme-tools"
+root = "docs/wörk/"
+
+[toolkit]
+client = "0.4.2"
+registry = "0.4.2"
+unidata = "16.0.0"
+object_id = "sha1"
+
+[ladder]
+levels = ["initiative"]
+
+[shapes]
+allowed = ["bdd", "task", "spike", "crispy"]
+
+[shapes.crispy]
+
+[runners]
+lint = "ruff"
+
+[prioritization]
+time_criticality = 400
+unblocking = 300
+resume = 150
+aging = 100
+batch = 50
+risk = 0
+
+[origin]
+card = ["session", "review", "planner", "suggestion", "digest", "gossip"]
+
+[extensions]
+
+[extensions.risk_reduction]
+type = "string"
+class = "gated"
+required_when = [{ field = "kind", in = ["story"] }]
+
+[[governed]]
+path = "cards/*.md"
+schema = "card@1"
+write = ["owner", "contributor"]
+
+[[governed]]
+path = "suggestions.jsonl"
+schema = "inbox@1"
+write = ["owner", "contributor", "lander"]
+
+[[governed]]
+path = "state.json"
+schema = "sidecar@1"
+write = ["lander"]
+
+[[governed]]
+path = "state/history.jsonl"
+schema = "sidecar-events@1"
+write = ["lander"]
+
+[[governed]]
+path = "BOARD.md"
+schema = "board@1"
+write = ["lander"]
+
+[[governed]]
+path = "config.toml"
+schema = "config@1"
+write = ["owner"]
+
+[[governed]]
+path = "docs/wiki/*.md"
+schema = "card@1"
+write = ["owner"]
+
+[history]
+entries = [
+  { seq = 1, at = "2026-08-26T09:00:07Z", by = "owner@acme-tools.example", act = "created", fields = ["governed", "schema", "tenant", "toolkit"], build = "sha256:74affbaa66e55075c69d6494b9e4e3a0f36611043082b9e479f023f5a9de98cf", h = "sha256:7f744e703477a9c986e006aedf611e31ec6e65fbb7bca9dd9acca7d1fb7e5971", sig = "ed25519:a84968b882f8682f:H5ERZgAxtohFDcvmNtbejYaeGaB74B2XDm/ztHQlCMc=" },
+  { seq = 2, at = "2026-08-26T09:00:14Z", by = "amodal1@example", act = "config-policy", fields = ["prioritization"], build = "sha256:bc0ebd04de12ff91e944e8794c3c1eae8889662411894adecdf806eef4c0fe7d", h = "sha256:640b9ca351692f1ae08ee6088b0f6957afcf032901b2a856f05fd87002f4363a", sig = "ed25519:5af3c5d6fc9dac8d:+FyIA6Hk/pKADmdyA0VqnIyoYmQOpWE3yIx572/9DzU=" },
+  { seq = 3, at = "2026-08-26T09:00:28Z", by = "amodal1@example", act = "config-policy", fields = ["ladder", "origin", "runners", "shapes"], build = "sha256:3679548b6f24cd28b672fe456b0ffb7d47f42ad5b3ae03149c33134e26b8ea28", h = "sha256:a92c937750a824ea86cd402329b2c07ff07957bceb0cc589cda77ba565c1c915", sig = "ed25519:5af3c5d6fc9dac8d:NULcdX5IGRAb3PGsaaI6vuWeVPcNT08WUc+vAYYCuSs=" },
+  { seq = 4, at = "2026-08-26T09:00:35Z", by = "amodal1@example", act = "config-policy", fields = ["extensions"], build = "sha256:b62406f4b5e00c3c06fc64a392bc51a61f00740f9008e464d2165b3bcb40f640", h = "sha256:9b198391175fb6a1a464b92770df865677a98b8d2d23747198fc6a1008ee3862", sig = "ed25519:5af3c5d6fc9dac8d:WFXn7SOld+m+DJroaLffM9k33IF1NaHT3tbPZN76IUM=" },
+  { seq = 5, at = "2026-08-26T09:00:42Z", by = "amodal1@example", act = "config-policy", fields = ["governed"], build = "sha256:1897d5691d6918e4ef8350beb08d129006e6d1dc747e5ec09af322df47dcd016", h = "sha256:ea9cf0e2adb050e071417331577f538e58f84ef81b32259315c9b4cb10512728", sig = "ed25519:5af3c5d6fc9dac8d:hcPUr1ie4l9Ow2LdIHTbtp+qsCu1SMcux2GM5/YgFb4=" },
+  { seq = 6, at = "2026-08-26T09:00:49Z", by = "amodal1@example", act = "batch-manifest", fields = [], build = "sha256:1897d5691d6918e4ef8350beb08d129006e6d1dc747e5ec09af322df47dcd016", ref = ["sha256:4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a", "sha256:6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d", "sha256:dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986"], h = "sha256:06cf5048756d1883ae838073fb0b345d64fe276d8e63680e597e13a8b1df2cfa", sig = "ed25519:5af3c5d6fc9dac8d:tqWXAqM5ynDLwCEXqOkCCzLXO7VJc7adcmK+bZdXoc0=" },
+  { seq = 7, at = "2026-08-26T09:00:56Z", by = "realm-svc@agents.example", act = "binding", fields = [], build = "sha256:1897d5691d6918e4ef8350beb08d129006e6d1dc747e5ec09af322df47dcd016", ref = { key_fpr = "cccccccccccccccc", grant = "owner", tenant = "acme-tools", from = "2026-08-26T00:00:00Z" }, h = "sha256:1d448b361f99197d67475947ef1c25d52041fe283c1df9e8bf26ea0aa9a569ad", sig = "ed25519:51b3cf6237592de8:zPjT/QHdp6N+iJNo/xThFOf3DCjbYv3HmofKNo9Zc+A=" },
+  { seq = 8, at = "2026-08-26T09:01:03Z", by = "amodal1@example", act = "config-policy", fields = ["root"], build = "sha256:6e68abf3b539a874ad414722f93e98535576db1d14885388cf2027f1bdc71510", h = "sha256:5ec7924c510df46cbdd2eb1533841f379a3e1c26f6a3fadbb531545f1bdb2397", sig = "ed25519:5af3c5d6fc9dac8d:bJB7FBwHFqlNda7y5IdqEvC6VbSydyujHHV57PD7aiE=" },
+]

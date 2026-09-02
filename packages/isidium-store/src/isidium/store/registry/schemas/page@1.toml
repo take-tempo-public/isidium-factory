@@ -1,0 +1,32 @@
+name = "page"
+version = 1
+form = "markdown"
+footer = "history"
+
+# The second Markdown document type under the governed-document grammar (03b §3): a typed head, one bounded prose
+# section, the footer. Wiki and recall page schemas proper are designed under T-B12 — declared, not yet validated;
+# this is the minimal form the grammar and the store exercise (the r6 `pages/*.md` scenarios).
+
+[[head]]
+name = "schema"
+type = "int"
+class = "meta"
+required_when = []
+
+[[head]]
+name = "title"
+type = "string"
+class = "gated"
+required_when = []
+
+[[head]]
+name = "slug"
+type = "string"
+class = "meta"
+pattern = "[a-z0-9][a-z0-9-]*"
+
+[[sections]]
+name = "Body"
+kind = "prose"
+max_bytes = 8192
+headings_allowed = true

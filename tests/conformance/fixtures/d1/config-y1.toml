@@ -1,0 +1,48 @@
+schema = 2
+tenant = "acme-tools"
+
+[toolkit]
+client = "0.4.2"
+registry = "0.4.2"
+unidata = "16.0.0"
+object_id = "sha1"
+
+[inbox]
+dedupe_window_days = 3
+
+[[governed]]
+path = "cards/*.md"
+schema = "card@1"
+write = ["owner", "contributor"]
+
+[[governed]]
+path = "suggestions.jsonl"
+schema = "inbox@1"
+write = ["owner", "contributor", "lander"]
+
+[[governed]]
+path = "state.json"
+schema = "sidecar@1"
+write = ["lander"]
+
+[[governed]]
+path = "state/history.jsonl"
+schema = "sidecar-events@1"
+write = ["lander"]
+
+[[governed]]
+path = "BOARD.md"
+schema = "board@1"
+write = ["lander"]
+
+[[governed]]
+path = "config.toml"
+schema = "config@2"
+write = ["owner"]
+
+[history]
+entries = [
+  { seq = 1, at = "2026-08-26T09:00:07Z", by = "owner@acme-tools.example", act = "created", fields = ["governed", "schema", "tenant", "toolkit"], build = "sha256:74affbaa66e55075c69d6494b9e4e3a0f36611043082b9e479f023f5a9de98cf", h = "sha256:7f744e703477a9c986e006aedf611e31ec6e65fbb7bca9dd9acca7d1fb7e5971", sig = "ed25519:a84968b882f8682f:H5ERZgAxtohFDcvmNtbejYaeGaB74B2XDm/ztHQlCMc=" },
+  { seq = 2, at = "2026-08-26T09:00:14Z", by = "amodal1@example", act = "config-policy", fields = ["governed", "schema"], build = "sha256:50637a7a05f6869dc0e828e9bf5cca0dab43e707b228da6194a0ee6376e78a3d", h = "sha256:2603f3869a54c0703be52662f084fdea3fc66c525e565e1d5b983b2500bd10b2", sig = "ed25519:5af3c5d6fc9dac8d:EEN4b3EkyRYDulPq2Hoz0K7hSJ6vc85t0n2MO5bA0lk=" },
+  { seq = 3, at = "2026-08-26T09:00:21Z", by = "amodal1@example", act = "config-policy", fields = ["inbox"], build = "sha256:c34f9431fc73421c87410cca54f453879e017b4edf8b13169751c6ab028cc711", h = "sha256:7f2acbb2d02ac9d5ad8a30ca5b0c9f77da796b403d6f2d4c3e9a859d8ec8ed46", sig = "ed25519:5af3c5d6fc9dac8d:XuFISOMD1i7+Zt7HJjCqbs98zZZpx4sjvj8/mYdj7uI=" },
+]

@@ -1,0 +1,124 @@
+# K4's mutations (2026-08-31) -- `GitCli` bare and object-level, and the store's registry source.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `server/gitrepo.py`, `server/refs.py` or `serve`'s store construction must be re-run against.
+# Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k4.toml M3
+#
+# The chunk's whole claim is that the footprint is now ENFORCED rather than implied, so M1 and M2 are the two ways
+# it stops being: the gate goes, or the guard underneath it goes. They are separate on purpose -- each alone leaves
+# a test passing that reads as if the property held, and only the pair says the enforcement is doubled deliberately.
+
+[[mutation]]
+id = "M1"
+label = "the root gate goes -- `read` no longer refuses a path outside the governed set"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        if not path.startswith(self.root):
+            raise Refusal("git.outside-footprint", path, "this path is outside the governed set")"""
+replace = "        pass  # the gate, removed"
+
+[[mutation]]
+id = "M2"
+label = "`GIT_NO_LAZY_FETCH` goes -- a read of a code path silently fetches the blob and keeps it (the 2026-08-29 defect, restored)"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '        self._env: dict[str, str] = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}'
+replace = "        self._env: dict[str, str] = {**os.environ}"
+
+[[mutation]]
+id = "M3"
+label = "the clone stops filtering -- the footprint grows to the whole history and the report still says so"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '            ["git", "clone", "--bare", "--filter=blob:none", "-b", branch, url, str(into)],'
+replace = '            ["git", "clone", "--bare", "-b", branch, url, str(into)],'
+
+[[mutation]]
+id = "M4"
+label = "`update-ref` drops the expected old value -- the compare-and-swap on the ref is gone"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '            self._git("update-ref", ref, commit_oid, old if old else "")'
+replace = '            self._git("update-ref", ref, commit_oid)'
+
+# M5's FIRST FORM, kept above its replacement because the three ways a survivor happens are worth telling apart
+# and only two of them are findings about a missing test (K3's worked example is the other kind).
+#
+#   id = "M5"  label = "the push drops its lease"
+#   find    = '        lease = [f"--force-with-lease=refs/heads/{self.branch}:{self._lease}"] if self._lease else []'
+#   replace = "        lease: list[str] = []"
+#
+# It SURVIVED, and chasing why found a defect in the code rather than a gap in the tests. `--force-with-lease` is a
+# safer `--force`, not a safer push: measured 2026-08-31, with the lease naming the value the remote actually held,
+# a divergent push succeeded as a **forced update** and destroyed the other writer's commit, where the plain push
+# was rejected. So the lease could only ever help when it named the value the store built on -- in which case the
+# push is a fast-forward and needs no help. Removing it was strictly safer, which is why the mutation could not be
+# killed: it deleted something that was worse than nothing. `push` is now plain, and the mutation below is one that
+# actually is a change -- the old rebase-and-retry, which is the behaviour the ruling removed.
+
+[[mutation]]
+id = "M5"
+label = "the rejected push rebases and retries again -- the shape the ruling removed, and there is no tree to rebase in"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        except Refusal as r:
+            raise Refusal(
+                "git.push-rejected", f"{self.remote}/{self.branch}", "the remote moved under the store"
+            ) from r"""
+replace = """        except Refusal:
+            self._git("fetch", "--quiet", self.remote, self.branch)
+            self._git("update-ref", f"refs/heads/{self.branch}", "FETCH_HEAD")
+            self._git("push", "--quiet", self.remote, f"HEAD:{self.branch}")"""
+
+[[mutation]]
+id = "M6"
+label = "`read` decodes and re-encodes again -- the round trip that corrupts every non-UTF-8 byte"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "        return self.blob(oid)"
+replace = '        return self.blob(oid).decode("utf-8", "replace").encode("utf-8")'
+
+[[mutation]]
+id = "M7"
+label = "`refs` resolution reads content again -- Q11 undone, and the store reaches for a code blob at ratification"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            self.repo.oid_of,"
+replace = "            lambda p: (lambda b: None if b is None else blob_id(b, self.repo.object_format))(self.repo.read(p)),"
+
+[[mutation]]
+id = "M8"
+label = "`paths()` reads the index again -- `ls-files` on a bare clone, which answers nothing at all"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "        return sorted(self._tree())"
+replace = '        return [p for p in self._git("ls-files", "-z").split("\\0") if p]'
+
+[[mutation]]
+id = "M9"
+label = "the tree cache is never invalidated -- a write lands and the next read serves the commit before it"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        self._tree_cache = None
+        return commit_oid"""
+replace = "        return commit_oid"
+
+[[mutation]]
+id = "M10"
+label = "the footprint is read off the config instead of counted -- S-9's first trap, taken"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        for line in self._git("rev-list", "--objects", "--all", "--missing=print").splitlines():
+            if line.startswith("?"):
+                return Footprint.FILTERED
+        return Footprint.FULL"""
+replace = """        if self._git("config", "--get", "remote.origin.promisor").strip() == "true":
+            return Footprint.FILTERED
+        return Footprint.FULL"""
+
+[[mutation]]
+id = "M11"
+label = "reads spawn a process each again -- the batch reader is bypassed (C-8; 22x here)"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        data = self._reader().read(oid)
+        if data is None:
+            if oid not in self._vouched:
+                raise Refusal("git.outside-footprint", oid, "this object was not resolved from a governed path")
+            self._hydrate(oid)
+            data = self._reader().read(oid)"""
+replace = """        r = subprocess.run(
+            ["git", "cat-file", "blob", oid], cwd=self.gitdir, capture_output=True, check=False, env=self._fetch_env
+        )
+        data = r.stdout if r.returncode == 0 else None"""

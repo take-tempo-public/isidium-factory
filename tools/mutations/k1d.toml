@@ -1,0 +1,84 @@
+# K1d's mutations (2026-08-30) -- lazy registry loading, C-13. All ten died on the first pass.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `registry/loader.py` should be re-run against. Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k1d.toml M3
+
+[[mutation]]
+id = "M1"
+label = "`installed` forces every document -- the lazy listing lost"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        return frozenset(self._slots)"
+replace = "        return frozenset(self.addresses)"
+
+[[mutation]]
+id = "M2"
+label = "`get()` forces the whole collection to answer one question"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = """\n        return slot.doc()
+
+    def has(self, ref: str) -> bool:"""
+replace = """\n        for other in self._slots.values():
+            other.doc()
+        return slot.doc()
+
+    def has(self, ref: str) -> bool:"""
+
+[[mutation]]
+id = "M3"
+label = "the filename-agreement check is gone: contents may say anything"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "            if declared != self._ref:"
+replace = "            if False and declared != self._ref:"
+
+[[mutation]]
+id = "M4"
+label = "the filename grammar check is gone: any `*.toml` is a ref"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "    if not SCHEMA_REF.match(ref):"
+replace = "    if False and not SCHEMA_REF.match(ref):"
+
+[[mutation]]
+id = "M5"
+label = "the startup contract is deferred -- C-13 carve-out 1 removed"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        if not slots:"
+replace = "        if False and not slots:"
+
+[[mutation]]
+id = "M6"
+label = "a forced slot is not held: lazy becomes lazy-and-repeated"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = """\n            self._doc = doc
+        return self._doc"""
+replace = """\n            return doc
+        return self._doc"""
+
+[[mutation]]
+id = "M7"
+label = "`source()` parses every document to hand back bytes it already had"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        return {ref: slot.raw() for ref, slot in self._slots.items()}"
+replace = "        return {ref: (slot.doc() and slot.raw()) for ref, slot in self._slots.items()}"
+
+[[mutation]]
+id = "M8"
+label = "`for_checkout` ignores the checkout's own registry"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        return cls._over(slots) if slots else cls.shipped()"
+replace = "        return cls.shipped()"
+
+[[mutation]]
+id = "M9"
+label = "the directory listing silently truncates to one document"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        for path in sorted(directory.glob(\"*.toml\"))"
+replace = "        for path in sorted(directory.glob(\"*.toml\"))[:1]"
+
+[[mutation]]
+id = "M10"
+label = "`addresses` comes back empty -- a carve-out that answers nothing"
+file = "packages/isidium-store/src/isidium/store/registry/loader.py"
+find = "        return {ref: canon.content_address(slot.doc()) for ref, slot in self._slots.items()}"
+replace = "        return {}"

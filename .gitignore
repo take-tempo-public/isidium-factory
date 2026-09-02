@@ -1,0 +1,27 @@
+# the factory (working label) -- design sprint repo
+# Machine-local
+.claude/settings.local.json
+# Python
+__pycache__/
+*.pyc
+# tools/mutate.py's crash-safety sidecar: the pristine bytes of the file a mutation run is holding. Its
+# presence means a run did not finish; the next invocation repairs the tree from it.
+.mutation-in-flight.json
+
+# Build
+.venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+# Python build artifacts only — anchored, because a bare `build/` also matched `docs/build/` and silently
+# untracked the build plan and the setup record (caught 2026-08-27).
+/build/
+/dist/
+
+# The deployment's private material. `deploy/README.md` has the operator write these into `deploy/` itself, so
+# without these lines a first `git add -A` after standing a store up commits the CA key and every caller's key.
+/deploy/tls/
+/deploy/registration.json
+/deploy/signer.key.pem
+/deploy/.env
