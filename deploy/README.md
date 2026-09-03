@@ -340,6 +340,45 @@ git fetch origin main && git ls-tree -r origin/main --name-only | grep ^docs/wor
 line itself — so this checkout refuses a governed-path commit locally, and `main` refuses one at the forge once the
 gate is on (the deployment record, S-12 … S-14).
 
+### The gate on `main`, demonstrated 2026-09-03
+
+With the three checks green on `main`, the ruleset went on (the deployment record, S-12: a pull request required, the
+checks `sweep` / `verify` / `green-bar` required, no force-push, no deletion, the store's deploy key the one bypass;
+GitHub ruleset `22217228`). Then each refusal was attempted for real. `main` was `486cfe3` before and after all three.
+
+```
+$ git push origin HEAD:main                       # a human's direct push (an empty commit on top of main)
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Changes must be made through a pull request.
+remote: - 3 of 3 required status checks are expected.
+ ! [remote rejected] HEAD -> main (push declined due to repository rule violations)
+
+$ git push --force origin e042ab8:main            # a force-push rewinding main by one commit
+remote: - Cannot force-push to this branch
+remote: - Changes must be made through a pull request.
+ ! [remote rejected] e042ab8 -> main (push declined due to repository rule violations)
+
+$ printf '\n# a hand edit\n' >> docs/work/config.toml && git commit -am "…"   # a human edits the governed root
+isidium: refused — governed paths are written by the store, not by a commit here (03 §9.6):
+  docs/work/config.toml                           # the local hook, first
+$ git commit --no-verify -am "…" && git push -u origin demo-governed-edit && gh pr create …   # past the hook: PR #3
+verify   fail   14s                               # the required check, on the forge:
+    changed  docs/work/config.toml  — a governed path changed off main; the store is its only writer
+    tampered config.toml  [config@1]  head.history-position @ history: content after the entries array
+$ gh pr merge 3 --rebase
+X Pull request … is not mergeable: the base branch policy prohibits the merge.
+```
+
+Two mechanisms fired on the one hand edit: the diff check (any governed change off `main`), and the grammar (a
+comment after `[history]` — the store's own rule that the history is the last thing in the file). Either alone
+would have blocked the merge.
+
+**Override, and what there is not.** There is no standing bypass for the owner: `gh`'s hint that `--admin` merges a
+blocked pull request is generic advice for branch protection, and a ruleset exempts nobody who is not in its bypass
+list — here, the deploy key alone. The break-glass at the forge is *disable the ruleset, fix, re-enable*, one audited
+call; in the store it is `isidium repair`, owner-signed. Revoking the store is deleting its deploy key. (The `--admin`
+attempt itself is the owner's to run; it was not run by the session that wrote this.)
+
 **Install the client; do not run `init` under `PYTHONPATH`.** The first run here did exactly that, and the hook
 `init` installs — `exec <the interpreter init ran under> -m isidium.store.client.hook` — then refused the very
 next commit with `ModuleNotFoundError: No module named 'isidium'`, because that interpreter had never had the
