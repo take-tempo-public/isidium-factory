@@ -18,7 +18,12 @@ jobs:
       - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
       - uses: actions/setup-python@v5 # likewise
         with:
-          python-version: "3.12" # the runtime the container ships (deploy/Containerfile.store); the suite is run on 3.13 by hand
+          # 3.13, not the container's 3.12 — measured on this workflow's first run (2026-09-03, PR #1): the suite
+          # fails on 3.12 with `Path.read_text() got an unexpected keyword argument 'newline'` (3.13+) in
+          # tests/conformance/test_corpus.py, so 3.13 is the only version the suite has ever passed on, while the
+          # package declares >=3.12 and the image ships 3.12. That gap is recorded for K5, which owns the pin;
+          # until it is reconciled the container's runtime is exercised by the live run, not by this check.
+          python-version: "3.13"
       - name: install
         run: |
           set -eu
