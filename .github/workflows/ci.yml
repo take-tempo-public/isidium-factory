@@ -1,0 +1,38 @@
+# The code gate (K8, ruled Q13 2026-09-03: "ci.yml in K8"): the green bar every chunk already runs by hand — the
+# suite, `mypy --strict` over packages/, `ruff check`, `ruff format --check` — as a REQUIRED status check, so nothing
+# reaches `main` gated by less than it. Same idiom as identity-sweep: a property enforced by a check.
+#
+# **Unpinned on purpose, and K5 owns the fix**: K5 replaces the install below with the locked toolchain
+# (`uv sync --locked`, hashes) and pins the actions by digest. Until then this file is the belt without the lock,
+# and it says so rather than pretending.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+jobs:
+  green-bar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
+      - uses: actions/setup-python@v5 # likewise
+        with:
+          python-version: "3.12" # the runtime the container ships (deploy/Containerfile.store); the suite is run on 3.13 by hand
+      - name: install
+        run: |
+          set -eu
+          python -m pip install --quiet --upgrade pip
+          # the store first: the factory package names `isidium-store` as a dependency, and this is where it comes from
+          python -m pip install --quiet "./packages/isidium-store[server,telemetry]"
+          python -m pip install --quiet ./packages/isidium-factory
+          python -m pip install --quiet pytest pytest-xdist mypy ruff
+      - name: the suite
+        run: python -m pytest tests -q -n auto --dist loadfile
+      - name: mypy --strict over packages/
+        run: python -m mypy packages/isidium-store/src packages/isidium-factory/src
+      - name: ruff
+        run: |
+          set -eu
+          python -m ruff check packages tests tools
+          python -m ruff format --check packages tests tools

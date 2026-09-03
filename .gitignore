@@ -25,3 +25,6 @@ __pycache__/
 /deploy/registration.json
 /deploy/signer.key.pem
 /deploy/.env
+# The store's deploy key (K8): the private half lives here and is mounted read-only into the container. The public
+# half is registered at the forge and is not secret, but it is this deployment's, so the whole directory stays out.
+/deploy/ssh/

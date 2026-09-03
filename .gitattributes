@@ -5,3 +5,4 @@ deploy/entrypoint.sh text eol=lf
 deploy/Containerfile.store text eol=lf
 deploy/healthcheck.py text eol=lf
 deploy/compose.yaml text eol=lf
+deploy/known_hosts text eol=lf

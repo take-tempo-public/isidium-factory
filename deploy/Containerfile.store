@@ -16,8 +16,12 @@ RUN python -m pip install --no-cache-dir --upgrade pip build \
 
 FROM docker.io/library/python:3.12-slim
 # git is the store's own tool: it holds the tenant's partial bare clone and commits governed writes to `main`.
+# **`openssh-client` is what a deploy key needs** (K8): a forge's deploy key is an SSH key, and an origin of the form
+# `git@forge:owner/repo.git` can be neither cloned nor pushed without a client. The image before this line could
+# clone over https and could push nowhere with a key. Its cost to the image is recorded in deploy/README.md beside
+# telemetry's.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /wheels /wheels
@@ -40,12 +44,19 @@ RUN python -m pip install --no-cache-dir "$(printf '%s' /wheels/isidium_store-*.
 # derived, not authored: the entrypoint recreates it at every start (see entrypoint.sh), which is what makes
 # "a bypass commit is visible after a restart" true rather than aspirational.
 RUN useradd --system --create-home --home-dir /var/lib/isidium isidium \
- && mkdir -p /var/lib/isidium/repo /var/lib/isidium/state /etc/isidium/tls \
+ && mkdir -p /var/lib/isidium/repo /var/lib/isidium/state /var/lib/isidium/.ssh /etc/isidium/tls /etc/isidium/ssh \
+ && chmod 0700 /var/lib/isidium/.ssh \
  && chown -R isidium:isidium /var/lib/isidium
 
 COPY deploy/entrypoint.sh /usr/local/bin/isidium-entrypoint
 COPY deploy/healthcheck.py /usr/local/bin/isidium-healthcheck
-RUN chmod 0755 /usr/local/bin/isidium-entrypoint /usr/local/bin/isidium-healthcheck
+# The forge's host keys, pinned in the image rather than learned on first contact (K8). `deploy/known_hosts` says
+# where each line came from and carries the fingerprints to check it against. It lives outside /etc/isidium/ssh on
+# purpose: that directory is the deployment's read-only mount for the deploy key, and a mount there must not shadow
+# the pin.
+COPY deploy/known_hosts /etc/isidium/known_hosts
+RUN chmod 0755 /usr/local/bin/isidium-entrypoint /usr/local/bin/isidium-healthcheck \
+ && chmod 0644 /etc/isidium/known_hosts
 
 # The image's own layout, not policy: these are where things live in this filesystem. Every value that is a
 # *decision* — the tenant, the origin, the tracking root, the address — has no default here and the entrypoint
@@ -53,7 +64,10 @@ RUN chmod 0755 /usr/local/bin/isidium-entrypoint /usr/local/bin/isidium-healthch
 ENV ISIDIUM_REGISTRATION=/etc/isidium/registration.json \
     ISIDIUM_REPO_DIR=/var/lib/isidium/repo \
     ISIDIUM_STATE_DIR=/var/lib/isidium/state \
-    ISIDIUM_TLS_DIR=/etc/isidium/tls
+    ISIDIUM_TLS_DIR=/etc/isidium/tls \
+    ISIDIUM_SSH_DIR=/etc/isidium/ssh \
+    ISIDIUM_KNOWN_HOSTS=/etc/isidium/known_hosts \
+    HOME=/var/lib/isidium
 
 # A data directory, not a checkout. There is no working tree in this container: the store's clone is bare (K4), and
 # `cd`-ing into one was the previous version's assumption (Q6, which is why this file was written after K4).
