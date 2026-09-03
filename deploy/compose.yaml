@@ -10,6 +10,7 @@
 #   ./tls/probe.cert.pem, probe.key.pem   the healthcheck's certificate — CA-issued, and NOT in the registration
 #   ./registration.json               {"<client certificate subject>": ["<principal>", "<grant>"]}
 #   ./signer.key.pem                  the store's own Ed25519 signing key — the software-grade waiver path
+#   ./ssh/store-deploy-key            the store's deploy key, private half — only when ISIDIUM_ORIGIN is SSH (K8)
 #   ISIDIUM_ORIGIN                    the tenant repository the store clones and pushes to
 #
 # **There is no `./tenant` mount, and that is the change.** The store's clone is derived, not authored: the
@@ -33,7 +34,10 @@ services:
       # The store fetches governed blob content from the origin while it runs (a filtered clone holds no blob it did
       # not write), so the forge must be reachable from this container and on its egress allowlist (7be.2). A store
       # cut off from the origin can read no governed document it did not itself write.
-      GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=yes"
+      #
+      # How git reaches an SSH origin is the entrypoint's, not this file's (K8): it installs the mounted deploy key
+      # and sets GIT_SSH_COMMAND with the image's pinned known_hosts, only when ISIDIUM_ORIGIN is an SSH origin.
+      # Setting GIT_SSH_COMMAND here would override that with a line that knows neither path.
       # **Instrumentation is installed; whether it exports is decided here** (C-11). `console` writes spans to
       # stderr — no collector, no SigNoz, no network at all — and it is what the first start should use, because a
       # wrong CA path refuses every caller silently on both sides of the connection and the spans are how that is
@@ -54,6 +58,10 @@ services:
       # permission failure with no diagnosis in it. `podman volume inspect isidium-state-<tenant>` finds it.
       - state:/var/lib/isidium/state
       - ./tls:/etc/isidium/tls:ro
+      # The deploy key's private half, when the origin is SSH (K8). The whole directory is mounted so that a
+      # deployment with a file:// or https origin — K2's own first start — has nothing to mount and needs no edit
+      # here: an empty ./ssh is fine, and a missing key against an SSH origin is the entrypoint's refusal.
+      - ./ssh:/etc/isidium/ssh:ro
       - ./registration.json:/etc/isidium/registration.json:ro
       # Not TLS, and mounted on its own so it reads as what it is: the key the store signs the policy chain with.
       - ./signer.key.pem:/etc/isidium/signer.key.pem:ro

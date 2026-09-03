@@ -32,6 +32,27 @@ KEY="$ISIDIUM_TLS_DIR/store.key.pem"
 [ -z "${ISIDIUM_SIGNER:-}" ] || [ -f "$ISIDIUM_SIGNER" ] || fail "ISIDIUM_SIGNER names $ISIDIUM_SIGNER, which is not there"
 mkdir -p "$ISIDIUM_STATE_DIR" || fail "$ISIDIUM_STATE_DIR is not writable — the journal and the signing material live there"
 
+# ---- the deploy key, when the origin is reached over SSH -----------------------------------------------------------
+# Whether a key is needed is not a new decision: ISIDIUM_ORIGIN already made it. An origin of the form `git@host:…`
+# or `ssh://…` needs the deploy key at $ISIDIUM_SSH_DIR/store-deploy-key; any other origin (a `file://` URL, https)
+# needs none and a key present is ignored — so the same image and the same compose file serve both.
+#
+# **Copied, not used in place.** ssh refuses a private key that anyone but its owner can read, and a bind mount
+# arrives with the host's owner and mode — so the mounted file is installed into the store's own ~/.ssh at 0600 and
+# ssh is pointed at that copy. The host keys are the image's pinned file, and nothing else: `StrictHostKeyChecking=yes`
+# with an explicit `UserKnownHostsFile` means a host that does not match a pinned line is refused, never prompted
+# for and never learned. The two failures this produces look alike on the git side — a rejected key and a rejected
+# host key both end the push — so the README's diagnosis step says how to tell them apart from the ssh line each
+# prints.
+case "$ISIDIUM_ORIGIN" in
+  git@*|ssh://*)
+    DEPLOY_KEY="$ISIDIUM_SSH_DIR/store-deploy-key"
+    [ -f "$DEPLOY_KEY" ] || fail "ISIDIUM_ORIGIN is an SSH origin and there is no deploy key at $DEPLOY_KEY — mount the private half there (deploy/README.md, the deploy key)"
+    install -m 0600 "$DEPLOY_KEY" "$HOME/.ssh/id_ed25519" || fail "could not install the deploy key into $HOME/.ssh"
+    export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ISIDIUM_KNOWN_HOSTS"
+    ;;
+esac
+
 # ---- the store's clone, rebuilt at every start ----------------------------------------------------------------------
 # **Rebuilt, not reused.** A running store never re-reads `main` — it sees only the commits it wrote itself — so a
 # bypass commit somebody pushed straight to the branch is invisible to it until it restarts. That sentence is only

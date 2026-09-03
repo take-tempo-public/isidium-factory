@@ -1,0 +1,69 @@
+# K8's mutations (2026-09-03) -- the governed-path gate, `tools/verify_chain.py`.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `tools/verify_chain.py` must be re-run against. Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k8.toml M1
+#
+# **What this spec can and cannot see, said out loud (the K2 rule).** The suite sees the script's verdicts and exit
+# codes -- nine tests in tests/store/test_verify_chain.py -- and every mutation below is aimed at one of those. The
+# suite cannot see what the forge enforces: that a human's direct push to `main` is refused, that a pull request
+# touching the governed root cannot be merged, that a force-push is refused, that the store's own push lands. Those
+# are demonstrated live against the repository and recorded in the handoff with their output; a mutation of a
+# ruleset is a `PUT` and a `DELETE`, not a TOML table.
+#
+# **Run 2026-09-03: 7 mutations, 7 died.** M1 by the nothing-verified test alone; M2 by the three chain tests; M3 by
+# the does-not-parse test alone; M4 by the diff-base test alone; M5 by the intact, hand-edit and policy tests;
+# M6 by five; M7 by the drift test alone -- which is the point of M7: it is the only test that can see the mirror
+# drift, so a later edit that deletes that test leaves the mirror unwatched, and this line is what says so.
+
+[[mutation]]
+id = "M1"
+label = "`passed` stops requiring at least one intact chained document -- a root with nothing verified becomes a pass"
+file = "tools/verify_chain.py"
+find = "        return self.count(TAMPERED) == 0 and not self.governed_changed and self.count(OK) > 0"
+replace = "        return self.count(TAMPERED) == 0 and not self.governed_changed"
+
+[[mutation]]
+id = "M2"
+label = "a `tampered` verdict in a chain no longer taints the document -- every chain reads `ok`"
+file = "tools/verify_chain.py"
+find = "    return TAMPERED if not verdicts or TAMPERED in verdicts else OK"
+replace = "    return TAMPERED if not verdicts else OK"
+
+[[mutation]]
+id = "M3"
+label = "a governed file that does not parse is reported `parsed` instead of `tampered`"
+file = "tools/verify_chain.py"
+find = """    except (Refusal, UnicodeDecodeError, ValueError) as e:
+        return Line(rel, ref, TAMPERED, f"does not parse: {e}")"""
+replace = """    except (Refusal, UnicodeDecodeError, ValueError) as e:
+        return Line(rel, ref, PARSED, f"does not parse: {e}")"""
+
+[[mutation]]
+id = "M4"
+label = "the diff check goes -- a governed change off main is never reported"
+file = "tools/verify_chain.py"
+find = "        rep.governed_changed = hook.offending(repo, [p for p in out.stdout.split(\"\\0\") if p])"
+replace = "        rep.governed_changed = []"
+
+[[mutation]]
+id = "M5"
+label = "`config.toml` is skipped -- the policy chain is never verified"
+file = "tools/verify_chain.py"
+find = "    if cfg_path.is_file():\n        rep.lines.append(_policy(cfg_path))"
+replace = "    if False:\n        rep.lines.append(_policy(cfg_path))"
+
+[[mutation]]
+id = "M6"
+label = "the exit code stops depending on the report -- the script always exits 0"
+file = "tools/verify_chain.py"
+find = "    return 0 if rep.passed else 1"
+replace = "    return 0"
+
+[[mutation]]
+id = "M7"
+label = "the `DocSchema` mirror drifts from the store's builder (a page's genesis prefix) -- the drift test is the only thing that can see it"
+file = "tools/verify_chain.py"
+find = "    genesis = \"card\" if name == \"card\" else \"page\""
+replace = "    genesis = \"card\""
