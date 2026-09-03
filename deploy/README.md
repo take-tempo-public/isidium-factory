@@ -376,8 +376,53 @@ would have blocked the merge.
 **Override, and what there is not.** There is no standing bypass for the owner: `gh`'s hint that `--admin` merges a
 blocked pull request is generic advice for branch protection, and a ruleset exempts nobody who is not in its bypass
 list — here, the deploy key alone. The break-glass at the forge is *disable the ruleset, fix, re-enable*, one audited
-call; in the store it is `isidium repair`, owner-signed. Revoking the store is deleting its deploy key. (The `--admin`
-attempt itself is the owner's to run; it was not run by the session that wrote this.)
+call; in the store it is `isidium repair`, owner-signed. Revoking the store is deleting its deploy key. **Measured by
+the owner, 2026-09-03**, on PR #3 with repository admin:
+
+```
+$ gh pr merge 3 --admin --rebase --repo take-tempo-public/isidium-factory
+GraphQL: Repository rule violations found
+Required status check "verify" is failing.
+ (mergePullRequest)
+```
+
+Refused; `main` unchanged; PR #3 closed unmerged.
+
+### The store's own push after the gate — and the stale clone it exposed
+
+The last demonstration is the store writing *through* the gate: the first card, a draft written through the front
+door under the owner's certificate. It landed — and not the way it was expected to, which is the finding.
+
+```
+$ python -m isidium.store.client.cli write --new k8-tenant-zero --document card.json
+git.push-rejected                                 # the caller sees the rule and nothing else (C-12)
+$ podman logs isidium-store-isidium-factory | grep push-rejected
+git.push-rejected withheld from the caller: path='origin/main' detail='the remote moved under the store'
+```
+
+The store's clone was at its own last commit, `0847c85`; three pull requests had been merged to `main` since it
+started, and **a running store never re-reads `main`** (the entrypoint says so). Its commit was a non-fast-forward
+and the forge refused it. The journal row was already durable, so:
+
+```
+$ podman restart isidium-store-isidium-factory     # the clone is rebuilt at the current main …
+$ podman exec isidium-store-isidium-factory git -C /var/lib/isidium/repo log --oneline -1
+24652f2 replay journal 2                          # … and the pending row is replayed onto it and pushed
+$ git fetch origin main && git log --oneline -1 origin/main
+24652f2 replay journal 2                          # committer isidium-store <store@isidium-factory>; the bypass, live
+```
+
+`docs/work/cards/0002-k8-tenant-zero.md` is on `main`, its one history entry `by` the owner's public identity. Two
+things this says. **The deploy key bypasses the gate, measured after the gate went on.** And **under a gated `main`,
+every merged pull request leaves the store stale, so its next write fails until a restart** — which is the chunk
+plan's **Q14**, open for the owner: the store should re-read `main` before it writes, or recover on a rejected push
+when no governed path moved. Until it is ruled and built: **restart the store after merging**. The replay makes that
+safe — nothing journaled is lost.
+
+(Two smaller facts from the same run: a write refused at validation still consumes a card id — this card is `0002`
+because an earlier attempt with an unaccepted `source` took `1`; and a replayed commit's git author is
+`store <store@…>` with the message `replay journal N`, where a direct write's author is the caller — the document's
+own `by` is right in both.)
 
 **Install the client; do not run `init` under `PYTHONPATH`.** The first run here did exactly that, and the hook
 `init` installs — `exec <the interpreter init ran under> -m isidium.store.client.hook` — then refused the very
