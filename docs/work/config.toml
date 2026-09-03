@@ -49,3 +49,5 @@ write = ["owner"]
 entries = [
   { seq = 1, at = "2026-09-03T18:45:55Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["governed", "ratification", "root", "schema", "signer", "tenant", "toolkit"], build = "sha256:7d35d3f4b82da2261fcd36a3bceeba415e34de17ee2883406ce4d098fc92a026", h = "sha256:15a726b2fae20734ab15e55a7822afe470752b92e16aaf12fefe2e908474c801", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:BoyUNDXExjc5uWoVDbmaAtfeC4sZ83oF8cyL1bqGlnTkWL28obal3JY73uqz2YnGeaLgzd02S6wxkQAsseKmBg==" },
 ]
+
+# a hand edit under the governed root, made past the local hook, which the forge must refuse
