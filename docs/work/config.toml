@@ -1,0 +1,51 @@
+schema = 1
+tenant = "isidium-factory"
+root = "docs/work/"
+
+[toolkit]
+client = "0.1.0"
+registry = "0.1.0"
+unidata = "15.0.0"
+object_id = "sha1"
+
+[ratification]
+software_key_ack = "software-grade signatures are acceptable for this tenant for now"
+pin = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8"
+
+[signer]
+backends = ["software_key_ack"]
+
+[[governed]]
+path = "cards/*.md"
+schema = "card@1"
+write = ["owner", "contributor"]
+
+[[governed]]
+path = "suggestions.jsonl"
+schema = "inbox@1"
+write = ["owner", "contributor", "lander"]
+
+[[governed]]
+path = "state.json"
+schema = "sidecar@1"
+write = ["lander"]
+
+[[governed]]
+path = "state/history.jsonl"
+schema = "sidecar-events@1"
+write = ["lander"]
+
+[[governed]]
+path = "BOARD.md"
+schema = "board@1"
+write = ["lander"]
+
+[[governed]]
+path = "config.toml"
+schema = "config@1"
+write = ["owner"]
+
+[history]
+entries = [
+  { seq = 1, at = "2026-09-03T18:45:55Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["governed", "ratification", "root", "schema", "signer", "tenant", "toolkit"], build = "sha256:7d35d3f4b82da2261fcd36a3bceeba415e34de17ee2883406ce4d098fc92a026", h = "sha256:15a726b2fae20734ab15e55a7822afe470752b92e16aaf12fefe2e908474c801", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:BoyUNDXExjc5uWoVDbmaAtfeC4sZ83oF8cyL1bqGlnTkWL28obal3JY73uqz2YnGeaLgzd02S6wxkQAsseKmBg==" },
+]
