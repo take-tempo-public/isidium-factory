@@ -415,9 +415,9 @@ $ git fetch origin main && git log --oneline -1 origin/main
 `docs/work/cards/0002-k8-tenant-zero.md` is on `main`, its one history entry `by` the owner's public identity. Two
 things this says. **The deploy key bypasses the gate, measured after the gate went on.** And **under a gated `main`,
 every merged pull request leaves the store stale, so its next write fails until a restart** — which is the chunk
-plan's **Q14**, open for the owner: the store should re-read `main` before it writes, or recover on a rejected push
-when no governed path moved. Until it is ruled and built: **restart the store after merging**. The replay makes that
-safe — nothing journaled is lost.
+plan's **Q14**, ruled the same day: the store will fetch and fast-forward to `main` before every write, and on a
+rejected push rebuild its one commit on the new tip when no governed path moved (K9). Until that is built:
+**restart the store after merging**. The replay makes that safe — nothing journaled is lost.
 
 (Two smaller facts from the same run: a write refused at validation still consumes a card id — this card is `0002`
 because an earlier attempt with an unaccepted `source` took `1`; and a replayed commit's git author is
