@@ -1,0 +1,36 @@
+# The governed-path gate (K8, ruled Q13 2026-09-03). As a REQUIRED status check on every pull request: no governed
+# path changed at all — governed paths are written by the store, on `main`, or not at all (7bg.6) — and every
+# chained document still recomputes. On every push to `main`: the same verification over what landed, the store's
+# own writes included, since the store's deploy key is the one writer the pull-request gate does not see. Same idiom
+# as identity-sweep: a property enforced by a check, not a convention remembered.
+#
+# With `main` requiring a pull request, this check is prevention on a forge that has no path-aware branch rule; on a
+# forge that has one (Gitea's protected file patterns) it is the belt under the braces. What it can and cannot see
+# is written at the top of tools/verify_chain.py: it does not verify signatures, and it cannot reach the store's
+# journal — that reconciliation stays on the factory side.
+#
+# Kept to checkout → install → one script on purpose, so it runs unchanged on another forge's runner.
+name: chain-verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
+        with:
+          fetch-depth: 0 # a pull request's diff base is the base branch, which a shallow clone does not hold
+      - name: install the store
+        run: |
+          set -eu
+          python3 --version
+          python3 -m pip install --quiet ./packages/isidium-store
+      - name: verify every governed document
+        if: github.event_name == 'push'
+        run: python3 tools/verify_chain.py --repo .
+      - name: verify, and refuse any governed change off main
+        if: github.event_name == 'pull_request'
+        run: python3 tools/verify_chain.py --repo . --diff-base "origin/${{ github.base_ref }}"

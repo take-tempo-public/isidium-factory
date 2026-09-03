@@ -28,3 +28,5 @@ __pycache__/
 # The store's deploy key (K8): the private half lives here and is mounted read-only into the container. The public
 # half is registered at the forge and is not secret, but it is this deployment's, so the whole directory stays out.
 /deploy/ssh/
+# isidium-store: the client's half of the registration and its local install — never committed
+.isidium/
