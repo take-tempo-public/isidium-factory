@@ -18,8 +18,8 @@ FROM docker.io/library/python:3.12-slim
 # git is the store's own tool: it holds the tenant's partial bare clone and commits governed writes to `main`.
 # **`openssh-client` is what a deploy key needs** (K8): a forge's deploy key is an SSH key, and an origin of the form
 # `git@forge:owner/repo.git` can be neither cloned nor pushed without a client. The image before this line could
-# clone over https and could push nowhere with a key. Its cost to the image is recorded in deploy/README.md beside
-# telemetry's.
+# clone over https and could push nowhere with a key. Measured 2026-09-03: 5.55 MB on a 301.6 MB image (1.9%);
+# deploy/README.md, "Tenant #0".
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
  && rm -rf /var/lib/apt/lists/*

@@ -35,6 +35,7 @@ clone and is wrong now, not merely stale.
 | `registration.json` | `{"<client certificate subject>": ["<principal>", "<grant>"]}` |
 | `signer.key.pem` | the store's own Ed25519 key: the software-grade waiver path, and what signs the policy chain |
 | `.env` → `ISIDIUM_ORIGIN` | the tenant repository the store clones and pushes to |
+| `ssh/store-deploy-key` | the store's deploy key, private half — only when `ISIDIUM_ORIGIN` is an SSH origin (see *The deploy key*) |
 
 `.gitignore` covers every one of them. They are private material and this is a tracked repository.
 
@@ -146,6 +147,50 @@ One entry per caller identity; the subject is the certificate's, and the grant i
 }
 ```
 
+## The deploy key
+
+When `ISIDIUM_ORIGIN` is a forge over SSH (`git@host:owner/repo.git`), the store needs a credential to clone and
+push with, and it is a **deploy key**: one per tenant repository, registered at the forge with write access
+(ruled 2026-09-02: a deploy key, not a machine account).
+
+```sh
+mkdir -p deploy/ssh
+ssh-keygen -t ed25519 -N "" -C "isidium-store deploy key" -f deploy/ssh/store-deploy-key
+gh api -X POST repos/<owner>/<repo>/keys -f title="isidium-store deploy key" \
+  -f key="$(cat deploy/ssh/store-deploy-key.pub)" -F read_only=false
+```
+
+No passphrase — a container cannot type one. The private half stays here (`deploy/ssh/` is gitignored) and is
+mounted read-only; the entrypoint copies it into the store's own home at 0600, because ssh refuses a key anyone
+else can read and a bind mount arrives with the host's mode. Nothing else about the image changes: with a `file://`
+or https origin the key is never looked for.
+
+**What this credential is, so nobody assumes it the other way round.** A deploy key is a **repository-wide write
+credential** — no forge scopes a key to a path. What holds the store to `docs/work/` is the store's own code; what
+holds *everyone else* out of `docs/work/` is the forge's gate on `main` (the deployment record, S-12). Two parties,
+two mechanisms, and neither substitutes for the other.
+
+**The forge's host keys are pinned, never learned.** `deploy/known_hosts` carries GitHub's three host keys, fetched
+from its authenticated API with the fingerprints beside each line; the image copies it to `/etc/isidium/known_hosts`
+and git is told to use that file and nothing else, with `StrictHostKeyChecking=yes`. A host that does not match is
+refused, never prompted for. Another forge is another line in that file, its fingerprint checked the same way.
+
+**When the push fails, which of two things it was.** A rejected key and a rejected host key both end the push and
+git's line looks the same. Run ssh's own check from the host with the same pins:
+
+```sh
+ssh -i deploy/ssh/store-deploy-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=deploy/known_hosts -T git@github.com
+# -> Hi <owner>/<repo>! You've successfully authenticated, but GitHub does not provide shell access.
+```
+
+`Host key verification failed` is the pin — the host's key is not in `deploy/known_hosts`. `Permission denied
+(publickey)` is the key — not registered, registered read-only, or the wrong repository. If this succeeds from the
+host and the container still fails, the difference is the mount: the key file must be readable inside the
+container, and `ISIDIUM_ORIGIN` must be the SSH form.
+
+**Revoking the store** is deleting the key at the forge. It stops the store and nothing else.
+
 ## Standing it up
 
 ```sh
@@ -254,16 +299,65 @@ channel** — the store commits `docs/work/config.toml` and pushes it. Verified 
 came back signed by the mounted `signer.key.pem`, and the commit was on the origin's `main`. The client file it
 writes names no principal and no grant, because the caller is the certificate on the connection (7bg.2).
 
+## Tenant #0 — this repository, run 2026-09-03
+
+The store's first tenant on a real forge is the repository this file lives in: `ISIDIUM_ORIGIN` is
+`git@github.com:take-tempo-public/isidium-factory.git`, the tracking root is `docs/work/`, and every command below
+was run in this order (podman 5.8.3, rootless, WSL2; podman-compose 1.6.0). Where the walkthrough above and this
+differ, this is the later one and the one against a forge.
+
+```sh
+# The material, under the repository's PUBLIC identity: the caller's principal is written into config.toml's
+# first history entry, and that lands on a public main.
+#   deploy/tls/…            as in "Issuing the certificates", with CN=amodal1@users.noreply.github.com for the owner
+#   deploy/registration.json  {"CN=amodal1@users.noreply.github.com": ["amodal1@users.noreply.github.com", "owner"]}
+#   deploy/signer.key.pem     as in "The store's signing key"
+#   deploy/ssh/store-deploy-key (+ .pub)   as in "The deploy key"; registered at GitHub as deploy key 162206265
+printf '%s\n' 'TENANT=isidium-factory' \
+  'ISIDIUM_ORIGIN=git@github.com:take-tempo-public/isidium-factory.git' \
+  'ISIDIUM_ROOT=docs/work/' 'STORE_PORT=8443' > deploy/.env
+
+podman build -f deploy/Containerfile.store -t isidium-store:0.1.0 .   # 301.6 MB; openssh-client is 5.55 MB of it
+cd deploy && podman-compose up -d && cd ..
+podman logs isidium-store-isidium-factory
+    -> isidium: tenant=isidium-factory footprint=filtered root=docs/work/    # the clone came over SSH, through the pin
+podman ps --filter name=isidium-store-isidium-factory                        # -> Up … (healthy)
+GET /health over mTLS from the host, as in "Checking it"                     # -> 200 {"ok": true}
+
+mkdir -p .isidium && cp deploy/tls/ca.pem deploy/tls/owner.cert.pem deploy/tls/owner.key.pem .isidium/
+python -m pip install -e packages/isidium-store        # INSTALL the client first — read the note below
+python -m isidium.store.client.cli init \
+  --tenant isidium-factory --address https://localhost:8443 \
+  --ca .isidium/ca.pem --cert .isidium/owner.cert.pem --key .isidium/owner.key.pem \
+  --root docs/work/ --ack "software-grade signatures are acceptable for this tenant for now"
+    -> the policy chain's first entry: seq 1, by amodal1@users.noreply.github.com, act created, signed ed25519
+    -> commit 0847c85, journal_seq 1 — pushed to main WITH THE DEPLOY KEY; the identity sweep ran on it and passed
+git fetch origin main && git ls-tree -r origin/main --name-only | grep ^docs/work/
+    -> docs/work/config.toml
+```
+
+`init` also installed the pre-commit hook and the registry schemas under `.isidium/` — ignored; it appended the
+line itself — so this checkout refuses a governed-path commit locally, and `main` refuses one at the forge once the
+gate is on (the deployment record, S-12 … S-14).
+
+**Install the client; do not run `init` under `PYTHONPATH`.** The first run here did exactly that, and the hook
+`init` installs — `exec <the interpreter init ran under> -m isidium.store.client.hook` — then refused the very
+next commit with `ModuleNotFoundError: No module named 'isidium'`, because that interpreter had never had the
+package installed. It failed **closed**, which is the designed behaviour and the right one: a hook that cannot tell
+what is governed refuses rather than guesses. The fix was `pip install -e packages/isidium-store` and the same
+`init` line without `PYTHONPATH`; the sequence above is the corrected one. (That the refusal reads as a raw Python
+error rather than an `isidium:` line is recorded as a finding.)
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
   installed and this workstation had none, so one was used from a throwaway virtualenv. Everything it *runs* —
   the environment, the volumes, the ports, the healthcheck — was exercised; what it **builds** was not, because
   `--build` fails there for the reason above. The `docker compose` path is written down and unexercised.
-- **`ISIDIUM_ORIGIN` was verified over `file://` against a bare repository mounted into the container**, not
-  against a forge over ssh or https. The clone, the filter, the degradation and the push were all exercised;
-  forge authentication and the egress allowlist were not. A mounted path also needs git told that the mount is
-  trustworthy (`safe.directory`) — a real remote meets none of that.
+- **`ISIDIUM_ORIGIN` over SSH against a real forge is now verified** (tenant #0, above): the clone through the
+  pinned host key and the push with the deploy key. The `file://` path remains what the walkthrough above shows,
+  and a mounted path still needs git told that the mount is trustworthy (`safe.directory`). **The egress allowlist
+  is untested** — so far the container has reached whatever it asked for.
 - **Revoking a caller** means editing `registration.json` and restarting; there is no certificate-revocation check
   and no reload. Both are named in the deployment record (H-1), and land before this listens outside a trusted
   network.
