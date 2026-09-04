@@ -416,15 +416,62 @@ $ git fetch origin main && git log --oneline -1 origin/main
 
 `docs/work/cards/0002-k8-tenant-zero.md` is on `main`, its one history entry `by` the owner's public identity. Two
 things this says. **The deploy key bypasses the gate, measured after the gate went on.** And **under a gated `main`,
-every merged pull request leaves the store stale, so its next write fails until a restart** — which is the chunk
-plan's **Q14**, ruled the same day: the store will fetch and fast-forward to `main` before every write, and on a
-rejected push rebuild its one commit on the new tip when no governed path moved (K9). Until that is built:
-**restart the store after merging**. The replay makes that safe — nothing journaled is lost.
+every merged pull request left the store stale, so its next write failed until a restart** — which is the chunk
+plan's **Q14**, ruled the same day and **built by K9**, below. The restart is no longer the answer and is no longer
+the instruction.
 
 (Two smaller facts from the same run: a write refused at validation still consumes a card id — this card is `0002`
 because an earlier attempt with an unaccepted `source` took `1`; and a replayed commit's git author is
 `store <store@…>` with the message `replay journal N`, where a direct write's author is the caller — the document's
 own `by` is right in both.)
+
+### K9: a write onto a `main` the store had never seen — 2026-09-03
+
+The condition above is closed. The store now fetches `main` and fast-forwards its own ref before every governed
+write, so a merged pull request no longer leaves it behind. Demonstrated on this repository, in this order, with
+**no restart between the merge and the write**:
+
+```
+$ podman exec isidium-store-isidium-factory git -C /var/lib/isidium/repo log --oneline -1
+cfba6c9 The chunk plan lives in the record, not here    # the store's clone, before anything merged
+
+$ gh pr merge 8 --rebase --delete-branch                # K9 itself; main moves to ef7cd4b
+$ git log --oneline -1 origin/main
+ef7cd4b K9: the store fetches and fast-forwards to `main` before every write
+
+$ python -m isidium.store.client.cli write --new k9-store-re-reads-main --document card.json
+  … "commit": "7aaa50c8b21dfdb9fdacfcdf4b0b33a7bc856c46", "journal_seq": 3
+
+$ git fetch origin main && git log --format="%h %p %s" -1 origin/main
+7aaa50c ef7cd4b created cards/0003-k9-store-re-reads-main.md   # its parent IS the merged tip
+```
+
+The card's parent is the commit the store had never seen when the write began. Under the shape this replaces, that
+same write came back `git.push-rejected` and needed a container restart and a journal replay to land.
+
+**The in-memory model was checked against `main`, not assumed.** The fast-forward is cheap only because the store
+does not re-parse the documents it loaded at start, which is safe exactly when the commits it caught up on touched
+no governed path. Live, after the fast-forward: `show card 2` and `git show origin/main:docs/work/cards/0002-…` agree
+on all eleven head fields, on the scope prose and on the history length.
+
+**Both spans arrived** (C-11). `isidium.store.sync` appears twice on that write, `isidium.action=fetch` and
+`isidium.action=fast-forward`, both `status_code: OK`, beside the request and call spans.
+
+**What it costs, measured in this container against GitHub over SSH** (seven repetitions): a fetch of an unmoved
+`main` is **1568 ms median** (1277 min, 2708 max) and reading the tip off it is 8 ms. That is one extra round trip
+per governed write. It is not the process spawns — those are single-digit milliseconds here — it is the round trip,
+and there is no cheaper shape: `ls-remote` is the same conversation, and no answer about a remote's tip can be had
+without asking it.
+
+**One environment note, and it is the workstation's rather than the deployment's.** The clone at start hung for
+fourteen minutes on this machine before any of the above could run. Measured: the path MTU out of the podman VM is
+about 1400 while its interfaces advertise 1500, and nothing sends back the ICMP that would say so — a black hole.
+Small exchanges survive it (`git ls-remote` over SSH answers in 2 s, and an HTTPS clone finishes in 1 s), and bulk
+transfer over SSH does not, which is why the symptom looked like a broken deploy key and was not: the same clone
+from Windows, outside the VM, takes 3 s. `ip link set eth0 mtu 1400` inside the VM fixed it immediately, and the
+container needs its own interface capped too — it was run on `podman network create --opt mtu=1400 isidium-mtu1400`.
+Neither is persistent and neither is part of this deployment; they are recorded here because the failure they
+produce is indistinguishable from a credential problem and cost an hour once.
 
 **Install the client; do not run `init` under `PYTHONPATH`.** The first run here did exactly that, and the hook
 `init` installs — `exec <the interpreter init ran under> -m isidium.store.client.hook` — then refused the very
