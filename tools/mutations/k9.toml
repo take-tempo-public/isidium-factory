@@ -1,0 +1,113 @@
+# K9's mutations (2026-09-03) -- the store re-reads `main` before it writes (Q14 (c)).
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `server/store.py` or `server/gitrepo.py` must be re-run against. Run one at a time, in the
+# FOREGROUND -- a background batch is killed around ten minutes and leaves the file mutated (`--restore` repairs it).
+#
+#   python tools/mutate.py tools/mutations/k9.toml M1
+#
+# **What this spec can and cannot see, said out loud (the K2 rule).** The suite sees everything below against a real
+# bare origin on this machine: the fetch, the fast-forward, the governed walk, the rebuild and its bound. It cannot
+# see the one thing that needed the forge -- that a pull request touching the governed root cannot be merged at all,
+# which is the guarantee the fast-forward's precondition rests on. That is K8's, demonstrated live and recorded in
+# `deploy/README.md`, and it is why M2 below exists: if the gate ever stopped holding, M2's property is the only
+# thing between a bypass commit and the store's stale model being written back over it.
+
+[[mutation]]
+id = "M1"
+label = "the fast-forward goes -- the store fetches and then writes on its stale base anyway"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            self.repo.fast_forward(tip)"
+replace = "            pass  # mutated: the ref stays where it was"
+
+[[mutation]]
+id = "M2"
+label = "the governed-path check goes -- a governed change on the remote is fast-forwarded like any other"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = """        for sha in self.repo.first_parent_walk(base, tip):
+            for repo_path in self.repo.touched(sha):
+                if self.is_governed_repo_path(repo_path):
+                    return f"{sha[:12]} {repo_path}"
+        return None"""
+replace = "        return None  # mutated: nothing governed ever moved"
+
+[[mutation]]
+id = "M3"
+label = "the retry is unbounded -- the store rebuilds however many commits it is carrying"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "                if ahead != [sha]:"
+replace = "                if False:  # mutated: any amount of unpushed history is rebuilt"
+
+[[mutation]]
+id = "M4"
+label = "a force path arrives on the push -- `--force-with-lease`, the shape K4 measured destroying a writer"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '            self._git("push", "--quiet", self.remote, f"HEAD:{self.branch}")'
+replace = '            self._git("push", "--quiet", "--force-with-lease", self.remote, f"HEAD:{self.branch}")'
+
+[[mutation]]
+id = "M5"
+label = "the walk is replaced by the tip's own diff -- a two-commit ungoverned catch-up is judged on its last commit"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        for sha in self.repo.first_parent_walk(base, tip):"
+replace = "        for sha in [tip]:  # mutated: only the tip's own diff is examined"
+
+[[mutation]]
+id = "M6"
+label = "the fast-forward stops dropping the cached tree -- the store's commit reverts the merge it moved past"
+# SURVIVED its first run and was not a missing property: in every other test the cache is cold when the write
+# starts, so `_tree()` re-reads the tip anyway and the mutant is indistinguishable. Killed by a test that warms
+# the cache first, which is what `Store.load`'s own `repo.paths()` walk does.
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """            raise Refusal("git.ref-moved", f"refs/heads/{self.branch}", "the ref moved under the store") from r
+        self._tree_cache = None
+        return True"""
+replace = """            raise Refusal("git.ref-moved", f"refs/heads/{self.branch}", "the ref moved under the store") from r
+        return True"""
+
+[[mutation]]
+id = "M7"
+label = "the rebuild builds on the cached HEAD tree instead of the tip's -- the same revert, one step later"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "            tree = dict(self._tree()) if base == old else self._tree_at(base)"
+replace = "            tree = dict(self._tree())  # mutated: the stale tree, whatever the parent"
+
+[[mutation]]
+id = "M8"
+label = "the fast-forward becomes a reset -- a diverged ref is moved onto the remote and an unpushed commit is lost"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        if old is not None and not self._git_ok("merge-base", "--is-ancestor", old, to):
+            return False"""
+replace = "        # mutated: any ref is moved, ancestor or not"
+
+[[mutation]]
+id = "M9"
+label = "the compare-and-swap on the fast-forward goes -- a second writer over one clone is overwritten in silence"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '            self._git("update-ref", f"refs/heads/{self.branch}", to, old if old else "")'
+replace = '            self._git("update-ref", f"refs/heads/{self.branch}", to)'
+
+[[mutation]]
+id = "M10"
+label = "a failed fetch is swallowed -- the store writes on a base it could not verify"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = """        except Refusal as r:
+            raise Refusal("git.fetch-failed", f"{self.remote}/{self.branch}", r.detail) from r
+        return self._git("rev-parse", "--verify", "FETCH_HEAD").strip() or None"""
+replace = """        except Refusal:
+            return None
+        return self._git("rev-parse", "--verify", "FETCH_HEAD").strip() or None"""
+
+[[mutation]]
+id = "M11"
+label = "the rebuild's second push is retried in a loop rather than pushed once"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = """                rebuilt = self.repo.commit(changes, author, at, message, parents=[tip])
+                self.repo.push()"""
+replace = """                rebuilt = self.repo.commit(changes, author, at, message, parents=[tip])
+                for _ in range(5):
+                    try:
+                        self.repo.push()
+                        break
+                    except Refusal:
+                        continue"""

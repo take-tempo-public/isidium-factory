@@ -51,9 +51,13 @@ RULE: Final = "isidium.rule"  # the refusal's rule id (C-5) — an attribute, ne
 REASON: Final = "isidium.reason"  # a typed classification: `Refused` at the edge, the admission bound's own name
 
 # ---- the span names ----------------------------------------------------------------------------------------------
-# One span per phase (C-11). Two phases exist today: the edge's request, and the call it dispatches.
+# One span per phase (C-11). Three phases exist: the edge's request, the call it dispatches, and — inside a governed
+# write — the store's synchronisation with the remote `main` (K9). The third is named separately rather than folded
+# into the call because it is the one phase that leaves the process for a reason unrelated to the caller's request:
+# an operator reading a slow write needs to see the round trip as its own span, not as time missing from the call.
 REQUEST_SPAN: Final = "isidium.store.request"
 CALL_SPAN: Final = "isidium.store.call"
+SYNC_SPAN: Final = "isidium.store.sync"
 
 _tracer = trace.get_tracer(SCOPE)
 _meter = metrics.get_meter(SCOPE)
@@ -104,6 +108,19 @@ def record_refusal(rule: str) -> None:
     current.set_attribute(RULE, rule)
     current.set_status(Status(StatusCode.ERROR, rule))
     REFUSED_CALLS.add(1, {RULE: rule})
+
+
+def record_refusal_on(sp: Span, rule: str) -> None:
+    """A refusal on an **inner** span, without the counter — the shape `record_refusal` cannot take.
+
+    `record_refusal` is the *door's* recorder: it fires from `Refusal.payload()`, once per call, and moves
+    `isidium.store.refusal`. An inner span (K9's fetch, fast-forward and rebuild) exits before the refusal reaches
+    that door, so its own status would otherwise stay unset — indistinguishable from a phase that succeeded. This
+    writes the same two facts C-11 asks for, the outcome as the status and the rule id as an attribute, and
+    deliberately does **not** touch the counter: the door records the call, and one refused write is one refusal.
+    """
+    sp.set_attribute(RULE, rule)
+    sp.set_status(Status(StatusCode.ERROR, rule))
 
 
 def record_ok() -> None:
