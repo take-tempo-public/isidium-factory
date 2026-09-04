@@ -19,7 +19,7 @@ from typing import Any
 
 from .. import __version__
 from ..core import board as board_mod
-from ..core import canon, chain, derive, status
+from ..core import canon, chain, derive, status, telemetry
 from ..core.grammar import (
     CARD_TABLE_ORDER,
     DocSchema,
@@ -348,6 +348,133 @@ class Store:
         prow["after_blob"] = after
         return prow, after
 
+    # ---- re-reading `main` before a write (K9, Q14 (c), ruled 2026-09-03) -----------------------------------------
+
+    def _first_governed_change(self, base: str, tip: str) -> str | None:
+        """The first governed repo path that moved between `base` and `tip`, named, or `None` if none did.
+
+        **This is Q14's precondition, asserted and never assumed.** The ruling is cheap only because the store's
+        in-memory copy of the governed documents — loaded once at start and never re-read — stays *right* across a
+        fast-forward. It stays right exactly when the commits being caught up touch no governed path, which under
+        the gate (Q13) is what a merged pull request is: the forge refuses one that reaches the tracking root, and
+        so does the installed hook. That is a guarantee about the gate, and a guarantee is the thing a store checks.
+
+        The walk is first-parent, matching `touched()`, so a merge contributes the diff against the tip it landed
+        on rather than the whole of the branch it merged. It stops at the first offending path: the `git` namespace
+        discloses tersely (C-12), so the caller gets the rule id either way and the record gets one named path,
+        and continuing would spend a `diff-tree` per commit to build a list nobody reads.
+
+        **Cost (C-8):** one `rev-list` plus one `diff-tree` per commit the store is behind — and it is behind by
+        the pull requests merged since its last write, which is one or two. It runs only when the remote actually
+        moved; a store whose fetch finds its own tip pays nothing beyond the fetch.
+        """
+        for sha in self.repo.first_parent_walk(base, tip):
+            for repo_path in self.repo.touched(sha):
+                if self.is_governed_repo_path(repo_path):
+                    return f"{sha[:12]} {repo_path}"
+        return None
+
+    def _sync_to_main(self) -> None:
+        """**(a) of Q14's ruling: before every write, re-read `main` and fast-forward onto it.**
+
+        Until this existed a running store never re-read `main` (K4's finding, and the entrypoint said so out loud),
+        so under the gate every merged pull request left the store's clone stale and its next governed write refused
+        until somebody restarted the container and let the journal replay. That was measured on tenant #0 the day
+        the gate went up, and it is the whole reason for this chunk.
+
+        Three outcomes, in the order they are cheap:
+
+        * the remote's tip is the store's own head — the ordinary case, one fetch and nothing else;
+        * the tip is ahead and no governed path moved — the ref fast-forwards, the in-memory model is still right
+          by the precondition above, and the write commits on the tip the store now holds;
+        * a governed path moved — **refused, and the rule id is the one K4 chose** (`git.push-rejected`). A moved
+          remote whose diff reaches the tracking root still means a second writer of governed paths, which is the
+          condition K4 ruled must be reported rather than merged past, and nothing in Q14 refines that. Refusing
+          here rather than letting the push discover it saves a commit, a journal row and a round trip, and the
+          caller cannot tell the two apart because the id and the disclosure are identical.
+
+        A ref that has diverged — the store holding an unpushed commit of its own — is left alone by
+        `fast_forward`, which never resets; the write then commits on the base it holds and the rebuild below
+        refuses on its own bound. No commit is dropped by this path.
+
+        **What (a) is actually for, learned from its own mutation.** Deleting the fast-forward here leaves a store
+        that still works: the write commits on the stale base, the push is rejected, and `_push_or_rebuild` below
+        rebuilds it on the same tip. The mutation survived until a test counted the pushes. So (a) is not the
+        correctness path — (b) is — and what (a) buys is **the rejected round trip that never happens**, on every
+        write after every merged pull request. That is the trade the ruling made when it chose (c) over (b) alone,
+        and it is worth one fetch: measured in tenant #0's container against GitHub, 1568 ms median for the fetch
+        against a rejected push plus a fetch plus a second push for the same write.
+        """
+        attrs = {telemetry.TENANT: self.tenant, telemetry.ACTION: "fetch"}
+        with telemetry.span(telemetry.SYNC_SPAN, **attrs) as sp:
+            try:
+                tip = self.repo.fetch()
+            except Refusal as r:
+                telemetry.record_refusal_on(sp, r.rule)
+                raise
+            telemetry.record_ok()
+        head = self.repo.head
+        if tip is None or head is None or tip == head:
+            return
+        attrs = {telemetry.TENANT: self.tenant, telemetry.ACTION: "fast-forward"}
+        with telemetry.span(telemetry.SYNC_SPAN, **attrs) as sp:
+            moved = self._first_governed_change(head, tip)
+            if moved is not None:
+                telemetry.record_refusal_on(sp, "git.push-rejected")
+                raise Refusal("git.push-rejected", tip[:12], f"a governed path moved on the remote: {moved}")
+            self.repo.fast_forward(tip)
+            telemetry.record_ok()
+
+    def _push_or_rebuild(self, changes: dict[str, bytes], author: str, at: str, message: str, sha: str) -> str:
+        """**(b) of Q14's ruling: one bounded rebuild on a rejected push, and only when nothing governed moved.**
+
+        The race (a) cannot close: a pull request merges between the fetch and the push. The answer is the same
+        question asked again, and the retry is bounded three ways, each of which falls back to today's refusal:
+
+        1. the store must be **exactly one commit** ahead of the new tip, and it must be *this* commit. More than
+           one means the store is carrying unpushed history — the state a governed refusal leaves behind — and
+           rebuilding would drop it. This is also what makes a separate ancestry check unnecessary: if this commit
+           is the only one the remote lacks, its parent is reachable from the tip by construction.
+        2. **no governed path may have moved** between the store's base and the new tip, by the same walk (a) uses;
+        3. the rebuilt commit is pushed **once**. A second rejection is the refusal, never another round.
+
+        It is not a rebase and not a force. `GitCli` holds no force path at all, and none is added here: the store
+        re-derives its own one commit on a parent it verified, and the compare-and-swap on its own ref plus the
+        remote's own fast-forward check are what decide. `git push --force-with-lease` was measured destroying a
+        concurrent writer's commit (K4, mutation M5) and is the thing this shape exists to stay away from.
+        """
+        try:
+            self.repo.push()
+            return sha
+        except Refusal as r:
+            if r.rule != "git.push-rejected":
+                raise
+            rejected = r
+        attrs = {telemetry.TENANT: self.tenant, telemetry.ACTION: "rebuild"}
+        with telemetry.span(telemetry.SYNC_SPAN, **attrs) as sp:
+            try:
+                tip = self.repo.fetch()
+                if tip is None:
+                    raise rejected
+                ahead = self.repo.first_parent_walk(tip)
+                if ahead != [sha]:
+                    raise Refusal(
+                        "git.push-rejected",
+                        tip[:12],
+                        f"the store holds {len(ahead)} commits the remote does not; only its own one is rebuilt",
+                    )
+                parents = self.repo.parents(sha)
+                moved = self._first_governed_change(parents[0], tip) if parents else "a root commit has no base"
+                if moved is not None:
+                    raise rejected
+                rebuilt = self.repo.commit(changes, author, at, message, parents=[tip])
+                self.repo.push()
+            except Refusal as e:
+                telemetry.record_refusal_on(sp, e.rule)
+                raise
+            telemetry.record_ok()
+            return rebuilt
+
     def _apply(
         self,
         caller: Caller,
@@ -357,8 +484,14 @@ class Store:
         repairs: str | None = None,
         in_txn: bool = False,
     ) -> tuple[dict[str, Any], str, dict[str, str]]:
-        """Journal write-ahead (one row) → files → one commit + one push → the row applied. Opens the tenant's
-        transaction unless the caller already holds it (`ratify`, across the signer's round trip)."""
+        """Re-read `main` (K9) → journal write-ahead (one row) → files → one commit → one push, or one bounded
+        rebuild on a rejected push → the row applied. Opens the tenant's transaction unless the caller already
+        holds it (`ratify`, across the signer's round trip)."""
+        # (a): re-read `main` first, so the commit below is built on the tip the remote holds rather than on
+        # whatever this container cloned when it started. Placed ahead of the journal row on purpose — an
+        # origin this store cannot reach refuses here, before a row is written and before a commit is made,
+        # rather than after both.
+        self._sync_to_main()
         prows: list[dict[str, Any]] = []
         blobs: dict[str, str] = {}
         for p, d in files.items():
@@ -373,8 +506,9 @@ class Store:
         for p, d in files.items():
             self.raw[p] = d
             self._blob[p] = blobs[p]
-        sha = self.repo.commit({self.rp(p): d for p, d in files.items()}, caller.principal, at, message)
-        self.repo.push()
+        repo_files = {self.rp(p): d for p, d in files.items()}
+        sha = self.repo.commit(repo_files, caller.principal, at, message)
+        sha = self._push_or_rebuild(repo_files, caller.principal, at, message, sha)
         self.journal.applied(int(row["seq"]))
         return row, sha, blobs
 

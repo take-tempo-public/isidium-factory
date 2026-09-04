@@ -44,11 +44,13 @@ clone and is wrong now, not merely stale.
 The store's clone is **derived, not authored**: the entrypoint rebuilds it from `ISIDIUM_ORIGIN` at every start,
 inside the container's own writable layer, and nothing bind-mounts it.
 
-That is what makes a restart the way a bypass commit becomes visible. A running store never re-reads `main` — it
-sees the commits it wrote and no others — so a commit somebody pushed straight past it, which is precisely what
-`check` exists to detect, stays invisible until it restarts. **Verified 2026-09-01:** with the store up, a commit
-pushed directly to the origin left the store's clone at `32217bd`; after `podman restart` it was at `6b6f3ba`, the
-planted commit. A persistent clone would have gone on serving whatever branch it last saw.
+That is what makes a restart the way a bypass commit becomes visible. Since K9 a running store does re-read the
+*branch* — it fetches and fast-forwards its own ref before every write — but it does not re-parse the documents it
+loaded at start, and a catch-up that touches a governed path is refused rather than followed. So a commit somebody
+pushed straight past it, which is precisely what `check` exists to detect, is still invisible to what `check` reads
+until the store restarts. **Verified 2026-09-01:** with the store up, a commit pushed directly to the origin left
+the store's clone at `32217bd`; after `podman restart` it was at `6b6f3ba`, the planted commit. A persistent clone
+would have gone on serving whatever branch it last saw.
 
 **The cost, stated rather than discovered:** a fresh clone is cold, and a filtered clone holds no governed blob
 either, so the first load hydrates the governed set one object at a time — N round trips to the origin at every

@@ -52,6 +52,12 @@ class Repo(Protocol):
     def blob(self, oid: str) -> bytes: ...
     def commit(self, changes: Changes, author: str, at: str, message: str, parents: list[str] | None = None) -> str: ...
     def push(self) -> None: ...
+    # K9 (Q14 (c)): the store re-reads `main` before it writes. `fetch` reports the remote's tip without moving
+    # anything — `None` means *this repo has no remote to re-read*, which is the in-memory double and a store built
+    # with `push=False`. `fast_forward` moves this clone's own ref to a tip it has verified, as a compare-and-swap,
+    # and returns whether it moved; it is never a reset, so a ref that is not an ancestor of `to` stays where it is.
+    def fetch(self) -> str | None: ...
+    def fast_forward(self, to: str) -> bool: ...
     def parents(self, sha: str) -> list[str]: ...
     def commit_time(self, sha: str) -> str: ...
     def touched(self, sha: str) -> dict[str, tuple[str | None, str | None]]: ...
@@ -116,6 +122,20 @@ class MemGit:
 
     def push(self) -> None:
         self.pushed += 1
+
+    def fetch(self) -> str | None:
+        """The double has **no remote**, and `None` is how it says so — the store then skips the sync entirely.
+
+        Modelling one here was considered and rejected: these scenarios are about document semantics, and every
+        property Q14 rules on is about git's own refs and reachability, which a dict cannot be wrong about in the
+        way a real clone can. `tests/store/test_k9.py` drives the real thing over the harness's real bare origin.
+        """
+        return None
+
+    def fast_forward(self, to: str) -> bool:
+        """Unreachable through the store, because `fetch` above returns `None`, and refused rather than silently
+        implemented so that a future caller finds out here instead of moving a head the double never checked."""
+        raise Refusal("git.unsupported", "fast-forward", "the in-memory double has no remote to fast-forward to")
 
     def read(self, path: str, sha: str | None = None) -> bytes | None:
         b = self.tree(sha or self._head).get(path)
@@ -380,18 +400,28 @@ class GitCli:
         triggers a fetch.
         """
         if self._tree_cache is None:
-            out: dict[str, tuple[str, str]] = {}
-            if self.head is not None:
-                for entry in self._git("ls-tree", "-r", "-z", "HEAD").split("\0"):
-                    if not entry:
-                        continue
-                    meta, path = entry.split("\t", 1)
-                    mode, _kind, oid = meta.split(" ", 2)
-                    out[path] = (mode, oid)
-                    if path.startswith(self.root):
-                        self._vouched.add(oid)
-            self._tree_cache = out
+            self._tree_cache = self._tree_at("HEAD") if self.head is not None else {}
         return self._tree_cache
+
+    def _tree_at(self, rev: str) -> dict[str, tuple[str, str]]:
+        """One revision's tree as `path -> (mode, oid)`, from **one** `ls-tree -r`, uncached.
+
+        Split out of `_tree` by K9, which needs the tree of a tip that is *not* `HEAD`: a commit rebuilt on
+        the remote's new tip must be built from **that tip's** tree, and building it from the cached `HEAD`
+        tree would silently revert every ungoverned path the merged pull request changed — the store's stale
+        view of the repository, written back onto `main` as if it were a decision. `ls-tree` resolves through
+        trees alone, so this holds under the footprint on a clone that has no blob for most of what it lists.
+        """
+        out: dict[str, tuple[str, str]] = {}
+        for entry in self._git("ls-tree", "-r", "-z", rev).split("\0"):
+            if not entry:
+                continue
+            meta, path = entry.split("\t", 1)
+            mode, _kind, oid = meta.split(" ", 2)
+            out[path] = (mode, oid)
+            if path.startswith(self.root):
+                self._vouched.add(oid)
+        return out
 
     @property
     def head(self) -> str | None:
@@ -502,19 +532,30 @@ class GitCli:
         impossible rather than guarded. `--no-verify` goes with the porcelain for the same reason: plumbing runs no
         hooks, so there is nothing to tell not to run.
         """
-        if parents is not None:
+        if parents is not None and len(parents) != 1:
             raise Refusal(
-                "git.unsupported", "commit", "explicit parents are the test double's; the store commits on HEAD"
+                "git.unsupported", "commit", "a merge is the test double's; the store commits one commit on one tip"
             )
         old = self.head
-        tree = dict(self._tree())
+        # **One explicit parent is the store's own now, and K9 is why** [Q14 (c), ruled 2026-09-03]. It is the
+        # rebuild: a push refused because the remote moved, the move then verified to touch no governed path, and
+        # this one commit re-derived on the tip the store has just verified. It is not a rebase of history and not a
+        # force — the store rebuilds *its own single unpushed commit* on a parent it checked, and `update-ref`'s
+        # expected old value below still decides. The tree comes from **that tip**, never from the cached `HEAD`
+        # tree, because `HEAD` is the stale base and committing its tree would carry the store's old view of every
+        # ungoverned path back onto `main`, reverting the merge it is trying to land behind.
+        if parents is None:
+            base, tree = old, dict(self._tree())
+        else:
+            base = parents[0]
+            tree = dict(self._tree()) if base == old else self._tree_at(base)
         oids = self._hash_objects({p: d for p, d in changes.items() if d is not None})
         for path, data in changes.items():
             if data is None:
                 tree.pop(path, None)
             else:
                 tree[path] = (tree[path][0] if path in tree else "100644", oids[path])
-        commit_oid = self._commit_tree(self._write_tree(tree), old, author, at, message)
+        commit_oid = self._commit_tree(self._write_tree(tree), base, author, at, message)
         ref = f"refs/heads/{self.branch}"
         try:
             # The third argument is the compare-and-swap. An empty string is git's own spelling of "and it must not
@@ -618,6 +659,95 @@ class GitCli:
             raise Refusal(
                 "git.push-rejected", f"{self.remote}/{self.branch}", "the remote moved under the store"
             ) from r
+
+    # ---- re-reading `main` (K9, Q14 (c)) ---------------------------------------------------------------------------
+
+    def fetch(self) -> str | None:
+        """`git fetch origin main` — the remote's tip, **without moving anything here**. `None` when this clone has
+        no remote to re-read, which is a store built with `push=False`.
+
+        **It stays blob-less, and that is measured rather than reasoned.** The clone's own config carries
+        `remote.origin.promisor=true` and `remote.origin.partialclonefilter=blob:none`, so a fetch against it
+        honours the filter; measured 2026-09-03 on a filtered bare clone, a fetch across an ungoverned commit grew
+        the object store by two objects — the commit and its tree — and left three blobs absent. `GIT_NO_LAZY_FETCH`
+        stays on, because it forbids the *lazy* fetch of a missing object and not an explicit one; the same
+        measurement ran under it, exit 0.
+
+        **`FETCH_HEAD`, not a remote-tracking ref.** `git clone --bare` writes no `remote.origin.fetch` refspec at
+        all (checked, not assumed), so there is no `refs/remotes/origin/main` here to read; the tip is where git
+        itself puts it for a one-shot fetch. Nothing else in this class depends on a ref this method might create.
+
+        A fetch that cannot reach the origin raises `git.fetch-failed` rather than a bare `git.failed`: the store's
+        answer to it is not "git broke" but "I cannot establish that I am writing on the current tip", which is a
+        different thing to a caller and to whoever reads the log.
+
+        **Declared cost (C-8, C-10), measured where it runs and not on the workstation.** Inside tenant #0's own
+        container against GitHub over SSH, 2026-09-03, seven repetitions: **a fetch of an unmoved `main` is 1568 ms
+        median** (1277 min, 2708 max) and the `rev-parse` that reads the tip off it is **8 ms**. So a governed write
+        gains one SSH round trip and nothing else worth naming, and it is the round trip — not the two process
+        spawns — that is the whole of the number. The ruling took that knowingly (*"costs a fetch per write, which
+        the store already pays per blob read"*); there is no cheaper shape, because `ls-remote` is the same round
+        trip and no answer about a remote's tip can be had without asking it.
+
+        The 8 ms is also why the tip is read with a second `git` rather than by parsing `FETCH_HEAD` off disk, or by
+        `git fetch --porcelain`, which prints it: the parse would buy half a percent of the sync in exchange for a
+        dependency on a file's layout, and `--porcelain` needs git 2.41 — which this image has (2.47.3, checked) and
+        a future base image might not, on the write path, silently.
+        """
+        if not self.do_push:
+            return None
+        try:
+            self._git("fetch", "--quiet", self.remote, self.branch)
+        except Refusal as r:
+            raise Refusal("git.fetch-failed", f"{self.remote}/{self.branch}", r.detail) from r
+        return self._git("rev-parse", "--verify", "FETCH_HEAD").strip() or None
+
+    def fast_forward(self, to: str) -> bool:
+        """Move this clone's own ref up to `to` — a compare-and-swap, and **never a reset**. Returns whether it moved.
+
+        Two guards, and each of them is the whole point of the method rather than defensive padding:
+
+        * **`to` must have this ref's current value as an ancestor.** A ref that has diverged — the store holding a
+          commit of its own that the remote refused — is *behind and ahead*, and moving it to `to` would drop that
+          commit on the floor. Declining leaves the existing machinery to answer: the write commits on the base it
+          holds, the push is rejected, and the rebuild's own bound refuses. A store must never lose a commit to a
+          convenience.
+        * **The move is `update-ref <ref> <new> <old>`** — the same third-argument compare-and-swap `commit` uses,
+          so a second writer over this same clone (a restarted container beside a still-running one) loses the swap
+          instead of overwriting it. A lost swap is `git.ref-moved`, not a silent no-op.
+
+        The cached tree is dropped, and that is load-bearing: `commit` builds the next tree from `_tree()`, so a
+        fast-forward that left the cache in place would write the *old* tree back and revert the merge it just
+        moved past. `_vouched` is deliberately **not** cleared — every id in it was resolved from a path inside the
+        tracking root, which stays true of an id after the ref moves.
+        """
+        old = self.head
+        if old == to:
+            return False
+        if old is not None and not self._git_ok("merge-base", "--is-ancestor", old, to):
+            return False
+        try:
+            self._git("update-ref", f"refs/heads/{self.branch}", to, old if old else "")
+        except Refusal as r:
+            raise Refusal("git.ref-moved", f"refs/heads/{self.branch}", "the ref moved under the store") from r
+        self._tree_cache = None
+        return True
+
+    def _git_ok(self, *args: str) -> bool:
+        """A git whose **exit 1 is an answer and every other failure is still a failure** — `merge-base
+        --is-ancestor` is the one such question this class asks, and it says "no" with exit 1. `_git` raises on any
+        non-zero, which would turn a plain "not an ancestor" into a refusal, so this is a separate door.
+
+        **Only exit 1 is the answer, and that distinction is not pedantry** [found by K9's own tests]. Folding every
+        non-zero into `False` reads as the safe direction — the one caller merely declines to move a ref — but it
+        makes *"the object you named is not in this repository"* indistinguishable from *"it is not an ancestor"*,
+        and two tests written against a tip the clone had not fetched passed for that reason instead of for the
+        property they claimed. A question this class cannot answer is a failure, said out loud.
+        """
+        r = subprocess.run(["git", *args], cwd=self.gitdir, capture_output=True, check=False, env=dict(self._env))
+        if r.returncode not in (0, 1):
+            raise Refusal("git.failed", " ".join(args[:2]), r.stderr.decode("utf-8", "replace").strip()[:300])
+        return r.returncode == 0
 
     # ---- the walk (object-level already) -------------------------------------------------------------------------
 

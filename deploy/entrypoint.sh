@@ -54,10 +54,13 @@ case "$ISIDIUM_ORIGIN" in
 esac
 
 # ---- the store's clone, rebuilt at every start ----------------------------------------------------------------------
-# **Rebuilt, not reused.** A running store never re-reads `main` — it sees only the commits it wrote itself — so a
-# bypass commit somebody pushed straight to the branch is invisible to it until it restarts. That sentence is only
-# true if a restart re-reads the branch, and this is where it becomes true. The clone is derived: everything the
-# store writes is pushed before it is acknowledged, so there is nothing in here to keep.
+# **Rebuilt, not reused.** Since K9 a running store fast-forwards its own ref onto `main` before every write, so it
+# no longer goes stale between restarts — but it does **not** re-parse the documents it loaded at start, and it
+# refuses rather than fast-forwards when the catch-up touches a governed path. So a bypass commit somebody pushed
+# straight to the branch is still invisible to the store's *model* until it restarts, which is what `check` reads,
+# and a restart is still how one comes to be seen. That sentence is only true if a restart re-reads the branch, and
+# this is where it becomes true. The clone is derived: everything the store writes is pushed before it is
+# acknowledged, so there is nothing in here to keep.
 #
 # **The cost, stated rather than discovered** (C-8, and K4's second finding): a fresh clone is cold, and a filtered
 # clone holds no governed blob either, so the store's first load hydrates its governed set one object at a time —

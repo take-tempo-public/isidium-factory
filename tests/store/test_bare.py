@@ -249,6 +249,14 @@ def test_a_push_onto_a_moved_ref_is_refused_and_never_rebased(store: Store, tmp_
 
     The discriminator is that the remote is left alone: a rebase-and-retry would have landed the store's commit on
     top of the stranger's, which is the silent outcome this refusal exists to prevent.
+
+    **Its subject split when Q14 was ruled (2026-09-03), and this half is the one that did not move.** `GitCli`
+    knows nothing about which paths are governed, so a plain push onto a moved ref is rejected here whatever moved
+    — that is K4's property, unrefined, and it is what the store's own answer is built on top of. What Q14 refines
+    is the *store's* answer to this rejection, which needs the tenant's manifest: an ungoverned move is now
+    fast-forwarded and the write lands, a governed one is still `git.push-rejected`. Both halves are in
+    `tests/store/test_k9.py`, and neither can be seen from here, because a test that calls `repo.push()` directly
+    never reaches the code that decides.
     """
     repo = store.repo
     assert isinstance(repo, GitCli)
