@@ -41,6 +41,38 @@
       "description": "A base-image digest bump is a rebuild and a restart of every tenant's store; it is never grouped with anything else.",
       "matchManagers": ["dockerfile"],
       "groupName": null
+    },
+    {
+      "description": "uv is a build-stage tool that never reaches the runtime layer, and it is referenced twice: as the version input to setup-uv in the workflows and as the image the Containerfile copies the binary from. They move together, so CI and the image always build with the same uv [K5c, 2026-09-05: the first run proposed them as two PRs].",
+      "matchPackageNames": [
+        "astral-sh/uv",
+        "ghcr.io/astral-sh/uv"
+      ],
+      "groupName": "uv"
+    },
+    {
+      "description": "The version input to setup-uv is a release number, not an action ref. Pinning it to a commit is meaningless and failed on every run (the Repository Problems entry on the first dashboard). Digest pinning stays on for every real action.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "astral-sh/uv"
+      ],
+      "pinDigests": false
+    },
+    {
+      "description": "The runtime Python is ruled, not maintained: 3.12 is the floor the distributions declare and the version the container ships (owner, 2026-09-04). Digest bumps of 3.12-slim still arrive, because those are the base being rebuilt underneath us; a move to another Python is a decision and never a PR.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "docker.io/library/python"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "enabled": false
     }
   ]
 }
