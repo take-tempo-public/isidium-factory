@@ -44,7 +44,7 @@ def install_double(
     vulns: dict[tuple[str, str], list[str]] | None = None,
     control_ids: list[str] | None = None,
     drop_results: int = 0,
-    page: dict[str, list[str]] | None = None,
+    page: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """A querybatch that answers positionally, so a test can hand back the wrong shape on purpose."""
     hits = vulns or {}
@@ -65,7 +65,7 @@ def install_double(
                 continue
             found = list(hits.get(key, []))
             entry: dict[str, Any] = {"vulns": [{"id": i} for i in found]} if found else {}
-            if page and key == page["on"]:  # type: ignore[comparison-overlap]
+            if page and key == page["on"]:
                 entry = {"vulns": [{"id": i} for i in page["first"]], "next_page_token": "more"}
             results.append(entry)
         return {"results": results[: len(results) - drop_results] if drop_results else results}

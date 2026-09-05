@@ -21,7 +21,7 @@ from isidium.store.registry.config import CONFIG_ORDERS
 from isidium.store.server import reconcile
 from isidium.store.server.store import NewCard, WriteRequest
 
-from .conftest import BASE_SCOPE, LANDER, OWNER, PLANNER, Harness, base_head, fresh
+from .conftest import BASE_SCOPE, LANDER, OWNER, PLANNER, Harness, base_head, fresh, path_of
 
 ACTS_HIT: dict[str, str] = {"config-policy": "init", "binding": "realm", "created": "write"}
 IDS: dict[str, Any] = {}
@@ -60,7 +60,7 @@ def test_write_basics(hz: Harness) -> None:
     refuses(
         "write.stale",
         lambda: st.write(
-            st.path_of(cid),
+            path_of(st, cid),
             Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections)),
             {"seq": 0, "h": "x"},
             None,
@@ -70,13 +70,13 @@ def test_write_basics(hz: Harness) -> None:
     refuses(
         "write.no-change",
         lambda: st.write(
-            st.path_of(cid), Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections)), head, None, PLANNER
+            path_of(st, cid), Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections)), head, None, PLANNER
         ),
     )
     refuses(
         "validate.failed",
         lambda: st.write(
-            st.path_of(cid),
+            path_of(st, cid),
             Document({**copy.deepcopy(doc.head), "misc": 1}, copy.deepcopy(doc.sections)),
             head,
             None,
@@ -115,8 +115,8 @@ def test_ratify_single_with_content(hz: Harness) -> None:
     new.head["status"] = "ratified"
     new.head["title"] = "changed in the same write"
     calls = signer.calls
-    refuses("write.requires-owner", lambda: st.write(st.path_of(cid), new, head, None, PLANNER))
-    r = st.write(st.path_of(cid), new, head, None, OWNER)
+    refuses("write.requires-owner", lambda: st.write(path_of(st, cid), new, head, None, PLANNER))
+    r = st.write(path_of(st, cid), new, head, None, OWNER)
     ACTS_HIT["ratified"] = "write"
     assert r.entry["act"] == "ratified" and r.entry["fields"] == ["status", "title"]
     assert r.entry["build"] == canon.build_hash(new.head, BASE_SCOPE) and r.entry["build"] != doc.history[-1]["build"]
@@ -132,8 +132,8 @@ def test_reratification(hz: Harness) -> None:
     doc, head = st.show(cid)
     new = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
     new.head["rules"][0]["text"] += " (clarified)"
-    refuses("write.requires-owner", lambda: st.write(st.path_of(cid), new, head, None, PLANNER))
-    r = st.write(st.path_of(cid), new, head, None, OWNER)
+    refuses("write.requires-owner", lambda: st.write(path_of(st, cid), new, head, None, PLANNER))
+    r = st.write(path_of(st, cid), new, head, None, OWNER)
     assert r.entry["act"] == "ratified" and r.entry["fields"] == ["rules"] and "sig" in r.entry
     assert st.check(cid)["integrity"] == []
     p = st.path_of(cid)
@@ -236,7 +236,7 @@ def test_closure_and_accept(hz: Harness) -> None:
     }
     new.head["closures"] = [closure]
     new.head["status"] = "closed"
-    r = st.write(st.path_of(cid), new, head, None, PLANNER)
+    r = st.write(path_of(st, cid), new, head, None, PLANNER)
     ACTS_HIT["closed"] = "write"
     assert r.entry["act"] == "closed" and r.entry["fields"] == ["closures", "status"] and "sig" not in r.entry
     assert r.entry["build"] == doc.history[-1]["build"]
@@ -251,10 +251,10 @@ def test_closure_and_accept(hz: Harness) -> None:
     refuses(
         "write.requires-owner",
         lambda: st.write(
-            st.path_of(cid), Document(copy.deepcopy(doc2.head), copy.deepcopy(doc2.sections)), head2, ref, PLANNER
+            path_of(st, cid), Document(copy.deepcopy(doc2.head), copy.deepcopy(doc2.sections)), head2, ref, PLANNER
         ),
     )
-    r = st.write(st.path_of(cid), Document(copy.deepcopy(doc2.head), copy.deepcopy(doc2.sections)), head2, ref, OWNER)
+    r = st.write(path_of(st, cid), Document(copy.deepcopy(doc2.head), copy.deepcopy(doc2.sections)), head2, ref, OWNER)
     ACTS_HIT["accepted"] = "write --ref"
     assert r.entry["act"] == "accepted" and r.entry["fields"] == [] and r.entry["ref"] == ref and "sig" in r.entry
     assert re.fullmatch(r"c1:sha256:[0-9a-f]{64}", r.entry["ref"])
@@ -265,7 +265,7 @@ def test_closure_and_accept(hz: Harness) -> None:
     ro = Document(copy.deepcopy(doc3.head), copy.deepcopy(doc3.sections))
     ro.head["reopens"] = [{"id": "o1", "closure_id": "c1", "reason": "S2 must run"}]
     ro.head["status"] = "ratified"
-    r = st.write(st.path_of(cid), ro, head3, ref, OWNER)
+    r = st.write(path_of(st, cid), ro, head3, ref, OWNER)
     ACTS_HIT["reopened"] = "write --ref"
     assert r.entry["act"] == "reopened" and "sig" in r.entry
     doc4, head4 = st.show(cid)
@@ -281,12 +281,12 @@ def test_closure_and_accept(hz: Harness) -> None:
         }
     )
     cl2.head["status"] = "closed"
-    st.write(st.path_of(cid), cl2, head4, None, PLANNER)
+    st.write(path_of(st, cid), cl2, head4, None, PLANNER)
     assert st.projections()[cid].render() == "closed (pending-ingest)"
     doc5, head5 = st.show(cid)
     rt = Document(copy.deepcopy(doc5.head), copy.deepcopy(doc5.sections))
     rt.head["closures"][-1]["retracted"] = True
-    r = st.write(st.path_of(cid), rt, head5, None, PLANNER)
+    r = st.write(path_of(st, cid), rt, head5, None, PLANNER)
     ACTS_HIT["retracted"] = "write"
     assert r.entry["act"] == "retracted" and "sig" not in r.entry
     assert st.show(cid)[0].history[-1]["build"] == doc.history[-1]["build"]
@@ -324,6 +324,7 @@ def test_born_ratified(hz: Harness) -> None:
             NewCard("born2"), Document(base_head(0, "ratified"), {"Scope": BASE_SCOPE}), None, None, PLANNER
         ),
     )
+    assert r.id is not None
     assert st.projections()[r.id].render() == "ready"
 
 
@@ -421,31 +422,31 @@ def test_ears_and_validation(hz: Harness) -> None:
     bad = copy.deepcopy(head)
     bad["rules"][0]["text"] = "The store should journal quickly."
     r = refuses(
-        "validate.failed", lambda: st.write(st.path_of(cid), Document(bad, dict(doc.sections)), hd, None, PLANNER)
+        "validate.failed", lambda: st.write(path_of(st, cid), Document(bad, dict(doc.sections)), hd, None, PLANNER)
     )
     assert {"profile.ears.weak-word", "profile.ears.grammar"} <= set(cells(r))  # `should` fails both
     bad2 = copy.deepcopy(head)
     bad2["surfaces"] = ["docs/work/cards/0001-x.md"]
     r = refuses(
-        "validate.failed", lambda: st.write(st.path_of(cid), Document(bad2, dict(doc.sections)), hd, None, PLANNER)
+        "validate.failed", lambda: st.write(path_of(st, cid), Document(bad2, dict(doc.sections)), hd, None, PLANNER)
     )
     assert "surfaces.intersects-tracking-root" in cells(r)
     bad2b = copy.deepcopy(head)
     bad2b["surfaces"] = [".github/workflows/ci.yml"]
     r = refuses(
-        "validate.failed", lambda: st.write(st.path_of(cid), Document(bad2b, dict(doc.sections)), hd, None, PLANNER)
+        "validate.failed", lambda: st.write(path_of(st, cid), Document(bad2b, dict(doc.sections)), hd, None, PLANNER)
     )
     assert "surfaces.intersects-deny-set" in cells(r)
     bad3 = copy.deepcopy(head)
     bad3["x"] = {"ratio": 0.5}
     r = refuses(
-        "validate.failed", lambda: st.write(st.path_of(cid), Document(bad3, dict(doc.sections)), hd, None, PLANNER)
+        "validate.failed", lambda: st.write(path_of(st, cid), Document(bad3, dict(doc.sections)), hd, None, PLANNER)
     )
     assert "canon.float" in cells(r)
     bad4 = copy.deepcopy(head)
     bad4["depends_on"] = [3, 3]
     r = refuses(
-        "validate.failed", lambda: st.write(st.path_of(cid), Document(bad4, dict(doc.sections)), hd, None, PLANNER)
+        "validate.failed", lambda: st.write(path_of(st, cid), Document(bad4, dict(doc.sections)), hd, None, PLANNER)
     )
     assert "canon.set-duplicate" in cells(r)
 
@@ -591,7 +592,7 @@ def test_d6_batch_writes(hz: Harness) -> None:
     }
     closed.head["closures"] = [closure]
     closed.head["status"] = "closed"
-    st.write(st.path_of(c), closed, head_c, None, PLANNER)
+    st.write(path_of(st, c), closed, head_c, None, PLANNER)
     q = st.show("Queue")
     assert a in q.holds_on_owner and b in q.open_questions and c in q.closures_pending_review
     da, ha = st.show(a)
@@ -682,12 +683,12 @@ def test_d6_retraction_and_owner_close(hz: Harness) -> None:
         }
     ]
     cl.head["status"] = "closed"
-    st.write(st.path_of(f), cl, head, None, PLANNER)
+    st.write(path_of(st, f), cl, head, None, PLANNER)
     doc, head = st.show(f)
     rt = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
     rt.head["closures"][0]["retracted"] = True
     rt.head["status"] = "ratified"
-    r = st.write(st.path_of(f), rt, head, None, PLANNER)
+    r = st.write(path_of(st, f), rt, head, None, PLANNER)
     assert r.entry["act"] == "retracted" and "sig" not in r.entry and r.entry["fields"] == ["closures", "status"]
     assert st.check(f)["integrity"] == []
     # after the closure LANDED (the sidecar names it — injected here; `land` is v1b), the same diff needs the owner
@@ -706,7 +707,7 @@ def test_d6_retraction_and_owner_close(hz: Harness) -> None:
         }
     ]
     cl.head["status"] = "closed"
-    st.write(st.path_of(g), cl, head, None, PLANNER)
+    st.write(path_of(st, g), cl, head, None, PLANNER)
     landed = st.show(g)[0].history[-1]  # the sidecar's head AT the closed entry: landed (C6, one integer compare)
     st.state = {
         "cards": {
@@ -723,7 +724,7 @@ def test_d6_retraction_and_owner_close(hz: Harness) -> None:
     rt = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
     rt.head["closures"][0]["retracted"] = True
     rt.head["status"] = "ratified"
-    refuses("write.requires-owner", lambda: st.write(st.path_of(g), rt, head, None, PLANNER))
+    refuses("write.requires-owner", lambda: st.write(path_of(st, g), rt, head, None, PLANNER))
     st.state = {}
     h = hz.draft("owner-close")
     st.ratify([h], OWNER)
@@ -739,7 +740,7 @@ def test_d6_retraction_and_owner_close(hz: Harness) -> None:
     }
     cl.head["closures"] = [closure]
     cl.head["status"] = "closed"
-    r = st.write(st.path_of(h), cl, head, None, OWNER)
+    r = st.write(path_of(st, h), cl, head, None, OWNER)
     assert r.entry["act"] == "closed" and "sig" in r.entry and r.entry["ref"] == canon.closure_ref(closure)
     assert derive.needs_signature(doc.head, cl.head, ["closures", "status"], None) is None
     assert st.check(h)["integrity"] == []
@@ -824,6 +825,7 @@ def test_d6_merge_observed_fail_closed(hz: Harness) -> None:
     (the land itself is v1b)."""
     st = hz.st
     main = st.repo.head
+    assert main is not None
     branch = st.repo.commit(
         {"src/feature.py": b"print('built')\n"}, "builder", st.now(), "batch b2: code only", parents=[main]
     )
@@ -880,7 +882,7 @@ def test_d6_gate_refusals(hz: Harness) -> None:
         }
     ]
     cl.head["status"] = "closed"
-    st.write(st.path_of(b), cl, h0, None, PLANNER)
+    st.write(path_of(st, b), cl, h0, None, PLANNER)
     before = st.docs[str(st.path_of(b))]
     doc = hand_commit(
         b,
@@ -908,7 +910,7 @@ def test_d6_gate_refusals(hz: Harness) -> None:
     ups = am.sections["Updates"]
     assert isinstance(ups, list)
     ups[-1]["body"] = "amended same day"
-    refuses("log.rewritten", lambda: st.write(st.path_of(e), am, he, None, PLANNER))
+    refuses("log.rewritten", lambda: st.write(path_of(st, e), am, he, None, PLANNER))
 
 
 def test_every_act_reachable(hz: Harness) -> None:

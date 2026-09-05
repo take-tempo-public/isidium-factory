@@ -19,6 +19,7 @@ checked with `cat-file --batch-all-objects --batch-check`, which lists what is h
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,6 @@ import pytest
 from isidium.store.core.grammar import Document
 from isidium.store.core.refusal import Refusal
 from isidium.store.registry.loader import Registry
-from isidium.store.server import gitrepo
 from isidium.store.server.gitrepo import Footprint, GitCli, blob_id
 from isidium.store.server.journal import Journal
 from isidium.store.server.signer import SoftwareKey, SoftwareKeyAck
@@ -47,7 +47,7 @@ def held(repo: GitCli) -> set[str]:
         capture_output=True,
         check=True,
         text=True,
-        env={**gitrepo.os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
     ).stdout
     return {ln.split()[0] for ln in out.splitlines() if ln.strip() and not ln.startswith("warning")}
 
@@ -346,7 +346,7 @@ def test_reads_go_through_one_long_lived_process_and_not_one_spawn_each(
         spawned.append(list(args))
         return real(args, **kw)
 
-    monkeypatch.setattr(gitrepo.subprocess, "run", counting)
+    monkeypatch.setattr(subprocess, "run", counting)
     for p in paths:
         assert repo.read(p) is not None
     assert spawned == [], f"{len(paths)} reads spawned {len(spawned)} processes: {spawned[:3]}"

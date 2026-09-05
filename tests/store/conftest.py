@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from isidium.store.core.grammar import Document
+from isidium.store.core.grammar import Document, UpdateBlock
 from isidium.store.registry.loader import Registry
 from isidium.store.server.gitrepo import GitCli, MemGit
 from isidium.store.server.identity import Caller
@@ -94,7 +94,7 @@ BASE_SCOPE = (
     "scenario as an error (`S-3.story.acceptance`), never a warning. Legacy\n"
     "context: sartor item 0060 (see `refs`)."
 )
-BASE_UPDATES = [
+BASE_UPDATES: list[UpdateBlock] = [
     {
         "date": "2026-08-20",
         "title": "filed from the inbox (s12)",
@@ -300,3 +300,12 @@ def otel() -> Telemetry:
     reader = InMemoryMetricReader()
     _metrics.set_meter_provider(MeterProvider(metric_readers=[reader]))
     return Telemetry(exporter, reader)
+
+
+def path_of(st: Store, card_id: int) -> str:
+    """`Store.path_of` answers `None` for an id it has never seen. Every test that reaches for this is about a
+    card it just wrote, so `None` there is the test's own mistake and is asserted rather than handed on as a
+    path [K5b, 2026-09-04]."""
+    path = st.path_of(card_id)
+    assert path is not None, card_id
+    return path

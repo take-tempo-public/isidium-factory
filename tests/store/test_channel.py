@@ -22,6 +22,7 @@ socket from inside the loop and never needs this.
 from __future__ import annotations
 
 import asyncio
+import importlib.resources
 import os
 import subprocess
 import threading
@@ -164,7 +165,7 @@ def test_the_walk_runs_over_the_channel(open_channel: Callable[..., Channel]) ->
     assert (tenant / "docs" / "work" / "config.toml").is_file()
 
     # the installed schemas are the store's own bytes — a local check and the store cannot disagree (03b §4)
-    shipped = Path(__import__("isidium.store.registry", fromlist=["x"]).__file__).parent / "schemas" / "card@1.toml"
+    shipped = importlib.resources.files("isidium.store.registry").joinpath("schemas", "card@1.toml")
     assert (tenant / ".isidium" / "schemas" / "card@1.toml").read_bytes() == shipped.read_bytes()
 
     # 2. a card, written through the client's transport (what `isidium write --new` does)

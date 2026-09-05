@@ -43,7 +43,7 @@ from enum import Enum
 from http import HTTPStatus
 from pathlib import Path
 from types import MappingProxyType
-from typing import Final
+from typing import Final, Protocol
 
 import h11
 
@@ -445,8 +445,18 @@ def _wire(response: Response, head: bool) -> bytes:
     )
 
 
+class ResponseWriter(Protocol):
+    """What `_respond` needs of the connection's writer: `write` and `drain`, which is all it calls. Naming the
+    two is what lets a test hand in a writer that never drains -- the write-timeout property -- without
+    pretending to be a whole `asyncio.StreamWriter` [K5b, 2026-09-04, type-only]."""
+
+    def write(self, data: bytes) -> None: ...
+
+    async def drain(self) -> None: ...
+
+
 async def _respond(
-    writer: asyncio.StreamWriter,
+    writer: ResponseWriter,
     connection: h11.Connection | None,
     response: Response,
     limits: Limits,
