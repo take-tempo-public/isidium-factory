@@ -18,7 +18,7 @@ from typing import Any, BinaryIO, Final
 from ..core.refusal import Refusal
 from ..registry.codegen import tool_schemas
 from .config import ClientConfig
-from .transport import Transport
+from .transport import Channel, Transport
 
 PROTOCOL: Final = "2025-06-18"
 SERVER: Final = {"name": "isidium-store", "version": "0.1.0"}
@@ -34,7 +34,7 @@ def tools() -> list[dict[str, Any]]:
 class McpServer:
     """One tenant's store as tools. `transport` is the same object the CLI uses: the pinned channel (7bg.2)."""
 
-    def __init__(self, transport: Transport) -> None:
+    def __init__(self, transport: Channel) -> None:
         self.transport = transport
         self.tools = {t["name"]: t for t in tools()}
 

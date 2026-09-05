@@ -25,6 +25,7 @@ below use both, because a check written against the root prefix alone would pass
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -107,7 +108,7 @@ def test_a_write_after_an_ungoverned_merge_lands_on_the_new_tip_without_a_restar
         pushes.append(1)
         original(self)
 
-    GitCli.push = counted  # type: ignore[method-assign,assignment]
+    GitCli.push = counted  # type: ignore[method-assign]
     try:
         sha = draft(store, "after-a-merge")
     finally:
@@ -132,7 +133,12 @@ def test_the_fast_forward_is_one_fetch_and_the_ordinary_write_pays_only_that(sto
     assert isinstance(repo, GitCli)
     moves: list[str] = []
     original = GitCli.fast_forward
-    GitCli.fast_forward = lambda self, to: (moves.append(to), original(self, to))[1]  # type: ignore[method-assign]
+
+    def recorded(self: GitCli, to: str) -> bool:
+        moves.append(to)
+        return original(self, to)
+
+    GitCli.fast_forward = recorded  # type: ignore[method-assign]
     try:
         first = draft(store, "quiet-one")
         second = draft(store, "quiet-two")
@@ -230,7 +236,7 @@ def test_a_merge_between_the_fetch_and_the_push_is_rebuilt_once_and_lands(store:
             raced.append(stranger_pushes(tmp_path, "docs/dev/raced.md", b"merged mid-write\n"))
         original(self)
 
-    GitCli.push = push_after_a_merge  # type: ignore[method-assign,assignment]
+    GitCli.push = push_after_a_merge  # type: ignore[method-assign]
     try:
         sha = draft(store, "raced")
     finally:
@@ -259,7 +265,7 @@ def test_a_governed_change_that_arrives_in_the_race_is_refused_and_never_rebuilt
             raced.append(stranger_pushes(tmp_path, f"{ROOT}cards/0009-raced-bypass.md", b"# a bypass\n"))
         original(self)
 
-    GitCli.push = push_after_a_bypass  # type: ignore[method-assign,assignment]
+    GitCli.push = push_after_a_bypass  # type: ignore[method-assign]
     try:
         with pytest.raises(Refusal) as ei:
             draft(store, "raced-by-a-bypass")
@@ -315,7 +321,7 @@ def test_a_second_rejection_after_the_rebuild_is_the_refusal_and_not_another_rou
             landed.append(stranger_pushes(tmp_path, f"docs/dev/race-{len(landed)}.md", b"another merge\n"))
         original(self)
 
-    GitCli.push = push_into_a_moving_remote  # type: ignore[method-assign,assignment]
+    GitCli.push = push_into_a_moving_remote  # type: ignore[method-assign]
     try:
         with pytest.raises(Refusal) as ei:
             draft(store, "raced-twice")
@@ -483,7 +489,7 @@ def test_the_fetch_keeps_the_clone_blob_less(store: Store, tmp_path: Path) -> No
         capture_output=True,
         check=True,
         text=True,
-        env={**gitrepo.os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
     ).stdout
     held = {ln.split()[0] for ln in listed.splitlines() if ln.strip() and not ln.startswith("warning")}
     assert tip in held, "the fetched commit is not in the object store — the fetch did nothing"

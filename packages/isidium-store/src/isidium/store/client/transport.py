@@ -17,10 +17,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from ..core.refusal import Refusal, ValidationRefusal
 from .config import ClientConfig
+
+
+class Channel(Protocol):
+    """What `McpServer` needs of its channel: one call. `Transport` is the real one; a test hands in a double
+    that answers `call` and nothing else, which is all the server ever asks of it [K5b, 2026-09-04, type-only:
+    no runtime path changed, the contract the doubles already satisfied is now named]."""
+
+    def call(self, name: str, args: Mapping[str, Any]) -> Any: ...
 
 
 class Transport:

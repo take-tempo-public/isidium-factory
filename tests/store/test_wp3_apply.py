@@ -20,8 +20,10 @@ from isidium.store.core.refusal import Refusal
 from isidium.store.registry.config import CONFIG_ORDERS, resolve_effective
 from isidium.store.registry.loader import Registry
 from isidium.store.server.api import Api
+from isidium.store.server.gitrepo import GitCli
 from isidium.store.server.identity import GRANT_MATRIX, allowed
 from isidium.store.server.service import Registration, Request, Service
+from isidium.store.server.signer import SoftwareKeyAck
 from isidium.store.server.store import Store
 
 from .conftest import BASE_SCOPE, OWNER, PLANNER, Harness, base_head, store_on_disk, tenant_checkout
@@ -128,6 +130,7 @@ def test_s3_a_staged_file_does_not_ride_the_stores_commit(tenant: Path) -> None:
     assert sha is not None and sorted(store.repo.touched(sha)) == ["docs/work/cards/0001-a-card.md"]
     assert "evil.py" in git(tenant, "diff", "--cached", "--name-only")  # still staged, still the caller's business
     # the structural half: nothing to sweep, because there is no index and no working tree in the store's repository
+    assert isinstance(store.repo, GitCli)
     assert not (store.repo.gitdir / "index").exists()
     assert git(store.repo.gitdir, "rev-parse", "--is-bare-repository").strip() == "true"
 
@@ -139,6 +142,7 @@ def test_s4_a_single_signed_act_shows_the_diff(tenant: Path) -> None:
     store = initialized(tenant)
     api = Api(store)
     signer = store.signer
+    assert isinstance(signer, SoftwareKeyAck)
     head = base_head(0, "draft")
     head.pop("id")
     cid = api.call("write", OWNER, {"new_slug": "held-card", "document": {"head": head, "scope": BASE_SCOPE}})["id"]

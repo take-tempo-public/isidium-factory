@@ -82,7 +82,7 @@ def the_write(reps: int) -> None:
                 Store._sync_to_main, Store._push_or_rebuild = sync, wrap  # type: ignore[method-assign]
                 n += 1
                 with_k9.append(one(n))
-                Store._sync_to_main = no_sync  # type: ignore[method-assign]
+                Store._sync_to_main = no_sync  # type: ignore[method-assign,assignment]
                 Store._push_or_rebuild = plain_push  # type: ignore[method-assign,assignment]
                 n += 1
                 without.append(one(n))
@@ -107,7 +107,8 @@ def the_write(reps: int) -> None:
         report("the sync (fetch + rev-parse)", direct)
         # the batch reader and the journal hold handles into the temporary directory; Windows will not
         # delete a file another process has open, and an unclosed one turns a finished run into a traceback
-        st.repo.close()  # type: ignore[union-attr]
+        assert isinstance(st.repo, GitCli)
+        st.repo.close()
         st.journal.db.close()
 
 

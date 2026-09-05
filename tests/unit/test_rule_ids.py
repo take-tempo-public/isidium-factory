@@ -43,7 +43,7 @@ from pathlib import Path
 import isidium.store
 from isidium.store.core.disclosure import DECLARED, NAMESPACES, RULES, namespace_of
 
-PACKAGE = Path(isidium.store.__file__).parent  # type: ignore[arg-type]
+PACKAGE = Path(isidium.store.__file__).parent
 
 # `<namespace>.<name>[.<name>…]`: lower-case, hyphens inside a segment, at least one dot, never a colon.
 # Deliberately strict about the alphabet — this is the shape C-12's table keys on and the port's enum encodes.

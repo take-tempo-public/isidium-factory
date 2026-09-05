@@ -21,7 +21,7 @@ from isidium.store.server.journal import Journal
 from isidium.store.server.signer import SoftwareKeyAck
 from isidium.store.server.store import NewCard, Store, WriteRequest
 
-from .conftest import BASE_SCOPE, OWNER, PLANNER, REF_FILES, Clock, Harness, base_head, fresh
+from .conftest import BASE_SCOPE, OWNER, PLANNER, REF_FILES, Clock, Harness, base_head, fresh, path_of
 
 
 def refuses(rule: str, fn: Any) -> Refusal:
@@ -127,7 +127,7 @@ def test_c5_landed_closure_by_seq_compare(hz: Harness) -> None:
         }
     ]
     cl.head["status"] = "closed"
-    r = st.write(st.path_of(g), cl, head, None, PLANNER)
+    r = st.write(path_of(st, g), cl, head, None, PLANNER)
     closed_seq = r.entry["seq"]
     doc, head = st.show(g)
     rt = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
@@ -139,7 +139,7 @@ def test_c5_landed_closure_by_seq_compare(hz: Harness) -> None:
     assert any(v.startswith("ratify.not-a-signed-act") for v in dry["verdicts"][g])  # unsigned = write's, not ratify's
     # the sidecar's head AT the closed entry: landed → the owner's
     st.state = {"cards": {f"{g:04d}": {"history_head": {"seq": closed_seq, "h": "x"}}}}
-    refuses("write.requires-owner", lambda: st.write(st.path_of(g), rt, head, None, PLANNER))
+    refuses("write.requires-owner", lambda: st.write(path_of(st, g), rt, head, None, PLANNER))
     st.state = {}
 
 
@@ -231,13 +231,13 @@ def test_c8_accepted_ref_binds_a_real_closure(hz: Harness) -> None:
     }
     closed.head["closures"] = [closure]
     closed.head["status"] = "closed"
-    st.write(st.path_of(c), closed, head, None, PLANNER)
+    st.write(path_of(st, c), closed, head, None, PLANNER)
     doc, head = st.show(c)
     same = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
-    refuses("ref.closure-mismatch", lambda: st.write(st.path_of(c), same, head, "c9:sha256:" + "de" * 32, OWNER))
-    refuses("ref.closure-mismatch", lambda: st.write(st.path_of(c), same, head, "c1:sha256:" + "de" * 32, OWNER))
-    refuses("ref.grammar", lambda: st.write(st.path_of(c), same, head, "garbage", OWNER))
-    r = st.write(st.path_of(c), same, head, canon.closure_ref(closure), OWNER)
+    refuses("ref.closure-mismatch", lambda: st.write(path_of(st, c), same, head, "c9:sha256:" + "de" * 32, OWNER))
+    refuses("ref.closure-mismatch", lambda: st.write(path_of(st, c), same, head, "c1:sha256:" + "de" * 32, OWNER))
+    refuses("ref.grammar", lambda: st.write(path_of(st, c), same, head, "garbage", OWNER))
+    r = st.write(path_of(st, c), same, head, canon.closure_ref(closure), OWNER)
     assert r.entry["act"] == "accepted" and "sig" in r.entry
 
 
@@ -302,7 +302,7 @@ def test_c15_caller_aware_clause_needs_a_status_move(hz: Harness) -> None:
         }
     ]
     cl.head["status"] = "closed"
-    r = st.write(st.path_of(h), cl, head, None, OWNER)
+    r = st.write(path_of(st, h), cl, head, None, OWNER)
     assert "sig" in r.entry  # status moved to closed: the owner's close
     doc, head = st.show(h)
     cl2 = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
@@ -316,7 +316,7 @@ def test_c15_caller_aware_clause_needs_a_status_move(hz: Harness) -> None:
             "retracted": False,
         }
     )
-    r = st.write(st.path_of(h), cl2, head, None, OWNER)
+    r = st.write(path_of(st, h), cl2, head, None, OWNER)
     assert r.entry["act"] == "closed" and "sig" not in r.entry  # status unchanged: a claim, not the owner's close
 
 
@@ -336,7 +336,7 @@ def test_e1_e3_one_projection_per_show_and_the_id_index(hz: Harness, monkeypatch
         return orig_hash(*a, **k)
 
     monkeypatch.setattr(status_mod, "project", counted_project)
-    monkeypatch.setattr(status_mod.canon, "build_hash", counted_hash)
+    monkeypatch.setattr(canon, "build_hash", counted_hash)
     st.show("Board")
     assert calls["project"] == 1 and calls["hash"] == 0  # every card's build hash came from the cache
     assert st.path_of(1) is not None and st._by_id[1] == st.path_of(1)

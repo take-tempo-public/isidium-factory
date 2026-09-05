@@ -34,7 +34,7 @@ uv sync --locked --all-packages --all-extras
 uv run python -m pytest tests -q
 uv run python -m ruff check packages tests tools
 uv run python -m ruff format --check packages tests tools
-uv run python -m mypy packages/isidium-store/src packages/isidium-factory/src
+uv run python -m mypy packages/isidium-store/src packages/isidium-factory/src tests tools
 ```
 
 To move a version: edit `pyproject.toml`, run `uv lock`, commit the lock with the change. `python tools/osv_scan.py`

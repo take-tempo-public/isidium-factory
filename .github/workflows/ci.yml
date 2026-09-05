@@ -48,8 +48,10 @@ jobs:
       - name: the suite
         # --no-sync: the environment was just built from the lock and must not be quietly amended by a run.
         run: uv run --no-sync python -m pytest tests -q -n auto --dist loadfile
-      - name: mypy --strict over packages/
-        run: uv run --no-sync python -m mypy packages/isidium-store/src packages/isidium-factory/src
+      - name: mypy --strict over packages/, tests/ and tools/
+        # tests/ and tools/ joined the bar in K5b (ruled 2026-09-04): at `python_version = "3.12"` the checker
+        # rejects a 3.13-only call on sight, and the three that reached `main` were all in a test file it never saw.
+        run: uv run --no-sync python -m mypy packages/isidium-store/src packages/isidium-factory/src tests tools
       - name: ruff
         run: |
           set -eu
@@ -77,7 +79,8 @@ jobs:
   advisories:
     # **Reports; does not gate** — K5's done-when says "the OSV job runs and reports", and it is taken at that
     # amplitude. Promoting it to a required check would make api.osv.dev's availability a merge blocker, which is a
-    # different decision and the owner's. The schedule is the half a pull-request trigger cannot cover: an advisory
+    # different decision and the owner's -- ruled 2026-09-04 at K5's checkpoint: *not yet; we'll watch it*.
+    # The schedule is the half a pull-request trigger cannot cover: an advisory
     # published against a version already on `main` is news nobody asked for.
     runs-on: ubuntu-latest
     steps:

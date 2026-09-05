@@ -95,8 +95,10 @@ def test_d1_fixtures_validate() -> None:
         and cfg.declared_kinds(tree) == ["lint"]
         and cfg.declared_origins(tree) == ["gossip"]
     )
-    assert cfg.governed_resolve(eff, "cards/0042-x.md")["schema"] == "card@1"
-    assert cfg.governed_resolve(eff, "docs/wiki/home.md")["write"] == ["owner"]
+    card = cfg.governed_resolve(eff, "cards/0042-x.md")
+    wiki = cfg.governed_resolve(eff, "docs/wiki/home.md")
+    assert card is not None and card["schema"] == "card@1"
+    assert wiki is not None and wiki["write"] == ["owner"]
     assert cfg.governed_resolve(eff, "src/x.py") is None
 
     text = (D1 / "config-standalone.toml").read_text(encoding="utf-8")

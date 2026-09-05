@@ -213,7 +213,12 @@ def test_the_installed_hook_and_the_typed_command_are_one_function(
     monkeypatch.chdir(tenant)
 
     seen: list[Path] = []
-    monkeypatch.setattr(hook_mod, "check", lambda repo: (seen.append(repo), 7)[1])
+
+    def check_and_remember(repo: Path) -> int:
+        seen.append(repo)
+        return 7
+
+    monkeypatch.setattr(hook_mod, "check", check_and_remember)
     assert hook_mod.main() == 7
     with pytest.raises(typer.Exit) as exited:
         cli_mod.hook()
