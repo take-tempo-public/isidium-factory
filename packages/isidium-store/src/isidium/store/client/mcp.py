@@ -13,10 +13,12 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, BinaryIO, Final
 
 from ..core.refusal import Refusal
 from ..registry.codegen import tool_schemas
+from . import locus
 from .config import ClientConfig
 from .transport import Channel, Transport
 
@@ -32,10 +34,18 @@ def tools() -> list[dict[str, Any]]:
 
 
 class McpServer:
-    """One tenant's store as tools. `transport` is the same object the CLI uses: the pinned channel (7bg.2)."""
+    """One tenant's store as tools. `transport` is the same object the CLI uses: the pinned channel (7bg.2).
 
-    def __init__(self, transport: Channel) -> None:
+    `workdir` and `root` are the checkout this server runs in and its tracking root — for the ref pre-flight the
+    CLI's `write` and `ratify` also run (K4b, `client/locus.py`). The planner drafts most cards, so this is the door
+    where a ref whose locus does not land is most often written; it learns here, at draft time, what the assembler
+    would otherwise refuse at dispatch. Both are required: a server that could be built without a checkout would be
+    one that silently ran no pre-flight."""
+
+    def __init__(self, transport: Channel, workdir: Path, root: str) -> None:
         self.transport = transport
+        self.workdir = workdir
+        self.root = root
         self.tools = {t["name"]: t for t in tools()}
 
     def handle(self, request: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -57,6 +67,7 @@ class McpServer:
         if name not in self.tools:
             return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32602, "message": f"unknown tool {name!r}"}}
         try:
+            locus.preflight(name, args, self.workdir, self.root)  # the same door as the CLI's, before the channel
             result = self.transport.call(name, args)
         except Refusal as r:
             # `r.payload()`, not a dict built here: a validation refusal reaches the model as an ARRAY of typed
@@ -113,5 +124,5 @@ class McpServer:
 
 def main() -> int:
     cfg, workdir = ClientConfig.find()
-    McpServer(Transport(cfg, workdir)).serve()
+    McpServer(Transport(cfg, workdir), workdir, cfg.root).serve()
     return 0

@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 
 from isidium.store.core import canon, chain
+from isidium.store.core import refs as refs_mod  # the pure half lives under core/ since K4b; the store keeps `resolve`
 from isidium.store.core.grammar import CARD, Document, emit_markdown, parse_markdown
 from isidium.store.core.refusal import Refusal
 from isidium.store.registry.loader import Registry
-from isidium.store.server import refs as refs_mod
 from isidium.store.server.gitrepo import MemGit, blob_id
 from isidium.store.server.journal import Journal
 from isidium.store.server.signer import SoftwareKeyAck

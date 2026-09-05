@@ -22,6 +22,7 @@ from typing import Annotated, Any
 import typer
 
 from ..core.refusal import Refusal
+from . import locus
 from .config import ClientConfig
 from .transport import Transport
 
@@ -46,8 +47,13 @@ def _transport() -> tuple[Transport, ClientConfig, Path]:
 
 def _run(name: str, args: Mapping[str, Any], text: bool = False) -> None:
     try:
-        transport, _cfg, _wd = _transport()
-        _out(transport.call(name, args), text)
+        cfg, workdir = ClientConfig.find()
+        # The ref pre-flight runs BEFORE the channel is opened (K4b): a ref whose locus does not land in the working
+        # tree is refused here without a round trip — and without `httpx` and the certificates being loaded for a
+        # call that is not going to be made. `locus.preflight` reads the working tree and calls `core.refs`'s one
+        # locus function; it is the same door the MCP server runs, so the planner and the author get one answer.
+        locus.preflight(name, args, workdir, cfg.root)
+        _out(Transport(cfg, workdir).call(name, args), text)
     except Refusal as r:
         typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it (the other three sites already)
         raise typer.Exit(code=2) from None
@@ -133,7 +139,11 @@ def write(
 ) -> None:
     """The one writer (03 §1.2): validate, compare-and-swap, derive the act from the diff, sign if the predicate says
     so, journal, write, commit. `--config <file>` is the policy door: the owner edits `config.toml` in the checkout
-    and hands the file over; the store re-emits it in canonical form and signs the act."""
+    and hands the file over; the store re-emits it in canonical form and signs the act.
+
+    A ref in the document's `head.refs` (or in `--set refs=[…]`) whose line range, anchor or symbol does not land
+    in this checkout's working tree is refused **here**, before the call (K4b, `client/locus.py`): the store's tree
+    cannot see inside a file, and the author's terminal can."""
     if config is not None:
         _run("write", config_write_args(config))
         return
@@ -181,7 +191,11 @@ def show(
 
 @app.command()
 def check(id: Annotated[int, typer.Argument(help="the card id")]) -> None:
-    """Chain, recompute, signatures and bindings, the journal reconciliation, the whole-set rules (03 §9.6)."""
+    """Chain, recompute, signatures and bindings, the journal reconciliation, the whole-set rules (03 §9.6).
+
+    **Not the ref pre-flight's door** (K4b, decided): `check` is the store's integrity verdict over the channel and
+    its exit code means *integrity*; the locus check is advice about a specification and belongs where a ref is
+    being written — `write` and `ratify` — not folded into a verb whose `1` an operator reads as tampering."""
     try:
         transport, _cfg, _wd = _transport()
         result = transport.call("check", {"id": id})
@@ -199,7 +213,11 @@ def ratify(
     writes: Annotated[Path | None, typer.Option(help="a JSON file: [{card|new_slug, document, base?, ref?}]")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run/--sign", help="the dry run is the default (round 48)")] = True,
 ) -> None:
-    """The sitting (03 §1.12): the batch is a list of typed writes under ONE signature. Always dry-run first."""
+    """The sitting (03 §1.12): the batch is a list of typed writes under ONE signature. Always dry-run first.
+
+    Every ref the sitting commits to — in each write's document, and in each id's card as this checkout holds it —
+    is pre-flighted against the working tree before the call, dry run or signed (K4b, `client/locus.py`):
+    ratification is where the store records the blob, so it is the moment the locus has to be right."""
     args: dict[str, Any] = {"ids": list(ids or []), "dry_run": dry_run}
     if writes is not None:
         args["writes"] = json.loads(writes.read_text(encoding="utf-8"))

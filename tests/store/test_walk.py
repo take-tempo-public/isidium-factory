@@ -161,9 +161,15 @@ def test_the_client_no_longer_drags_the_store_into_every_import() -> None:
     Every module named is a real cost: `cryptography` and `pydantic` are seconds, `typer` is the CLI framework the
     hook never renders anything with, and `cli.py` is the module that imports all three of the store's clients'
     worth of surface. `client.cli` keeps `typer` — it is the CLI — so it is asserted against the store's two only.
+
+    **Widened by K4b (2026-09-05) with `isidium.store.server`, the package.** The client now runs the ref locus
+    check itself, and the cheap wrong way to build that is `from ..server.refs import locus_check` — one line, and
+    the client's graph would reach into the store's half for good. The pure half moved to `core/refs.py` so that it
+    need not; this row is what keeps it so. The package name is the probe rather than any one module because a
+    parent package enters `sys.modules` whichever of its modules is imported, so the row cannot be routed around.
     """
     env = {**os.environ, "PYTHONPATH": str(Path("packages/isidium-store/src").resolve())}
-    heavy = ("cryptography", "pydantic", "typer", "isidium.store.client.cli")
+    heavy = ("cryptography", "pydantic", "typer", "isidium.store.client.cli", "isidium.store.server")
 
     def pulled(module: str) -> list[str]:
         """Which of `heavy` are in `sys.modules` of a fresh interpreter that imported `module`, and nothing else."""
@@ -175,17 +181,20 @@ def test_the_client_no_longer_drags_the_store_into_every_import() -> None:
     # The hook's own door, named by the installed script rather than by this test.
     assert pulled(_hook_module_the_installed_script_runs()) == [], "the pre-commit hook imports the store again"
     # K3's half of the property, unchanged: the transport and the CLI stop short of the store's own two. `cli.py`
-    # keeps `typer` — it is the CLI — and it names itself, so this asks about the two rather than about the set.
-    store_only = {"cryptography", "pydantic"}
-    for module in ("isidium.store.client.transport", "isidium.store.client.cli"):
+    # keeps `typer` — it is the CLI — and it names itself, so this asks about the three rather than about the set.
+    # K4b's door, `client.locus`, is in the row on its own as well as through `cli.py`: it is the module with the
+    # reason to reach for `server/`, and the MCP server imports it without importing the CLI.
+    store_only = {"cryptography", "pydantic", "isidium.store.server"}
+    for module in ("isidium.store.client.transport", "isidium.store.client.cli", "isidium.store.client.locus"):
         assert not store_only & set(pulled(module)), f"{module} imports the store's dependency tree again"
 
     # The positive discriminators: the probe finds each name when it IS there, so an empty answer above means absent
     # rather than "the probe stopped working". `server.api` is what `transport.py` imported and pulls both of the
     # store's — `server.store` alone pulls `cryptography` and not `pydantic`, which is measured rather than assumed
-    # because a control that only half fires only half discriminates. `client.cli` is the control for the other two,
-    # and it is the module the hook used to run, so this row is also what the win is measured against.
-    assert sorted(pulled("isidium.store.server.api")) == ["cryptography", "pydantic"]
+    # because a control that only half fires only half discriminates — and it is under `server/`, so it is the
+    # control for K4b's row too. `client.cli` is the control for the other two, and it is the module the hook used
+    # to run, so this row is also what the win is measured against.
+    assert sorted(pulled("isidium.store.server.api")) == ["cryptography", "isidium.store.server", "pydantic"]
     assert sorted(pulled("isidium.store.client.cli")) == ["isidium.store.client.cli", "typer"]
 
 

@@ -763,7 +763,8 @@ class Store:
         root — that is what `ref.inside-root` enforces — and the store's clone holds blob content for governed paths
         only, so reading a ref's bytes is asking for exactly what the footprint forbids. What the store checks is
         what its trees can see: the path exists, its blob id, and it is outside the root. The line/anchor/symbol
-        locus is `refs_mod.locus_check`, run by T-B3's assembler at dispatch from the project checkout.
+        locus is `core.refs.locus_check`, run by T-B3's assembler at dispatch from the project checkout — and, since
+        K4b, by the author's own terminal before the call reaches here (`client/locus.py`).
         """
         refs = doc.head.get("refs") or []
         if not refs:

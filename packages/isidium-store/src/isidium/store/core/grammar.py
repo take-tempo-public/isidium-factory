@@ -153,9 +153,12 @@ _TABLE_HDR: Final = re.compile(r"^\[\[?([A-Za-z0-9_.\-]+)\]\]?$")
 _BARE_KEY: Final = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
-def parse_markdown(raw: str, schema: DocSchema) -> Document:
-    """9.1: the fence on line 1 with info string exactly `toml`; the first block is the head; fence-aware `##`
-    sections in the schema's order; `## History` last; everything else `body.unclassified`."""
+def split_head(raw: str) -> tuple[str, list[str], str]:
+    """9.1's first half: the fence on line 1 with info string exactly `toml`, the first block is the head. Returns
+    the head's text, the body lines after the closing fence, and the newline the file uses.
+
+    Shared by `parse_markdown` and `parse_head` [K4b, 2026-09-05] so the fence grammar has one home: a reader that
+    wants one key of a card must not grow its own idea of where the head ends."""
     if raw.startswith("﻿"):
         raise Refusal("head.bom")
     newline = "\r\n" if "\r\n" in raw else "\n"
@@ -167,16 +170,34 @@ def parse_markdown(raw: str, schema: DocSchema) -> Document:
         close = lines.index("```", 1)
     except ValueError:
         raise Refusal("head.fence", "", "no closing fence") from None
-    head_text = "\n".join(lines[1:close])
+    return "\n".join(lines[1:close]), lines[close + 1 :], newline
+
+
+def load_head(head_text: str) -> Head:
+    """The head's TOML, with the two refusals that name what went wrong (a fence inside a string, or not TOML)."""
     try:
-        head = tomllib.loads(head_text)
+        head: Head = tomllib.loads(head_text)
     except tomllib.TOMLDecodeError as e:
         if head_text.count('"""') % 2 or head_text.count("'''") % 2:
             raise Refusal("head.fence-in-string") from None
         raise Refusal("head.toml", "", str(e)) from None
+    return head
+
+
+def parse_head(raw: str) -> Head:
+    """The head alone, for a reader that needs one key of a card and not its sections — the author's terminal
+    reading a card's `refs` before `ratify <id>` (K4b). The same fence and TOML rules as `parse_markdown`, by
+    construction; the table-order check needs the schema and stays the full parse's."""
+    return load_head(split_head(raw)[0])
+
+
+def parse_markdown(raw: str, schema: DocSchema) -> Document:
+    """9.1: the fence on line 1 with info string exactly `toml`; the first block is the head; fence-aware `##`
+    sections in the schema's order; `## History` last; everything else `body.unclassified`."""
+    head_text, body, newline = split_head(raw)
+    head = load_head(head_text)
     _check_table_order(head_text, schema.table_order)
 
-    body = lines[close + 1 :]
     parts: list[tuple[str | None, list[str]]] = [(None, [])]
     in_fence = False
     for ln in body:

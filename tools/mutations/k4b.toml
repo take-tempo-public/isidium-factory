@@ -1,0 +1,119 @@
+# K4b's mutations (2026-09-05) -- the author's terminal checks a ref's sub-file locus before the store is called.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `client/locus.py`, `client/cli.py`'s `_run`, `client/mcp.py`'s `_call` or `core/refs.py` should be
+# re-run against. Run one at a time on this suite -- see tools/mutate.py.
+#
+#   python tools/mutate.py tools/mutations/k4b.toml M5
+#
+# M1/M2 are the two doors dropping the pre-flight. M3/M4 are the door refusing the wrong things: ambiguity let
+# through, absence refused (the store's half, done a second way). M5 is the one the brief names first -- a faithful
+# copy of the check inside the door, which passes every behavioural assertion and dies ONLY to the substitution
+# test. M6/M7/M9 are the three lesser doors going dark. M8 mutates the SHARED function: it must die to test_apply's
+# assembler test AND to this chunk's door test, which is the evidence they are one function. M10/M11 are the span
+# lying: a refusal with no outcome, and a pass that counts what it never read. M12 reads outside the checkout.
+
+[[mutation]]
+id = "M1"
+label = "the CLI door drops the pre-flight -- every ref goes to the store unchecked"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = "        locus.preflight(name, args, workdir, cfg.root)\n        _out(Transport(cfg, workdir).call(name, args), text)"
+replace = "        _out(Transport(cfg, workdir).call(name, args), text)"
+
+[[mutation]]
+id = "M2"
+label = "the MCP door drops the pre-flight -- the planner's drafts go through unchecked"
+file = "packages/isidium-store/src/isidium/store/client/mcp.py"
+find = "            locus.preflight(name, args, self.workdir, self.root)  # the same door as the CLI's, before the channel\n"
+replace = ""
+
+[[mutation]]
+id = "M3"
+label = "`ref.ambiguous` is not a refusal at the terminal -- a symbol defined twice passes"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        if rule is not None:\n            why = _WHY.get((ref.kind, rule))"
+replace = "        if rule == \"ref.unresolved\":\n            why = _WHY.get((ref.kind, rule))"
+
+[[mutation]]
+id = "M4"
+label = "a path that is not in the working tree is refused locally -- existence checked a second way, with the false positive"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        if data is None:\n            continue\n        checked += 1"
+replace = "        if data is None:\n            out.append(Refusal(\"ref.unresolved\", \"refs\", text))\n            continue\n        checked += 1"
+
+[[mutation]]
+id = "M5"
+label = "the door grows its own copy of the check -- byte-for-byte the same today, and free to drift tomorrow; dies ONLY to the substitution test"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        rule = refs_mod.locus_check(ref, data)"
+replace = '''        def _own_copy(ref: refs_mod.Ref, data: bytes) -> str | None:
+            if ref.kind == "path":
+                return None
+            lines = data.decode("utf-8", "replace").split("\n")
+            if ref.kind == "lines":
+                return None if ref.l2 <= len(lines) else "ref.unresolved"
+            if ref.kind == "anchor":
+                for ln in lines:
+                    m = refs_mod._HEADING.match(ln)
+                    if m and (m.group("explicit") == ref.anchor or refs_mod.github_slug(m.group("text")) == ref.anchor):
+                        return None
+                return "ref.unresolved"
+            hits = 0
+            for ln in lines:
+                m = refs_mod._SYMBOL_DEF.match(ln) or refs_mod._ASSIGN_DEF.match(ln)
+                if m and m.group("name") == ref.symbol:
+                    hits += 1
+            if hits == 0:
+                return "ref.unresolved"
+            return None if hits == 1 else "ref.ambiguous"
+
+        rule = _own_copy(ref, data)'''
+
+[[mutation]]
+id = "M6"
+label = "`ratify <id>` reads no card -- the sitting commits to refs nobody looked at"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        out.extend(_card_refs(workdir, root, int(cid)))"
+replace = "        pass"
+
+[[mutation]]
+id = "M7"
+label = "`--set refs=[...]` is not a door -- the tending gesture writes a ref unchecked"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "    if key != \"refs\" or not val:\n        return []"
+replace = "    if key != \"refs\" or val:\n        return []"
+
+[[mutation]]
+id = "M8"
+label = "THE SHARED FUNCTION: a line range is checked by its first line, not its last -- must die to the assembler's test and to the door's"
+file = "packages/isidium-store/src/isidium/store/core/refs.py"
+find = "        return None if ref.l2 <= len(lines) else \"ref.unresolved\""
+replace = "        return None if ref.l1 <= len(lines) else \"ref.unresolved\""
+
+[[mutation]]
+id = "M9"
+label = "`ratify --writes` documents are not read -- the batch form bypasses the door"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "            out.extend(_document_refs(w.get(\"document\")))"
+replace = "            pass"
+
+[[mutation]]
+id = "M10"
+label = "the span never records the refusal -- a refused pre-flight looks like one that crashed before it could say"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "            telemetry.record_refusal_on(sp, refusal.rule)\n            raise refusal"
+replace = "            raise refusal"
+
+[[mutation]]
+id = "M11"
+label = "`checked` counts every ref, read or not -- a pass that looked at nothing reports that it looked"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        if data is None:\n            continue\n        checked += 1"
+replace = "        checked += 1\n        if data is None:\n            continue"
+
+[[mutation]]
+id = "M12"
+label = "the door reads outside the checkout -- `../` and absolute paths are opened on a ref's say-so"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "    if not p.is_relative_to(base) or not p.is_file():"
+replace = "    if not p.is_file():"
