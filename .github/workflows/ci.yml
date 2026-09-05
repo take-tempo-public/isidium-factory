@@ -34,7 +34,7 @@ jobs:
         python-version: ["3.12", "3.13"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           # uv itself is a version too, and an unpinned resolver is an unpinned build.
@@ -84,7 +84,7 @@ jobs:
     # published against a version already on `main` is news nobody asked for.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: every locked version, asked of OSV in one call
         # Standard library only, so no install step and nothing this scan could itself have pulled in.
         run: python3 tools/osv_scan.py --lock uv.lock
