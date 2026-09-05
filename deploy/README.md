@@ -523,6 +523,36 @@ what is governed refuses rather than guesses. The fix was `pip install -e packag
 `init` line without `PYTHONPATH`; the sequence above is the corrected one. (That the refusal reads as a raw Python
 error rather than an `isidium:` line is recorded as a finding.)
 
+### K6: the migration act, and a revocation that needed no restart — 2026-09-05
+
+The K6 image (`e3b1e52312eb`, built from `main` at `ac81ad2`) went up the way K5's did: the container recreated from
+its recorded `CreateCommand` through `podman machine ssh` (`podman stop` waited its 10 s and sent SIGKILL — still
+K8's finding), healthy in about forty seconds. Its journal held three `journal@1` rows and no version pin; the first
+open under K6 added the four columns and pinned `meta.schema = 1`, the version those rows were chained from.
+
+**The act.** The owner's `config.toml`, edited to adopt `config@2` — head `schema = 2`, `chain_opened_under = 1`,
+the `config.toml` manifest row → `config@2`, no `[journal]` written (the default is `journal@2`) — handed over from
+the workstation checkout:
+
+```sh
+isidium write --config config-migration.toml
+```
+
+answered policy entry 2 (`act = "config-policy"`, `fields = ["chain_opened_under", "governed", "schema"]`), journal
+row 4 and commit `fe050e4`, pushed to `main` through the deploy key with no restart between the merge of K6 and the
+write. Inside the container afterwards: four rows, `Journal.verify()` true, the genesis still `schema:1`, rows 1–3
+byte-for-byte what they were, and row 4 carrying `schema = 2`, a `credential` of
+`sha256:e74d4eb11ca18fd501d729af39d59aed27ba1ce05dbcfbcd6cd0c9b9b739b04a` — the SHA-256 of the owner certificate's
+DER, recomputed on the workstation with `openssl x509 -outform DER | sha256` — and a trace pointer beside it. On the
+pulled checkout, `python tools/verify_chain.py --repo .` printed `ok config.toml [config@2] 2 entries`, and the forge's
+`chain-verify` run on `fe050e4` passed: the check that would have gone red on `main` had the verifier still read the
+genesis off the head's version.
+
+**The revocation.** With the store running, `deploy/registration.json` was rewritten **in place** with the owner's
+line replaced by a stranger's; the next `isidium show queue` from the workstation answered `auth.unknown-client`.
+Rewritten in place again with the owner's line back; the next call answered the queue. No restart either way, and
+the file the container reads is the bind-mounted one — which is why *in place* matters (above).
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
