@@ -1,0 +1,56 @@
+# K6b's mutations (2026-09-05) -- `serve` stops on SIGTERM.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `server/http.py`'s stop path must be re-run against. Run one at a time, in the FOREGROUND.
+#
+#   python tools/mutate.py tools/mutations/k6b.toml M2
+#
+# **What this spec can and cannot see, said out loud (the K2 rule).** M2-M4 die on every platform: the stop is
+# driven in-process against a real listener. **M1 dies here for a narrower reason than it dies on Linux.** On this
+# Windows workstation the test that kills it is `test_the_handler_is_installed_where_a_loop_can_deliver_a_signal`:
+# the mutation stops calling `add_signal_handler`, so the `NotImplementedError` that Windows raises never comes,
+# and the function *claims* two signals on a platform that can deliver none -- the test asserts `()` there. That
+# proves the reporting, not delivery. The delivery property -- a SIGTERM actually ends the serving process, exit 0 --
+# is `test_a_signal_ends_the_serving_process_cleanly`, which runs only on Linux (CI's leg; skipped here by name
+# because no signal reaches an event loop on Windows), and it was measured on tenant #0: `podman stop` in well under
+# a second, exit 0, after five chunks of `resorting to SIGKILL`.
+
+[[mutation]]
+id = "M1"
+label = "no handler is installed -- the store is PID 1 again with nothing listening for the signal (Linux-only killer)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = """        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            break"""
+replace = """        try:
+            pass  # mutated: nothing installed
+        except NotImplementedError:
+            break"""
+
+[[mutation]]
+id = "M2"
+label = "the listener is not closed -- a stopping store keeps admitting new connections while it drains"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = """    with telemetry.span(telemetry.STOP_SPAN) as sp:
+        server.close()"""
+replace = """    with telemetry.span(telemetry.STOP_SPAN) as sp:
+        pass  # mutated: still accepting"""
+
+[[mutation]]
+id = "M3"
+label = "the grace is unbounded -- one stalled peer holds the stop until its own read timeout, and podman's SIGKILL wins again"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "            await asyncio.wait_for(server.wait_closed(), limits.shutdown_grace)"
+replace = "            await server.wait_closed()  # mutated: no bound"
+
+[[mutation]]
+id = "M4"
+label = "the drain is skipped -- the stop returns at once and a call in flight is cut off"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = """        try:
+            await asyncio.wait_for(server.wait_closed(), limits.shutdown_grace)
+        except TimeoutError:"""
+replace = """        try:
+            raise TimeoutError  # mutated: never waits
+        except TimeoutError:"""

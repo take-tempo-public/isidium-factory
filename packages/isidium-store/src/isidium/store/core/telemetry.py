@@ -58,6 +58,10 @@ REASON: Final = "isidium.reason"  # a typed classification: `Refused` at the edg
 REQUEST_SPAN: Final = "isidium.store.request"
 CALL_SPAN: Final = "isidium.store.call"
 SYNC_SPAN: Final = "isidium.store.sync"
+# K6b: the stop — the listener closed, the calls in flight drained (or not) inside the grace. Its own span for the
+# same reason the sync has one: an operator reading a slow stop should see the drain as a phase, not as time missing.
+STOP_SPAN: Final = "isidium.store.stop"
+DRAINED: Final = "isidium.drained"  # on the stop span: whether every connection finished inside the grace
 
 _tracer = trace.get_tracer(SCOPE)
 _meter = metrics.get_meter(SCOPE)
