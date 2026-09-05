@@ -193,7 +193,8 @@ def test_sitting(hz: Harness) -> None:
     assert all(st.check(i)["integrity"] == [] for i in ids)
     cfg_tree, hist, rs = parse_config(st.raw["config.toml"].decode(), CONFIG_ORDERS)
     assert rs == [] and hist[-1]["act"] == "batch-manifest" and "history" not in cfg_tree
-    assert all(v == "ok" for v in chain.verify_chain(hist, chain.genesis("policy", "sartor")))
+    opened = cfg_tree.get("chain_opened_under", cfg_tree["schema"])  # config@2 records it (K6); the harness opens at 2
+    assert all(v == "ok" for v in chain.verify_chain(hist, chain.genesis("policy", "sartor", opened)))
     # the signer refuses a request outside its clock ± time_skew
     saved = signer.clock
     signer.clock = lambda: hz.clock.t + 5000
@@ -539,7 +540,9 @@ def test_reconcile(hz: Harness) -> None:
     sha = st.repo.commit({p: data}, OWNER.principal, fake["at"], "hand-written line")
     assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[p] == "unjournaled"
     for r_ in st.journal.rows():
-        assert "h_prev" not in r_ and set(r_) - {"repairs", "sig"} == {"seq", "at", "caller", "paths", "h"}
+        # journal@2's shape (K6): `schema` inside the content; `credential` only when a channel wrote the row, and
+        # this store is driven directly. `test_k6.py` covers the credential and the trace.
+        assert "h_prev" not in r_ and set(r_) - {"repairs", "sig"} == {"seq", "at", "schema", "caller", "paths", "h"}
 
 
 def test_d6_newcard(hz: Harness) -> None:

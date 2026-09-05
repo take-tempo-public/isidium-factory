@@ -124,7 +124,10 @@ def _policy(cfg_path: Path) -> Line:
         return Line("config.toml", "config@1", TAMPERED, "; ".join(str(r) for r in rs))
     tenant = str(tree.get("tenant", ""))
     schema_v = int(tree.get("schema", 1))
-    verdicts = chain.verify_chain(entries, chain.genesis("policy", tenant, schema_v))
+    # The genesis carries the version the chain OPENED under, not the head's: a file migrated to config@2 records
+    # its opening version in `chain_opened_under` (K6); a config@1 file opened under its own head version.
+    opened = int(tree.get("chain_opened_under", schema_v))
+    verdicts = chain.verify_chain(entries, chain.genesis("policy", tenant, opened))
     return Line("config.toml", f"config@{schema_v}", _verdict(verdicts), f"{len(verdicts)} entries")
 
 

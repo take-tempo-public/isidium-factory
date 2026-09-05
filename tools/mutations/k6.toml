@@ -1,0 +1,150 @@
+# K6's mutations (2026-09-05) -- H-1: caller identity in the journal row, and Q5.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `server/service.py`, `server/journal.py` or `server/store.py` must be re-run against. Run one at a
+# time, in the FOREGROUND -- a background batch is killed around ten minutes and leaves the file mutated
+# (`--restore` repairs it).
+#
+#   python tools/mutate.py tools/mutations/k6.toml M1
+#
+# **What this spec can and cannot see, said out loud (the K2 rule).** The suite sees the four caller-identity
+# properties end to end against `Service.handle` with real DER certificates, and the journal against a real SQLite
+# file -- including one built the way a store older than K6 built it, which is tenant #0's shape. It cannot see
+# two things, both demonstrated live and recorded in the handoff: that the TLS handshake in front of these checks
+# still refuses the same certificates (K1's tests hold that, and the window check exists for the day there is no
+# handshake in front of it), and that tenant #0's own three pre-K6 rows verify after the migration act -- that is
+# a fact about a file in a named volume on one machine, checked there.
+
+[[mutation]]
+id = "M1"
+label = "the clientAuth requirement goes -- a leaf issued for anything else is a store credential again (Q5)"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "    if ExtendedKeyUsageOID.CLIENT_AUTH not in eku:"
+replace = "    if False:  # mutated: any extended key usage will do"
+
+[[mutation]]
+id = "M2"
+label = "the absent-extension arm goes -- a certificate with no EKU at all is accepted"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = """    except x509.ExtensionNotFound:
+        return Refusal("auth.no-client-auth", "", f"{subject}: no extended key usage extension")"""
+replace = """    except x509.ExtensionNotFound:
+        return None  # mutated: no extension, no objection"""
+
+[[mutation]]
+id = "M3"
+label = "the expiry check goes -- a certificate past notAfter is a credential"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "    if now > not_after:"
+replace = "    if False:  # mutated: never expired"
+
+[[mutation]]
+id = "M4"
+label = "the not-yet-valid check goes -- a certificate from the future is a credential"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "    if now < not_before:"
+replace = "    if False:  # mutated: always already valid"
+
+[[mutation]]
+id = "M5"
+label = "the bare-common-name fallback comes back -- a registered CN in any subject matches"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = """        named = self.principals.get(subject)
+        if named is None:
+            return Credential(fingerprint)"""
+replace = """        named = self.principals.get(subject)
+        if named is None:  # mutated: the pre-K6 fallback
+            cn = next((a.value for a in cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)), None)
+            named = self.principals.get(f"CN={cn}") if cn else None
+        if named is None:
+            return Credential(fingerprint)"""
+
+[[mutation]]
+id = "M6"
+label = "a defective certificate still resolves its principal -- the window and EKU refusals ride beside a live identity"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = """        if refusal is not None:
+            return Credential(fingerprint, refusal=refusal)"""
+replace = """        if refusal is not None:  # mutated: refused, but named
+            named = self.principals.get(subject)
+            if named is not None:
+                return Credential(fingerprint, named[0], named[1], refusal=refusal)
+            return Credential(fingerprint, refusal=refusal)"""
+
+[[mutation]]
+id = "M7"
+label = "the credential is dropped from the journal row -- the principal alone is recorded, as before K6"
+file = "packages/isidium-store/src/isidium/store/server/journal.py"
+find = """        if carries and credential is not None:
+            row["credential"] = credential"""
+replace = """        if False:  # mutated: the row says who, never with what
+            row["credential"] = credential"""
+
+[[mutation]]
+id = "M8"
+label = "the row stops recording the version it was written under"
+file = "packages/isidium-store/src/isidium/store/server/journal.py"
+find = """        if carries:
+            row["schema"] = schema"""
+replace = """        if False:  # mutated: the version is implicit again
+            row["schema"] = schema"""
+
+[[mutation]]
+id = "M9"
+label = "the trace pointer enters the hashed content -- the chain now depends on whether telemetry ran (C-9)"
+file = "packages/isidium-store/src/isidium/store/server/journal.py"
+find = """        row["h"] = chain.link(prev, row)
+        trace_id, span_id = trace if (carries and trace is not None) else (None, None)"""
+replace = """        trace_id, span_id = trace if (carries and trace is not None) else (None, None)
+        if trace_id is not None:  # mutated: inside `c`
+            row["trace_id"], row["span_id"] = trace_id, span_id
+        row["h"] = chain.link(prev, row)"""
+
+[[mutation]]
+id = "M10"
+label = "a live journal is re-genesised under the adopted version -- tenant #0's three rows stop verifying"
+file = "packages/isidium-store/src/isidium/store/server/journal.py"
+find = """        pinned = self._pinned()
+        if pinned is None:
+            pinned = self._adopted()
+        return chain.genesis("journal", self.tenant, pinned)"""
+replace = """        return chain.genesis("journal", self.tenant, self._adopted())  # mutated: the pin is ignored"""
+
+[[mutation]]
+id = "M11"
+label = "the registration is read once -- an edit after start-up is never seen, revoking is a rebuild again"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = """        stamp = _stamp(self._path)
+        if stamp == self._stamp:
+            return"""
+replace = """        stamp = _stamp(self._path)
+        if True:  # mutated: never re-read
+            return"""
+
+[[mutation]]
+id = "M12"
+label = "an unreadable registration keeps serving the last good mapping -- the mistyped revocation is undone"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = """        except (OSError, ValueError) as e:
+            self.principals = {}"""
+replace = """        except (OSError, ValueError) as e:
+            pass  # mutated: fail open on the last good mapping"""
+
+[[mutation]]
+id = "M13"
+label = "the store stops re-adopting the journal version on a config change -- the migration act's own row is written under the old version"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = """        self.eff = cfg.resolve_effective(tree, self.registry)
+        # The journal version rides the config (K6, 7bg.10): a policy write that adopts `journal@2` changes what
+        # the very row recording that write carries, and a refused write that restores the previous tree restores
+        # the previous version with it, because this is the one site both paths pass through.
+        self.journal.adopt(cfg.journal_schema(self.eff))"""
+replace = """        self.eff = cfg.resolve_effective(tree, self.registry)
+        pass  # mutated: the journal keeps whatever version it was constructed with"""
+
+[[mutation]]
+id = "M14"
+label = "a config@1 file may carry [journal] -- a key a tenant has not adopted is accepted (04 §4.1)"
+file = "packages/isidium-store/src/isidium/store/registry/config.py"
+find = """    for name in ("toolkit", "journal", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces"):"""
+replace = """    for name in ("toolkit", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces"):  # mutated"""

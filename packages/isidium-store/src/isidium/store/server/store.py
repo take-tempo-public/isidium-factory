@@ -127,7 +127,11 @@ class Store:
         self.docs: dict[str, Document] = {}
         self.raw: dict[str, bytes] = {}
         self.config_tree: dict[str, Any] = {}
-        self.eff: dict[str, Any] = cfg.resolve_effective({"schema": 1}, registry)
+        # Before `load` reads the tenant's file: the newest config version this store ships, which is what `init`
+        # would adopt. Its journal version is handed to the journal now so a fresh journal pins the right genesis
+        # at its first row (K6); `_set_config` re-adopts from the file once there is one.
+        self.eff: dict[str, Any] = cfg.resolve_effective({"schema": registry.newest("config")}, registry)
+        self.journal.adopt(cfg.journal_schema(self.eff))
         self.policy: list[Entry] = []
         self.inbox: list[dict[str, Any]] = []
         self.state: dict[str, Any] = {}
@@ -209,6 +213,10 @@ class Store:
     def _set_config(self, tree: dict[str, Any]) -> None:
         self.config_tree = tree
         self.eff = cfg.resolve_effective(tree, self.registry)
+        # The journal version rides the config (K6, 7bg.10): a policy write that adopts `journal@2` changes what
+        # the very row recording that write carries, and a refused write that restores the previous tree restores
+        # the previous version with it, because this is the one site both paths pass through.
+        self.journal.adopt(cfg.journal_schema(self.eff))
         self._doc_schemas = {}
         self._policy_cache = None
 
@@ -498,11 +506,24 @@ class Store:
             prow, after = self._prow(p, d)
             prows.append(prow)
             blobs[p] = after
+        # The caller's credential and the running span's identity travel with the row (K6): the credential inside
+        # the hashed content, the trace beside it (C-9). Read once here, for both branches.
+        credential, trace = caller.credential, telemetry.current_trace()
         if in_txn:
-            row = self.journal.append(at, caller.principal, prows, repairs=repairs, pending=dict(files))
+            row = self.journal.append(
+                at, caller.principal, prows, credential=credential, trace=trace, repairs=repairs, pending=dict(files)
+            )
         else:
             with self.journal.transaction():
-                row = self.journal.append(at, caller.principal, prows, repairs=repairs, pending=dict(files))
+                row = self.journal.append(
+                    at,
+                    caller.principal,
+                    prows,
+                    credential=credential,
+                    trace=trace,
+                    repairs=repairs,
+                    pending=dict(files),
+                )
         for p, d in files.items():
             self.raw[p] = d
             self._blob[p] = blobs[p]
@@ -792,6 +813,8 @@ class Store:
         rs = cfg.validate_tree(after, self.registry, self.identity_enabled)
         if self.config_tree and after.get("tenant") != self.config_tree.get("tenant"):
             rs.append(Refusal("config.tenant-immutable", "tenant"))
+        if self.config_tree:
+            rs.extend(cfg.immutable_changed(self.config_tree, after, self.registry))
         if rs:
             raise ValidationRefusal(rs, "config.toml")
         before = self.config_tree or None
@@ -910,7 +933,9 @@ class Store:
         if self.config_tree:
             raise Refusal("init.exists", "config.toml")
         tree: dict[str, Any] = {
-            "schema": 1,
+            # The newest config version this store ships (K6): a tenant born here adopts `journal@2` with it and
+            # records caller credentials from its first row. An existing tenant moves only by a signed act.
+            "schema": self.registry.newest("config"),
             "tenant": self.tenant,
             "toolkit": {
                 "client": __version__,
@@ -921,6 +946,10 @@ class Store:
         }
         if root is not None:
             tree["root"] = root
+        # config@2 (K6) records the version the policy chain opens under, because a later migration moves `schema`
+        # and a genesis cannot move with it. Written only when the adopted version declares the key (04 §4.1).
+        if any(r["name"] == "chain_opened_under" for r in self.registry.get(f"config@{tree['schema']}")["scalars"]):
+            tree["chain_opened_under"] = tree["schema"]
         if not self.identity_enabled:
             if ratifier_fpr is None:
                 if self.signer is None:
@@ -1492,7 +1521,14 @@ class Store:
                     prow["after_blob"] = a
                 prows.append(prow)
             with self.journal.transaction():
-                row = self.journal.append(at, caller.principal, prows, repairs=journal)
+                row = self.journal.append(
+                    at,
+                    caller.principal,
+                    prows,
+                    repairs=journal,
+                    credential=caller.credential,
+                    trace=telemetry.current_trace(),
+                )
                 display = {"repairs": journal, "paths": [p["path"] for p in prows]}
                 sig = self._sign(str(row["h"]), at, [("journal", "repaired", journal, display)])
                 self.journal.sign_row(int(row["seq"]), sig)

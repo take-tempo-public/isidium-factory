@@ -165,8 +165,9 @@ that was otherwise entirely healthy, and it is the failure most likely to be met
 
 ## The registration
 
-One entry per caller identity; the subject is the certificate's, and the grant is what that caller may do
-(`owner`, `contributor`, `lander`).
+One entry per caller identity; the subject is the certificate's **whole subject in RFC 4514 form** (K6: a bare
+common name matches nothing — `openssl x509 -in <cert> -noout -subject -nameopt RFC2253` prints the key after
+`subject=`), and the grant is what that caller may do (`owner`, `contributor`, `lander`).
 
 ```json
 {
@@ -175,6 +176,20 @@ One entry per caller identity; the subject is the certificate's, and the grant i
   "CN=factory@example": ["factory@example", "lander"]
 }
 ```
+
+**The store re-reads this file** (K6): it checks the file's stamp on every connection and re-parses it when it moved,
+so revoking a caller is deleting their line — the next connection is refused `auth.unknown-client`, with no restart.
+A file that stops parsing — a torn edit, a grant that is not one of the three — **registers nobody until it parses
+again**: the store fails closed rather than keep serving the mapping it last read, because the line just mistyped
+may be the revocation. The reason goes to stderr with the rule id. At start-up the same defect stops the store before
+it listens. What the store checks on the certificate itself: it chains to the CA (the handshake), it is inside its
+validity window by the store's own clock, and it carries the `clientAuth` extended key usage — `auth.expired`,
+`auth.not-yet-valid`, `auth.no-client-auth` otherwise, each terse.
+
+**Edit the file in place.** `compose.yaml` bind-mounts the *file*, and a bind mount follows the inode: an editor that
+saves by writing a temporary file and renaming it over the original leaves the container reading the old inode, and
+the store — whose change detection is the file's stamp — sees nothing until a restart. `vim` and VS Code do that by
+default; `python -c` / `Set-Content` / `>` write in place. Verified on tenant #0 (below).
 
 ## The deploy key
 
@@ -518,8 +533,7 @@ error rather than an `isidium:` line is recorded as a finding.)
   pinned host key and the push with the deploy key. The `file://` path remains what the walkthrough above shows,
   and a mounted path still needs git told that the mount is trustworthy (`safe.directory`). **The egress allowlist
   is untested** — so far the container has reached whatever it asked for.
-- **Revoking a caller** means editing `registration.json` and restarting; there is no certificate-revocation check
-  and no reload. Both are named in the deployment record (H-1), and land before this listens outside a trusted
-  network.
+- **Revoking a caller** is editing `registration.json` — no restart since K6 (the store re-reads it). There is still no
+  certificate-revocation check against the CA: the registration is the revocation list, by design, until the realm.
 - **The realm.** When agent-station's identity system exists, `registration.json` is replaced by a lookup against
   it — one function in `server/service.py`. Nothing above that function changes.

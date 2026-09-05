@@ -108,9 +108,19 @@ def test_d1_fixtures_validate() -> None:
         "config.pin-identity-enabled"
     ]
 
-    # the Y1 adoption demo names config@2, which v1 does not ship: schema-unknown, twice (the head and the row)
+    # The Y1 adoption demo names config@2 — which **ships since K6** (the `[journal]` table rides it), so the demo's
+    # own file now validates under it: what is left is the fixture's unknown `[inbox]` key, the demo's third act.
+    # The fixture's bytes are the oracle's and stay; the "a version that does not ship" arm moves one number up.
     text = (D1 / "config-y1.toml").read_text(encoding="utf-8")
-    _, _, rs = cfg.parse_and_validate(text, REG)
+    tree, _, rs = cfg.parse_and_validate(text, REG)
+    # `config.type`: config@2 requires `chain_opened_under`, which the 2026-08-26 demo could not have written
+    assert sorted((r.rule, r.path) for r in rs) == [
+        ("config.enum", "inbox.dedupe_window_days"),
+        ("config.type", "chain_opened_under"),
+    ]
+    assert cfg.journal_schema(cfg.resolve_effective(tree, REG)) == 2  # config@2's declared default, no key written
+    unshipped = text.replace("schema = 2", "schema = 3", 1).replace('schema = "config@2"', 'schema = "config@3"', 1)
+    _, _, rs = cfg.parse_and_validate(unshipped, REG)
     assert sorted(r.rule for r in rs) == ["config.enum", "config.schema-unknown", "config.schema-unknown"]
 
 

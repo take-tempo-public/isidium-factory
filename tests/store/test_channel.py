@@ -26,6 +26,7 @@ import importlib.resources
 import os
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -48,7 +49,8 @@ from isidium.store.server.store import Store
 from .conftest import BASE_SCOPE, base_head, store_on_disk, tenant_checkout
 from .test_edge import authority, issue
 
-OWNER_SUBJECT = "owner@example"
+OWNER_NAME = "owner@example"  # the certificate's common name
+OWNER_SUBJECT = "CN=owner@example"  # the registration's key: the whole subject (K6)
 OWNER_PRINCIPAL = "amodal1@example"
 
 
@@ -83,7 +85,7 @@ def open_channel(tmp_path: Path) -> Iterator[Callable[..., Channel]]:
     certs.mkdir()
     ca = authority(certs, "tenant-ca")
     server_cert, server_key = issue(ca, certs, "store.sartor", "store", server=True)
-    client_cert, client_key = issue(ca, certs, OWNER_SUBJECT, "owner")
+    client_cert, client_key = issue(ca, certs, OWNER_NAME, "owner")
     context = tls_context(server_cert, server_key, ca.path)
     opened: list[tuple[asyncio.AbstractEventLoop, asyncio.AbstractServer, threading.Thread]] = []
 
@@ -101,7 +103,8 @@ def open_channel(tmp_path: Path) -> Iterator[Callable[..., Channel]]:
             # in the fixture and serving it here failed every call with `service.internal`. It is also the honest
             # shape: in a deployment the store is built by the process that serves it.
             store = store_on_disk(checkout, tmp_path / "journal.sqlite", root=root)
-            service = Service(Api(store), Registration({OWNER_SUBJECT: (OWNER_PRINCIPAL, "owner")}), "sartor")
+            registration = Registration({OWNER_SUBJECT: (OWNER_PRINCIPAL, "owner")}, lambda: int(time.time()))
+            service = Service(Api(store), registration, "sartor")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.set_exception_handler(lambda _loop, _context: None)  # a refused handshake is data, not a crash

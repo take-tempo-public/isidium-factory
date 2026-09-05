@@ -123,6 +123,21 @@ def record_refusal_on(sp: Span, rule: str) -> None:
     sp.set_status(Status(StatusCode.ERROR, rule))
 
 
+def current_trace() -> tuple[str, str] | None:
+    """The running span's identity as W3C hex — `(trace_id, span_id)` — or `None` when no span is running: no SDK
+    installed, or a store driven directly rather than through the edge.
+
+    **This is how K6 joins the journal on trace context without inventing a correlation id** (C-9, 7bg.12). The
+    journal never imports telemetry; the store reads this pair here and hands it to the row as data, where it is
+    kept **beside** the hashed content — the column `sig` already lives in — and never inside it. The chain therefore
+    hashes the same bytes whether or not a deployment configured an exporter, and an operator can go from a journal
+    row to its span and back."""
+    ctx = trace.get_current_span().get_span_context()
+    if not ctx.is_valid:
+        return None
+    return format(ctx.trace_id, "032x"), format(ctx.span_id, "016x")
+
+
 def record_ok() -> None:
     """The other outcome, said out loud. OpenTelemetry treats an unset status as "no error reported", which is also
     what a span that crashed before it could report anything looks like; the store knows the difference, so it says

@@ -56,6 +56,16 @@ class Api:
     def write(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
         doc_in = args.get("document") or {}
         ref = args.get("ref")
+        if args.get("path") == "config.toml":
+            # **The `config-policy` act's door** [K6]. Every change to `config.toml` is a signed policy act performed
+            # through `write` (04 §1, V5) — and until this arm existed the only such act reachable over the channel
+            # was `init`: this method read the card arguments only, so a tenant could adopt nothing after its first
+            # write. The document is the TOML tree without `[history]`, and `base` is the policy head the caller
+            # last saw; `Store._write_policy` owns the grant, the compare-and-swap and the validation.
+            if not isinstance(doc_in, dict):
+                raise Refusal("service.body", "config.toml", "the document is the config tree, a table")
+            r = self.store.write("config.toml", doc_in, args.get("base"), ref, caller)
+            return {"path": r.path, "entry": r.entry, "head": r.head, "commit": r.commit, "journal_seq": r.journal_seq}
         if args.get("new_slug"):
             doc = _document(doc_in)
             r = self.store.write(NewCard(str(args["new_slug"])), doc, None, ref, caller)

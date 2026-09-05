@@ -53,6 +53,31 @@ def _run(name: str, args: Mapping[str, Any], text: bool = False) -> None:
         raise typer.Exit(code=2) from None
 
 
+def config_write_args(path: Path) -> dict[str, Any]:
+    """`write --config <file>` as the call's typed arguments [K6]: the file the owner edited, as a tree, with the
+    chain stripped and the compare-and-swap base read off it.
+
+    **The file's own last `[history]` entry is the base.** The store alone writes that chain, so the file the owner
+    edited is the current file plus their edit, and its last entry is exactly the head the owner saw. An operator
+    who edits a stale copy is refused `write.stale` by the store, which is the compare-and-swap doing its job.
+    Ordering refusals are not raised here: the store emits the canonical form itself, so the owner's table order is
+    theirs to leave alone. A file that is not TOML at all is refused at the terminal (`head.toml`), before a call.
+
+    Both imports are inside the function (C-13, 7bh.1): this is the one command that parses TOML, and every other
+    `isidium` invocation would otherwise pay for the registry's validator on start-up."""
+    from ..core.grammar import parse_config
+    from ..registry.config import CONFIG_ORDERS
+
+    tree, entries, rs = parse_config(path.read_text(encoding="utf-8"), CONFIG_ORDERS)
+    fatal = [r for r in rs if r.rule == "head.toml"]
+    if fatal:
+        raise fatal[0]
+    args: dict[str, Any] = {"path": "config.toml", "document": tree}
+    if entries:
+        args["base"] = {"seq": entries[-1]["seq"], "h": entries[-1]["h"]}
+    return args
+
+
 # ---- the ten verbs ----------------------------------------------------------------------------------------------
 
 
@@ -102,9 +127,16 @@ def write(
     new: Annotated[str, typer.Option(help="create a card with this slug — the store allocates the id")] = "",
     document: Annotated[Path | None, typer.Option(help="a JSON file: {head, scope?, updates?}")] = None,
     ref: Annotated[str, typer.Option(help="a judging ref c<n>:sha256:<hex>")] = "",
+    config: Annotated[
+        Path | None, typer.Option(help="the tenant's edited config.toml — one signed config-policy act (owner)")
+    ] = None,
 ) -> None:
     """The one writer (03 §1.2): validate, compare-and-swap, derive the act from the diff, sign if the predicate says
-    so, journal, write, commit."""
+    so, journal, write, commit. `--config <file>` is the policy door: the owner edits `config.toml` in the checkout
+    and hands the file over; the store re-emits it in canonical form and signs the act."""
+    if config is not None:
+        _run("write", config_write_args(config))
+        return
     if document is not None:
         payload = json.loads(document.read_text(encoding="utf-8"))
         args: dict[str, Any] = {"document": payload}
@@ -294,7 +326,13 @@ def serve(
     # (C-11). It installs nothing unless `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` are set, and `console` —
     # what K2's container uses for its first start — needs no collector and no network at all.
     telemetry.configure()
-    principals = json.loads(registration.read_text(encoding="utf-8"))
+
+    def clock() -> int:
+        return int(time.time())
+
+    # Loaded now and re-read on change (K6): a caller is revoked by editing the file, and the next connection sees
+    # it. A file that will not parse at start-up stops the store here, before it listens.
+    principals = Registration.from_file(registration, clock)
     ack: Signer | None = SoftwareKeyAck(SoftwareKey.load(signer)) if signer else None
     store = Store(
         tenant,
@@ -311,12 +349,12 @@ def serve(
         # when a named version is absent. `Registry.for_checkout` stays the **client's** offline path (`check`, the
         # hook), which is the half that actually has a working tree.
         Registry.shipped(),
-        lambda: int(time.time()),
+        clock,
         ack,
         root=root,
         software_fprs=frozenset({ack.key_fpr}) if ack is not None else frozenset(),
     )
-    service = Service(Api(store), Registration({k: (v[0], v[1]) for k, v in principals.items()}), tenant)
+    service = Service(Api(store), principals, tenant)
     limits = Limits(
         max_connections=LIMITS.max_connections if max_connections is None else max_connections,
         max_per_caller=LIMITS.max_per_caller if max_per_caller is None else max_per_caller,
