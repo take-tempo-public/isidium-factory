@@ -553,6 +553,24 @@ line replaced by a stranger's; the next `isidium show queue` from the workstatio
 Rewritten in place again with the owner's line back; the next call answered the queue. No restart either way, and
 the file the container reads is the bind-mounted one — which is why *in place* matters (above).
 
+### K6b: `podman stop` reaches the store — 2026-09-05
+
+Every `podman stop` since K2 had printed *`StopSignal SIGTERM failed to stop container … in 10 seconds, resorting
+to SIGKILL`* — the store is PID 1 (the entrypoint `exec`s it) and installed no handler, and a PID 1 receives no
+default action. Since K6b `serve` handles SIGTERM and SIGINT: it closes the listener, waits up to
+`Limits.shutdown_grace` (5 s) for the calls in flight, and exits 0. Measured on the same evening, both ways: the
+K6 container's stop took **10.95 s** and ended in the SIGKILL line; the K6b image went up the usual way (the
+recorded `CreateCommand`, through `podman machine ssh`), and then:
+
+```sh
+time podman stop isidium-store-isidium-factory
+```
+
+returned in **1.15 s**, exit status 0, one `isidium.store.stop` span on stderr, no SIGKILL line — the first clean stop this
+container has had. `restart=unless-stopped` treats that as what it is: a stop, not a failure. A stop with a call
+in flight waits for it; one with a peer holding a connection open gives up on that peer at the grace and lets the
+journal's write-ahead replay whatever it was in the middle of at the next start.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
