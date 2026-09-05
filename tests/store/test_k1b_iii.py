@@ -201,7 +201,7 @@ def test_the_wire_carries_the_verdicts_and_the_client_rebuilds_them() -> None:
     assert rebuilt.detail == e.value.detail
 
 
-def test_the_tool_call_door_hands_the_model_the_array_too() -> None:
+def test_the_tool_call_door_hands_the_model_the_array_too(tmp_path: Path) -> None:
     """**The door Q7 was argued from.** The whole case for disclosing validation detail is that naming the field
     lets an agent self-correct instead of escalating, and the agent reads this surface — yet `McpServer._call` built
     its own `{rule, path, detail}` dict, so an array added to `Response.refusal` alone would have reached every
@@ -220,7 +220,7 @@ def test_the_tool_call_door_hands_the_model_the_array_too() -> None:
         def call(self, name: str, args: Mapping[str, Any]) -> Any:
             return hz.st.write(path, Document(dict(bad), {}), head, None, OWNER)
 
-    r = McpServer(_Refusing()).handle(
+    r = McpServer(_Refusing(), tmp_path, "docs/work/").handle(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "write", "arguments": {}}}
     )
     assert r is not None and r["result"]["isError"] is True

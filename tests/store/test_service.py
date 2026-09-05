@@ -12,6 +12,7 @@ import datetime as _dt
 import io
 import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -191,11 +192,12 @@ class DirectTransport:
         return self.api.call(name, self.caller, args)
 
 
-def test_mcp_serves_the_generated_schemas_and_calls(svc: tuple[Service, Harness]) -> None:
+def test_mcp_serves_the_generated_schemas_and_calls(svc: tuple[Service, Harness], tmp_path: Path) -> None:
     from .conftest import OWNER
 
     _service, hz = svc
-    server = McpServer(DirectTransport(Api(hz.st), OWNER))
+    # An empty directory as the checkout: the ref pre-flight (K4b) finds no file and leaves every ref to the store.
+    server = McpServer(DirectTransport(Api(hz.st), OWNER), tmp_path, "docs/work/")
     init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
     assert init is not None and init["result"]["serverInfo"]["name"] == "isidium-store"
     assert server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
@@ -232,11 +234,11 @@ def test_mcp_serves_the_generated_schemas_and_calls(svc: tuple[Service, Harness]
     assert r is not None and r["error"]["code"] == -32602
 
 
-def test_mcp_stdio_loop(svc: tuple[Service, Harness]) -> None:
+def test_mcp_stdio_loop(svc: tuple[Service, Harness], tmp_path: Path) -> None:
     from .conftest import OWNER
 
     _service, hz = svc
-    server = McpServer(DirectTransport(Api(hz.st), OWNER))
+    server = McpServer(DirectTransport(Api(hz.st), OWNER), tmp_path, "docs/work/")
     stdin = io.BytesIO(
         b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'
         b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
