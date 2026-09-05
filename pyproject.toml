@@ -24,7 +24,7 @@ dev = [
   # reading an advisory feed.
   "pytest>=9.0.3,<10",
   "pytest-xdist>=3.6,<4",
-  "mypy>=1.11,<2",
+  "mypy>=2.3,<3",
   "ruff>=0.6,<1",
 ]
 
