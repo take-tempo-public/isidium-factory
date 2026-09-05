@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import signal
 import ssl
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -88,6 +89,12 @@ class Limits:
     write_timeout: float = 30.0
     max_header_bytes: int = 16 * 1024  # the request line and headers, counted as they are read (see `_one_request`)
     max_body_bytes: int = 1024 * 1024  # one governed document plus its arguments; schema prose slots are far below
+    # K6b: how long a stopping store waits for the calls in flight before it exits anyway. The store is PID 1 in its
+    # container and, until K6b, installed no handler — and PID 1 receives no default action — so every `podman stop`
+    # waited its 10 s and sent SIGKILL (measured on five chunks). 5 s is half of podman's window, leaving the other
+    # half for the exit itself; a real call is milliseconds, and a peer still holding a connection past it is the
+    # read timeout's problem, not the shutdown's — the journal's write-ahead makes a cut-off write replayable.
+    shutdown_grace: float = 5.0
 
 
 LIMITS: Final = Limits()
@@ -244,9 +251,54 @@ async def start(
 async def serve_forever(
     service: Service, host: str, port: int, context: ssl.SSLContext, limits: Limits = LIMITS
 ) -> None:
+    """Serve until SIGTERM or SIGINT, then stop cleanly [K6b].
+
+    **The store is PID 1 in its container** (`deploy/entrypoint.sh` `exec`s it), and a PID 1 with no handler never
+    receives the kernel's default terminate: a `podman stop` waited its ten seconds and sent SIGKILL, on every restart
+    of tenant #0 since K2. The handler sets one event; `serve_until` does the rest. Exit code 0 is the contract — an
+    orchestrator that restarts on failure must not read a stop as one."""
     server = await start(service, host, port, context, limits)
-    async with server:
-        await server.serve_forever()
+    stop = asyncio.Event()
+    _stop_on_signal(asyncio.get_running_loop(), stop)
+    await serve_until(server, stop, limits)
+
+
+def _stop_on_signal(loop: asyncio.AbstractEventLoop, stop: asyncio.Event) -> tuple[int, ...]:
+    """SIGTERM and SIGINT set `stop`, on the loops that can deliver a signal. Returns what was installed.
+
+    Windows' event loops raise `NotImplementedError` here — no signal reaches an event loop there, and Ctrl-C arrives
+    as `KeyboardInterrupt` out of `asyncio.run` as it always did. The container is Linux; the property this exists
+    for is proven there (`tests/store/test_k6b.py`, and `podman stop` on tenant #0)."""
+    installed: list[int] = []
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            break
+        installed.append(int(sig))
+    return tuple(installed)
+
+
+async def serve_until(server: asyncio.Server, stop: asyncio.Event, limits: Limits) -> bool:
+    """Serve until `stop` is set; then stop accepting and wait for the calls in flight, up to
+    `limits.shutdown_grace`. Returns whether every connection finished inside the grace.
+
+    Closing the listener first is what makes a stop safe to begin: nothing new is admitted while the store drains.
+    A connection still open when the grace ends is abandoned by the process exit — its peer sees a closed
+    connection, and a governed write it was in the middle of replays from the journal's pending bytes at the next
+    start (`Store._replay_pending`). One span, so an operator reading a slow stop sees the drain as its own phase."""
+    await stop.wait()
+    with telemetry.span(telemetry.STOP_SPAN) as sp:
+        server.close()
+        try:
+            await asyncio.wait_for(server.wait_closed(), limits.shutdown_grace)
+        except TimeoutError:
+            sp.set_attribute(telemetry.DRAINED, False)
+            telemetry.record_ok()  # the stop itself succeeded; what did not finish is the peer's, not the store's
+            return False
+        sp.set_attribute(telemetry.DRAINED, True)
+        telemetry.record_ok()
+        return True
 
 
 def _peer_certificate(writer: asyncio.StreamWriter) -> bytes | None:
