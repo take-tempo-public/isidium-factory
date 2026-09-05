@@ -38,7 +38,7 @@ from isidium.store.server.api import Api
 from isidium.store.server.service import Registration, Request, Service
 
 from .conftest import BASE_SCOPE, Harness, Telemetry, base_head, fresh
-from .test_service import OWNER_CERT, PLANNER_CERT, STRANGER_CERT
+from .test_service import CLOCK, OWNER_CERT, PLANNER_CERT, STRANGER_CERT
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -48,9 +48,10 @@ def svc() -> tuple[Service, Harness]:
     hz = fresh("telemetry")
     registration = Registration(
         {
-            "owner@example": ("amodal1@example", "owner"),
-            "sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
-        }
+            "CN=owner@example": ("amodal1@example", "owner"),
+            "CN=sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
+        },
+        CLOCK,
     )
     return Service(Api(hz.st), registration, hz.st.tenant), hz
 

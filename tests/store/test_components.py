@@ -96,6 +96,8 @@ def test_journal_replays_a_half_applied_write(tmp_path: Path) -> None:
             st.now(),
             OWNER.principal,
             [{"path": "config.toml", "after_blob": "x"}],
+            credential=None,
+            trace=None,
             pending={"config.toml": replayed},
         )
     assert journal.pending_rows()[0][0] == row["seq"]

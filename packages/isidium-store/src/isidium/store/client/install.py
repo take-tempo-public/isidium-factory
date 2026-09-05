@@ -66,7 +66,8 @@ def resolve_root(cfg: ClientConfig, registry: Registry | None = None) -> ClientC
     root and silently protects the wrong tree. That is S5 wearing a different hat, and `hook.unknown-root` does not
     catch it because a blank root is an answer.
 
-    `config@1` is the version `Store.init` adopts (`store.py` writes `"schema": 1` into the chain's first entry).
+    `config@1` is the version this client-side read stands on; `Store.init` adopts the newest installed version
+    (`registry.newest("config")`, K6), and `root` carries the same declared value in every version so far.
     Version *selection* is not a declared default, which is why the literal is allowed to stand here — but it now
     stands in two places, and that is worth a single home the day a `config@2` exists."""
     if cfg.root:

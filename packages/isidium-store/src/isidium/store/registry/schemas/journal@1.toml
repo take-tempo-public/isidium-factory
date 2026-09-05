@@ -1,0 +1,46 @@
+name = "journal"
+version = 1
+form = "json"
+
+# 03b §2 / 03 §9.6 — one journal row, as `Journal.rows()` hands it back: the write-ahead record of one governed
+# transition. The chained content `c` is every key but `h` and `sig` (5.5); the genesis is
+# `sha256(b"schema:1\njournal:<tenant>")`. **A row of this version carries no `schema` key — the absence IS the
+# version**: journal@1 predates the key, which journal@2 introduces along with the caller's credential (K6, H-1).
+# The rows live as SQLite rows in the store's container, never as a governed file: this document names the shape a
+# port must transcribe; it is not a validator's input on the write path.
+
+[[record]]
+name = "seq"
+type = "int"
+required_when = []
+range = { min = 1 }
+
+[[record]]
+name = "at"
+type = "string"
+required_when = []
+pattern = "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"
+
+[[record]]
+name = "caller"
+type = "string"
+required_when = []
+
+[[record]]
+name = "paths"
+type = "array"
+required_when = []
+
+[[record]]
+name = "repairs"
+type = "string"
+
+[[record]]
+name = "h"
+type = "string"
+required_when = []
+pattern = "sha256:[0-9a-f]{64}"
+
+[[record]]
+name = "sig"
+type = "string"

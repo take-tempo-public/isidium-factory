@@ -18,7 +18,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 from isidium.store.client.mcp import McpServer, tools
 from isidium.store.core.refusal import Refusal
@@ -30,10 +30,11 @@ from .conftest import BASE_SCOPE, Harness, base_head, fresh
 
 def cert_for(cn: str) -> bytes:
     """A self-signed client certificate in DER — the channel's credential, in the encoding the connection hands
-    over; the registration maps its CN to a principal."""
+    over; the registration maps its **full subject** (`CN=<cn>`) to a principal [K6]. Issued with `clientAuth`,
+    which the store requires since K6 (Q5), and valid from 2026-08-01 for a year — `CLOCK` below sits inside."""
     key = ed25519.Ed25519PrivateKey.generate()
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
-    now = _dt.datetime(2026, 8, 27, tzinfo=_dt.UTC)
+    now = _dt.datetime(2026, 8, 1, tzinfo=_dt.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -42,9 +43,15 @@ def cert_for(cn: str) -> bytes:
         .serial_number(x509.random_serial_number())
         .not_valid_before(now)
         .not_valid_after(now + _dt.timedelta(days=365))
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
         .sign(key, None)
     )
     return cert.public_bytes(serialization.Encoding.DER)
+
+
+def CLOCK() -> int:
+    """2026-08-17T10:13:20Z — inside every `cert_for` window, and the instant the store's window check reads."""
+    return 1_787_000_000
 
 
 OWNER_CERT = cert_for("owner@example")
@@ -72,9 +79,10 @@ def svc() -> tuple[Service, Harness]:
     hz = fresh("svc")
     registration = Registration(
         {
-            "owner@example": ("amodal1@example", "owner"),
-            "sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
-        }
+            "CN=owner@example": ("amodal1@example", "owner"),
+            "CN=sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
+        },
+        CLOCK,
     )
     return Service(Api(hz.st), registration, hz.st.tenant), hz
 

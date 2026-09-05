@@ -15,11 +15,18 @@ GRANTS: Final[tuple[Grant, ...]] = ("owner", "contributor", "lander")
 class Caller:
     """The authenticated principal (email-shaped, lower-cased, NFC — the store attests it on every journaled call),
     its grant, and the principal it acts on behalf of (`for`, PROV actedOnBehalfOf — the harness that injected the
-    credential sets it)."""
+    credential sets it).
+
+    `credential` [K6, H-1] is the digest of the client certificate the channel presented — `sha256:<hex>` over the
+    DER bytes as the peer sent them — and it is what the journal row records beside the principal, because after a
+    rotation or a revocation the principal alone no longer says *which* certificate asserted it. `None` only for a
+    caller that did not arrive over the channel: the realm's binding act, which its own key signs (`Store.bind`).
+    Every caller `Service.caller_of` builds carries one."""
 
     principal: str
     grant: Grant
     on_behalf_of: str | None = None
+    credential: str | None = None
 
 
 # 03 §1.12 — what each grant may call. `write:signed` is the signature-requiring write (the predicate is write's);

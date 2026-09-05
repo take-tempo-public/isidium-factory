@@ -207,6 +207,18 @@ class Registry:
         """Whether this registry holds `ref` — a key lookup, and never a read or a parse."""
         return ref in self._slots
 
+    def newest(self, name: str) -> int:
+        """The highest installed version of the document type `name` — from the filenames, no parse (C-13).
+
+        What `init` adopts for a new tenant [K6]: a store initialising a tenant writes the newest `config@<n>` it
+        ships, so a tenant born on a K6 toolkit records caller credentials from its first journal row rather than
+        migrating to them later. An existing tenant is untouched by this — its adopted version is the one its own
+        `[[governed]]` row names (04 §4.1), and moving it is a signed `config-policy` act, never a toolkit upgrade."""
+        versions = [parse_ref(ref)[1] for ref in self._slots if ref.startswith(name + "@")]
+        if not versions:
+            raise Refusal("config.schema-unknown", "schema", f"no {name}@<n> in the installed registry")
+        return max(versions)
+
     def source(self) -> dict[str, bytes]:
         """Every installed document as the bytes it was read from, keyed by ref. What `init` writes into a
         checkout, so the installed registry and the `INSTALLED` list are the same registry by construction.

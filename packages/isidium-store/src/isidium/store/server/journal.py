@@ -6,6 +6,21 @@
 the files touched", 9.4), the blob-sha cache (9.4: 0 build hashes on a warm cache), the last-signed blob per path
 (the X1 display's baseline, durable across restarts), and the pending-write bytes that let a half-applied write
 replay after a crash. One transaction per call: `BEGIN IMMEDIATE` is the tenant's row lock.
+
+**Two versions, one chain** [K6, H-1; ruled 7bg.10]. The row's shape is a registry document, `journal@<n>`, and the
+tenant adopts a version through its `config.toml` — a signed `config-policy` act, like any other schema adoption.
+A row written under `journal@2` carries **the version it was written under** (`schema = 2`) and the **credential**
+that asserted the principal (`sha256:<hex>` of the client certificate the channel presented); a `journal@1` row
+carries neither, and its shape is byte-for-byte what it was before K6. Both are inside the hashed content. The trace
+context (`trace_id`, `span_id`) sits **beside** the content where `sig` does, never inside it (C-9).
+
+**The genesis is pinned once, at the first row, and a bump never re-genesises a live chain.** The genesis carries
+the version the chain *opened* under; each row carries the version it was *written* under. So the journal of a
+tenant that opened under `journal@1` and later adopted `journal@2` verifies from its original genesis, rows 1…k
+in the @1 shape and k+1… in the @2 shape — which is what the ruling's *"record the version the row was written
+under"* asks for, and it is the only shape that works, because tenant #0 held three real rows before this landed.
+`meta.schema` holds the pinned version; a journal with rows and no pin was written by a store older than K6, and
+`journal@1` is the only version such a store could write.
 """
 
 from __future__ import annotations
@@ -24,7 +39,8 @@ SCHEMA_SQL: Final = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS journal (
   seq INTEGER PRIMARY KEY, at TEXT NOT NULL, caller TEXT NOT NULL, paths TEXT NOT NULL,
-  repairs TEXT, h TEXT NOT NULL, sig TEXT);
+  repairs TEXT, h TEXT NOT NULL, sig TEXT,
+  schema INTEGER, credential TEXT, trace_id TEXT, span_id TEXT);
 CREATE TABLE IF NOT EXISTS journal_paths (seq INTEGER NOT NULL, path TEXT NOT NULL, PRIMARY KEY (path, seq));
 CREATE TABLE IF NOT EXISTS pending (seq INTEGER NOT NULL, path TEXT NOT NULL, data BLOB, PRIMARY KEY (seq, path));
 CREATE TABLE IF NOT EXISTS blobs (
@@ -32,24 +48,74 @@ CREATE TABLE IF NOT EXISTS blobs (
   ext_hash TEXT NOT NULL, canon INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS signed (path TEXT PRIMARY KEY, blob TEXT NOT NULL, seq INTEGER NOT NULL);
 """
+# The four columns K6 added, in the order `SCHEMA_SQL` declares them. A journal file made before K6 has none of
+# them; `ALTER TABLE … ADD COLUMN` is a metadata change in SQLite (no rewrite), paid once per file on the first open.
+_K6_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
+    ("schema", "INTEGER"),
+    ("credential", "TEXT"),
+    ("trace_id", "TEXT"),
+    ("span_id", "TEXT"),
+)
+# Everything a row carries that is NOT chained content: `h` and `sig` (5.5) and, since K6, the trace pointer.
+BESIDE: Final[frozenset[str]] = frozenset({"h", "sig", "trace_id", "span_id"})
+# The first journal version that carries `schema` and `credential` inside its rows.
+_CARRIES_IDENTITY: Final = 2
 
 Row = dict[str, Any]
 
 
 class Journal:
-    def __init__(self, path: str | Path, tenant: str, schema_version: int = 1) -> None:
+    def __init__(self, path: str | Path, tenant: str) -> None:
         self.tenant = tenant
-        self.genesis = chain.genesis("journal", tenant, schema_version)
         self.db = sqlite3.connect(str(path), isolation_level=None)  # autocommit; explicit BEGIN below
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA_SQL)
+        present = {str(r[1]) for r in self.db.execute("PRAGMA table_info(journal)")}
+        for column, kind in _K6_COLUMNS:
+            if column not in present:
+                self.db.execute(f"ALTER TABLE journal ADD COLUMN {column} {kind}")
         self.db.execute("INSERT OR IGNORE INTO meta VALUES ('tenant', ?)", (tenant,))
         self.db.execute("INSERT OR IGNORE INTO meta VALUES ('counter', '0')")
         got = self.db.execute("SELECT value FROM meta WHERE key='tenant'").fetchone()[0]
         if got != tenant:
             raise ValueError(f"journal belongs to tenant {got!r}, not {tenant!r}")
+        if self._pinned() is None and self.db.execute("SELECT 1 FROM journal LIMIT 1").fetchone() is not None:
+            # Rows and no pin: written by a store older than K6, whose only journal version was the v1 baseline.
+            # Pinned now so the genesis this chain was built from is a stored fact rather than a guess at every open.
+            self.db.execute("INSERT INTO meta VALUES ('schema', ?)", (str(chain.DEFAULT_REGISTRY["journal"]),))
         self._in_txn = False
+        # The version rows are written under. **Supplied by the store from the tenant's adopted config**, never
+        # defaulted here (C-1): `adopt` is called before the first append, and again whenever a policy write moves
+        # the tenant to another journal version.
+        self.schema: int | None = None
+
+    # ---- the adopted version ------------------------------------------------------------------------------------
+
+    def adopt(self, schema: int) -> None:
+        """The journal version this tenant writes under, from its effective config (`cfg.journal_schema`). Changes
+        what the next row carries; never what the chain's genesis was."""
+        self.schema = schema
+
+    def _pinned(self) -> int | None:
+        r = self.db.execute("SELECT value FROM meta WHERE key='schema'").fetchone()
+        return int(r[0]) if r else None
+
+    @property
+    def genesis(self) -> str:
+        """The chain's h_0: under the pinned version once a row exists, else under the version the next row would
+        pin — so `head` and `verify` agree with `append` on an empty journal too."""
+        pinned = self._pinned()
+        if pinned is None:
+            pinned = self._adopted()
+        return chain.genesis("journal", self.tenant, pinned)
+
+    def _adopted(self) -> int:
+        if self.schema is None:
+            # A bug in the store, not a refusal a caller can act on: `Store` adopts at construction and again at
+            # every config change, so reaching this means a journal was driven without a store in front of it.
+            raise RuntimeError("the journal has no adopted version: call `adopt` before the first row")
+        return self.schema
 
     # ---- transactions --------------------------------------------------------------------------------------------
 
@@ -103,20 +169,53 @@ class Journal:
         at: str,
         caller: str,
         paths: Sequence[Row],
+        *,
+        credential: str | None,
+        trace: tuple[str, str] | None,
         repairs: str | None = None,
         pending: dict[str, bytes] | None = None,
     ) -> Row:
         """Append one row inside the caller's transaction; returns the row with `h`. `pending` holds the bytes the
-        write is about to put on disk, cleared by `applied()` once the commit lands."""
+        write is about to put on disk, cleared by `applied()` once the commit lands.
+
+        `credential` and `trace` are **keyword-only and have no default**: the one way to omit either is to say so at
+        the call, so a call site cannot forget the identity K6 exists to record. Under `journal@1` they are *not
+        written* — a tenant that has not adopted `journal@2` is not affected by its keys (04 §4.1) — which is why an
+        existing tenant migrates rather than merely upgrading its store."""
+        schema = self._adopted()
         seq, prev = self.head
-        row: Row = {"seq": seq + 1, "at": at, "caller": caller, "paths": list(paths)}
+        if seq == 0 and self._pinned() is None:
+            self.db.execute("INSERT INTO meta VALUES ('schema', ?)", (str(schema),))  # the first row pins the genesis
+        row: Row = {"seq": seq + 1, "at": at}
+        carries = schema >= _CARRIES_IDENTITY
+        if carries:
+            row["schema"] = schema
+        row["caller"] = caller
+        if carries and credential is not None:
+            row["credential"] = credential
+        row["paths"] = list(paths)
         if repairs is not None:
             row["repairs"] = repairs
         row["h"] = chain.link(prev, row)
+        trace_id, span_id = trace if (carries and trace is not None) else (None, None)
         self.db.execute(
-            "INSERT INTO journal (seq, at, caller, paths, repairs, h) VALUES (?, ?, ?, ?, ?, ?)",
-            (row["seq"], at, caller, json.dumps(row["paths"], sort_keys=True, ensure_ascii=False), repairs, row["h"]),
+            "INSERT INTO journal (seq, at, caller, paths, repairs, h, schema, credential, trace_id, span_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                row["seq"],
+                at,
+                caller,
+                json.dumps(row["paths"], sort_keys=True, ensure_ascii=False),
+                repairs,
+                row["h"],
+                row.get("schema"),
+                row.get("credential"),
+                trace_id,
+                span_id,
+            ),
         )
+        if trace_id is not None:
+            row["trace_id"], row["span_id"] = trace_id, span_id
         self.db.executemany(
             "INSERT OR IGNORE INTO journal_paths (seq, path) VALUES (?, ?)", [(row["seq"], p["path"]) for p in paths]
         )
@@ -137,30 +236,53 @@ class Journal:
             for s, p, d in self.db.execute("SELECT seq, path, data FROM pending ORDER BY seq")
         ]
 
+    _SELECT: Final = "SELECT seq, at, caller, paths, repairs, h, sig, schema, credential, trace_id, span_id"
+
     @staticmethod
-    def _row(seq: int, at: str, caller: str, paths: str, repairs: str | None, h: str, sig: str | None) -> Row:
-        row: Row = {"seq": int(seq), "at": at, "caller": caller, "paths": json.loads(paths)}
+    def _row(
+        seq: int,
+        at: str,
+        caller: str,
+        paths: str,
+        repairs: str | None,
+        h: str,
+        sig: str | None,
+        schema: int | None,
+        credential: str | None,
+        trace_id: str | None,
+        span_id: str | None,
+    ) -> Row:
+        """The row as it was hashed: key presence is the version's, and `h`, `sig` and the trace pointer are
+        beside the content (`BESIDE`)."""
+        row: Row = {"seq": int(seq), "at": at}
+        if schema is not None:
+            row["schema"] = int(schema)
+        row["caller"] = caller
+        if credential is not None:
+            row["credential"] = credential
+        row["paths"] = json.loads(paths)
         if repairs is not None:
             row["repairs"] = repairs
         row["h"] = h
         if sig is not None:
             row["sig"] = sig
+        if trace_id is not None and span_id is not None:
+            row["trace_id"], row["span_id"] = trace_id, span_id
         return row
 
     def rows(self, since_seq: int = 0) -> list[Row]:
         return [
             self._row(*r)
-            for r in self.db.execute(
-                "SELECT seq, at, caller, paths, repairs, h, sig FROM journal WHERE seq > ? ORDER BY seq", (since_seq,)
-            )
+            for r in self.db.execute(f"{self._SELECT} FROM journal WHERE seq > ? ORDER BY seq", (since_seq,))
         ]
 
     def rows_for(self, path: str, since_seq: int = 0) -> list[Row]:
         """The rows touching `path` (their `paths` filtered to it) — one indexed query, bounded by the path (9.4)."""
         out: list[Row] = []
         for r in self.db.execute(
-            "SELECT j.seq, j.at, j.caller, j.paths, j.repairs, j.h, j.sig FROM journal j "
-            "JOIN journal_paths p ON p.seq = j.seq WHERE p.path = ? AND j.seq > ? ORDER BY j.seq",
+            "SELECT j.seq, j.at, j.caller, j.paths, j.repairs, j.h, j.sig, j.schema, j.credential, j.trace_id, "
+            "j.span_id FROM journal j JOIN journal_paths p ON p.seq = j.seq WHERE p.path = ? AND j.seq > ? "
+            "ORDER BY j.seq",
             (path, since_seq),
         ):
             row = self._row(*r)
@@ -168,10 +290,11 @@ class Journal:
         return out
 
     def verify(self) -> bool:
-        """Recompute the chain from the genesis."""
+        """Recompute the chain from the genesis. Every row is hashed as it was written — its own version's keys —
+        from the genesis the chain opened under, so a chain that spans a version bump verifies whole."""
         h = self.genesis
         for r in self.rows():
-            if chain.link(h, {k: v for k, v in r.items() if k not in ("h", "sig")}) != r["h"]:
+            if chain.link(h, {k: v for k, v in r.items() if k not in BESIDE}) != r["h"]:
                 return False
             h = r["h"]
         return True

@@ -201,7 +201,7 @@ def edge(tmp_path_factory: pytest.TempPathFactory) -> Edge:
     other_ca = authority(directory, "some-other-ca")
     server_cert, server_key = issue(ca, directory, "store.sartor", "store", server=True)
     harness = fresh("edge")
-    registration = Registration({"owner@example": ("amodal1@example", "owner")})
+    registration = Registration({"CN=owner@example": ("amodal1@example", "owner")}, lambda: int(NOW.timestamp()))
     return Edge(
         service=Recording(Api(harness.st), registration, harness.st.tenant),
         context=tls_context(server_cert, server_key, ca.path),
@@ -724,7 +724,7 @@ def test_the_admission_key_is_the_credential_and_not_the_grant() -> None:
     presented — both available the instant the handshake finishes, and neither needing the policy engine (Q4). A
     certificate that will not parse still gets a key, which is the peer that most needs one."""
     limits = Limits(max_per_caller=8, max_per_probe=2)
-    registration = Registration({"owner@example": ("amodal1@example", "owner")})
+    registration = Registration({"CN=owner@example": ("amodal1@example", "owner")}, lambda: int(NOW.timestamp()))
     named = Credential("ff" * 32, "amodal1@example", "owner")
     assert http.allowance_for(named, limits) == ("amodal1@example", 8)
     probe = registration.credential(b"not a certificate at all")

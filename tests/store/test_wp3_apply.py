@@ -27,7 +27,7 @@ from isidium.store.server.signer import SoftwareKeyAck
 from isidium.store.server.store import Store
 
 from .conftest import BASE_SCOPE, OWNER, PLANNER, Harness, base_head, store_on_disk, tenant_checkout
-from .test_service import OWNER_CERT, PLANNER_CERT, call, cert_for
+from .test_service import CLOCK, OWNER_CERT, PLANNER_CERT, call, cert_for
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -100,9 +100,10 @@ def svc_pair() -> tuple[Service, Harness]:
     hz = fresh("wp3")
     reg = Registration(
         {
-            "owner@example": ("amodal1@example", "owner"),
-            "sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
-        }
+            "CN=owner@example": ("amodal1@example", "owner"),
+            "CN=sartor-planner@agents.example": ("sartor-planner@agents.example", "contributor"),
+        },
+        CLOCK,
     )
     return Service(Api(hz.st), reg, hz.st.tenant), hz
 

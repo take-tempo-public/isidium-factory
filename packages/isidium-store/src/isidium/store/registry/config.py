@@ -19,16 +19,25 @@ from typing import Any, Final
 from ..core import canon
 from ..core.grammar import Entry, TomlOrders, parse_config
 from ..core.refusal import Refusal
-from .loader import Registry, adopted_version
+from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
-SCHEMA_VERSION: Final = 1  # the config schema version this module's cross-key code mirrors
+SCHEMA_VERSION: Final = 2  # the config schema version this module's cross-key code mirrors (K6: config@2)
 
 # 04 §2.1 — scalars first, among themselves in this inventory order
-SCALAR_ORDER: Final[tuple[str, ...]] = ("schema", "tenant", "root", "time_skew", "wip", "batch_boundary")
+SCALAR_ORDER: Final[tuple[str, ...]] = (
+    "schema",
+    "chain_opened_under",  # config@2 (K6): the policy chain's genesis version; absent from a config@1 file
+    "tenant",
+    "root",
+    "time_skew",
+    "wip",
+    "batch_boundary",
+)
 # 04 §1 — the pinned table order (`payload` orders the pinned `[payload.context]` header)
 TABLE_ORDER: Final[tuple[str, ...]] = (
     "toolkit",
+    "journal",  # config@2 (K6): the journal version this tenant writes under; absent from a config@1 file
     "ratification",
     "signer",
     "effort",
@@ -49,6 +58,7 @@ TABLE_ORDER: Final[tuple[str, ...]] = (
 # Per-table serialization key order (04 §2.2 column order) for the known keys
 TABLE_KEY_ORDER: Final[dict[str, tuple[str, ...]]] = {
     "toolkit": ("client", "registry", "unidata", "object_id"),
+    "journal": ("schema",),
     "ratification": ("mode", "software_key_ack", "path", "verdicts_required", "pin"),
     "signer": ("backends",),
     "effort": ("tiers", "budgets"),
@@ -293,6 +303,9 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
         _check_row_value(rs, tree[k], row, k)
     if isinstance(tree.get("root"), str) and not valid_root(tree["root"]):
         _r(rs, "config.pattern", "root", "relative, /-separated, no ./.. segments, trailing / (L2-15)")
+    opened = tree.get("chain_opened_under")
+    if isinstance(opened, int) and not isinstance(opened, bool) and ver is not None and opened > ver:
+        _r(rs, "config.range", "chain_opened_under", f"a chain cannot have opened under config@{opened} > config@{ver}")
 
     if ver is not None:
         if not registry.has(f"config@{ver}"):
@@ -325,7 +338,7 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
 
     if "toolkit" not in tree:
         _r(rs, "config.type", "toolkit", "required table absent (the four pins)")
-    for name in ("toolkit", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces"):
+    for name in ("toolkit", "journal", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces"):
         t = tree.get(name)
         if t is None:
             continue
@@ -347,6 +360,7 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
     _v_origin(rs, tree.get("origin"))
     _v_extensions(rs, tree.get("extensions"))
     _v_governed(rs, tree.get("governed"), registry)
+    _v_journal(rs, tree.get("journal"), registry)
     _v_history(rs, tree.get("history"))
     return rs
 
@@ -644,6 +658,59 @@ def _v_extensions(rs: list[Refusal], t: Any) -> None:
             check_required_when(v["required_when"], f"extensions.{k}.required_when", rs, "config.type", "config.enum")
         if "enum" in v and (not isinstance(v["enum"], list) or not v["enum"]):
             _r(rs, "config.type", f"extensions.{k}.enum", "a non-empty array")
+
+
+def _v_journal(rs: list[Refusal], t: Any, registry: Registry) -> None:
+    """`[journal].schema` [config@2, K6]: the journal version the store writes rows under. Its grammar and its name
+    are the schema document's (a mechanical `pattern`, checked above); what is code is the same rule a `[[governed]]`
+    row gets — the version must be one the store has installed, `config.schema-unknown` otherwise, so a tenant can
+    never adopt a row shape this binary cannot write."""
+    if not isinstance(t, dict):
+        return
+    ref = t.get("schema")
+    if isinstance(ref, str) and SCHEMA_REF.fullmatch(ref) and not registry.has(ref):
+        _r(rs, "config.schema-unknown", "journal.schema", f"{ref} not in the installed registry")
+
+
+def immutable_changed(before: Mapping[str, Any], after: Mapping[str, Any], registry: Registry) -> list[Refusal]:
+    """The vocabulary's `immutable` member, enforced at the policy write [K6]: a scalar the adopted version flags
+    `immutable = true` may not change between the tree the store holds and the tree it is asked to write. `tenant`
+    keeps its own older id (`config.tenant-immutable`, raised by the store); everything else flagged answers
+    `config.immutable` on its key. Read from the version being ADOPTED: a key the old version did not have is
+    being set for the first time, which is not a change."""
+    rs: list[Refusal] = []
+    ver = after.get("schema")
+    ref = (
+        f"config@{ver}"
+        if isinstance(ver, int) and not isinstance(ver, bool) and registry.has(f"config@{ver}")
+        else None
+    )
+    if ref is None:
+        return rs
+    for row in registry.get(ref)["scalars"]:
+        k = row["name"]
+        if row.get("immutable") and k != "tenant" and k in before and before[k] != after.get(k):
+            _r(rs, "config.immutable", k, f"{before[k]!r} -> {after.get(k)!r}: this key is immutable once written")
+    return rs
+
+
+def journal_schema(eff: Mapping[str, Any]) -> int:
+    """The journal version this tenant's store writes under (K6, ruled 7bg.10): `[journal].schema` in the
+    **effective** config, which for a config@2 tenant is the file's own value or config@2's declared default (Y1).
+
+    A config@1 tenant declares nothing — the key does not exist in its version — and every journal a store wrote
+    under config@1 is `journal@1` by construction. That baseline is `chain.DEFAULT_REGISTRY`'s, read from there
+    rather than written a second time here; it is the one place "which version predates the key" is recorded."""
+    t = eff.get("journal")
+    if isinstance(t, dict) and isinstance(t.get("schema"), str):
+        return parse_ref(str(t["schema"]))[1]
+    # Imported here, not at the top (C-13, 7bh.1): `core.chain` imports `cryptography`, and this module is in the
+    # pre-commit hook's graph — the hook validates a manifest on every commit and never asks this question. The
+    # store is the only caller, and it already holds `chain`. Measured: the top-level import put `cryptography`
+    # back into the hook (K3b's guard failed), which is ~0.5 s per commit for a constant.
+    from ..core.chain import DEFAULT_REGISTRY
+
+    return DEFAULT_REGISTRY["journal"]
 
 
 def _v_governed(rs: list[Refusal], rows: Any, registry: Registry) -> None:
