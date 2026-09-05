@@ -20,17 +20,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # a pull request's diff base is the base branch, which a shallow clone does not hold
-      - name: install the store
-        run: |
-          set -eu
-          python3 --version
-          python3 -m pip install --quiet ./packages/isidium-store
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.9"
+          python-version: "3.12" # the floor the package declares and the container ships
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: install the store from the lock, or fail
+        # **Locked as of K5.** This step used to `pip install ./packages/isidium-store` and take whatever pydantic
+        # PyPI held that morning — for a gate whose whole job is deciding whether a governed document parses.
+        # A parser that floats is a verdict that floats. `--locked` refuses a stale lock rather than resolving one.
+        run: uv sync --locked --all-packages --all-extras
       - name: verify every governed document
         if: github.event_name == 'push'
-        run: python3 tools/verify_chain.py --repo .
+        run: uv run --no-sync python tools/verify_chain.py --repo .
       - name: verify, and refuse any governed change off main
         if: github.event_name == 'pull_request'
-        run: python3 tools/verify_chain.py --repo . --diff-base "origin/${{ github.base_ref }}"
+        run: uv run --no-sync python tools/verify_chain.py --repo . --diff-base "origin/${{ github.base_ref }}"

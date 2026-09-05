@@ -25,6 +25,33 @@ governed blob content is fetched from the origin on demand, and a read outside t
 git runs. `git clone <remote> tenant` — what an earlier version of this file told you to do — makes a working-tree
 clone and is wrong now, not merely stale.
 
+### Every version in this image is pinned, and the pin is `uv.lock` (K5, 2026-09-04)
+
+Three kinds of thing used to float here, and none of them does now.
+
+1. **The base images.** Both `FROM` lines carry the digest beside the tag, and it is the digest that is fetched.
+   `python:3.12-slim` is rebuilt weekly, so an unpinned base meant two builds of the same commit were two
+   different images. The digest is the multi-arch index, so the same line builds on amd64 and on arm64.
+2. **The store's own dependencies.** The image used to `pip install` the wheel with its extras, which resolved
+   pydantic, cryptography, httpx, typer and the OpenTelemetry packages against PyPI at build time. The repository
+   checked a lock in CI and the container did not use it, so the artifact that actually runs was the one place
+   nothing was pinned. The build stage now exports the lock (`uv export --locked`) and the runtime stage installs
+   it under `pip --require-hashes`, which refuses any artifact whose bytes do not match. The store's own wheel
+   goes in afterwards with `--no-deps`. **What that guarantee is, exactly** (measured 2026-09-04): `uv`
+   exports both the wheel's hash and the sdist's for each version, and pip accepts an artifact matching
+   *either*. So the pin is to the set of artifacts the lock recorded for that version, not to one file.
+   Corrupting one of the two hashes changes nothing; corrupting both makes pip refuse with
+   `THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE` and exit 1, which is how this was
+   checked rather than assumed.
+3. **`uv` itself.** A resolver is a version too; it is copied in from `ghcr.io/astral-sh/uv`, digest-pinned, and
+   it stays in the build stage.
+
+**What this changes for you as the operator:** a build now fails if `uv.lock` and `pyproject.toml` disagree, which
+is the same refusal CI makes, and it fails at the export rather than by quietly resolving something else. To move
+a version, change `pyproject.toml`, run `uv lock`, and rebuild. Renovate proposes those bumps as pull requests; a
+base-image bump is deliberately never grouped with anything, because it means a rebuild and a restart of every
+tenant's store.
+
 ## What you provide
 
 | Path | What |

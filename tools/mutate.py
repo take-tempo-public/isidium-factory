@@ -165,9 +165,25 @@ def restorer(m: Mutation, pristine: bytes) -> Callable[[int, FrameType | None], 
 
 
 def run_suite(serial: bool) -> tuple[int, str]:
+    # **Both ends are pinned to UTF-8, and the decode cannot raise** [K5, 2026-09-04]. `text=True` alone
+    # decodes the child's pipe with the *locale* codec -- cp1252 on this workstation -- so one character
+    # pytest echoes back from a failing test's docstring is enough to kill the reader thread, leave
+    # `p.stdout` as `None`, and end the whole run with `TypeError: ... 'NoneType' and 'str'`. That is what
+    # happened to K5's first batch: eleven minutes of suite spent, the mutation's own verdict lost, and the
+    # three after it never run. The docstring above promises everything this file *prints* is ASCII; what it
+    # *reads back* was never covered, and the suite's output is not this file's to control. So the child is
+    # this end is told what to expect, and `errors="replace"` makes a surprising byte cost one mangled
+    # character in a test name instead of an hour.
+    #
+    # **Only this end.** The first fix also exported `PYTHONIOENCODING=utf-8` to the child, which is both
+    # unnecessary -- the raw 0x9d that started this proves pytest already writes UTF-8 into a pipe unbidden,
+    # since no cp1252 encoder can emit that byte -- and actively wrong: the variable is inherited all the way
+    # down into the subprocesses the *suite itself* spawns, and it broke a test in `test_verify_chain.py` that
+    # matches on an em dash. A harness that changes the environment of the thing it measures reports the
+    # change and not the mutation. It read as a killer for M5 and was this file's doing.
     argv = [sys.executable, "-m", "pytest", "-q", "--no-header", "-rf", *([] if serial else PARALLEL)]
-    p = subprocess.run(argv, cwd=REPO, capture_output=True, text=True)
-    return p.returncode, p.stdout + p.stderr
+    p = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
 def main() -> int:

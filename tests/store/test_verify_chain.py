@@ -45,12 +45,20 @@ def run(repo: Path, *args: str) -> tuple[int, str]:
     """The script through its own door — the way CI runs it — so the exit code is what is asserted."""
     # The child finds the package the way pytest does (pyproject's `pythonpath`), so this does not depend on an
     # install; CI installs the package and needs no such thing.
+    # **Both ends of this pipe say UTF-8** [K5, 2026-09-04]. The assertions below match on an em dash, and
+    # `text=True` alone decodes with whatever the ambient locale is -- cp1252 on a Windows workstation, UTF-8
+    # on the runner. This passed only because the child happened to guess the same codec as the parent, which
+    # is a coincidence and not a property: anything that sets `PYTHONIOENCODING` in the environment breaks the
+    # match while changing nothing about the script under test, and something did. Said at both ends, the test
+    # asserts what the script printed rather than what this machine's locale made of it. Deliberately no
+    # `errors=`: a byte this cannot decode should fail loudly here, which is the opposite of the harness.
     r = subprocess.run(
         [sys.executable, str(TOOL), "--repo", str(repo), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
-        env={**os.environ, "PYTHONPATH": str(SRC)},
+        env={**os.environ, "PYTHONPATH": str(SRC), "PYTHONIOENCODING": "utf-8"},
     )
     return r.returncode, r.stdout + r.stderr
 
