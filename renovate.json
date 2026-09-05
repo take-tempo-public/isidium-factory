@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "description": [
+    "Upstream updates arrive as reviewable pull requests (K5, ruling 7bg.5). Renovate and not Dependabot because it",
+    "runs on GitHub and on Forgejo, and this project's forge is not a settled thing; nothing below is a GitHub-only",
+    "feature, so this file moves with the repository.",
+    "Checking this file in does not start it: a person with admin on the account must install the app or stand up",
+    "the self-hosted runner once. Until that happens the lock is deterministic and unwatched, which is a narrower",
+    "gap than an unpinned one but still a gap."
+  ],
+  "labels": ["dependencies"],
+  "osvVulnerabilityAlerts": true,
+  "pinDigests": true,
+  "dependencyDashboard": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "dockerfile": {
+    "description": "deploy/Containerfile.store is not named Dockerfile; without this the two base images are unseen.",
+    "managerFilePatterns": ["/(^|/)Containerfile[^/]*$/"]
+  },
+  "packageRules": [
+    {
+      "description": "Actions are pinned to a commit, and Renovate keeps the trailing version comment honest.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "description": "The OpenTelemetry API, SDK and exporter are released together upstream; splitting them across three PRs would propose combinations nobody ships.",
+      "matchPackageNames": ["/^opentelemetry-/"],
+      "groupName": "opentelemetry"
+    },
+    {
+      "description": "The green bar's own tools land as one reviewable change, since they are reviewed by the bar itself going green.",
+      "matchPackageNames": ["mypy", "pytest", "pytest-xdist", "ruff"],
+      "groupName": "green-bar tooling"
+    },
+    {
+      "description": "A base-image digest bump is a rebuild and a restart of every tenant's store; it is never grouped with anything else.",
+      "matchManagers": ["dockerfile"],
+      "groupName": null
+    }
+  ]
+}

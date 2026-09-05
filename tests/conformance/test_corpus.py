@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -10,6 +11,34 @@ import pytest
 from isidium.store.core import canon, grammar
 
 from .conftest import R6
+
+
+def read_untranslated(path: Path) -> str:
+    """The fixture's own line endings, exactly as they sit on disk. This corpus is about bytes — a CRLF fixture
+    that arrives as LF proves nothing. `read_text(newline="")` says the same thing, but it is 3.13+ while the
+    package declares `>=3.12` and the container ships 3.12; decoding the bytes translates nothing on any version
+    [K5, 2026-09-04, the Python pin ruled to a 3.12/3.13 matrix].
+
+    **An earlier draft of this docstring claimed two tests below turn on that difference. They do not**, and a
+    mutation putting `read_text` back survived the whole suite to prove it: the build hash is CRLF-invariant by
+    design, the fixed-point test *skips* the mixed CRLF fixture (and the mutation removes the mixedness that
+    triggers the skip), and `test_file_level_equalities` reads an all-LF file and makes its own CRLF. The one
+    test that can see it is the next one, written because the mutation survived."""
+    return path.read_bytes().decode("utf-8")
+
+
+def test_the_reader_hands_back_the_bytes_the_fixture_actually_holds() -> None:
+    """**The discriminator for `read_untranslated`.** Universal-newline decoding is invisible everywhere else in
+    this file, so without this the reader could quietly go back to translating CRLF into LF and nothing would
+    fail. The fixture is asserted to hold CRLF *on disk* first: if it ever lost it, this test would otherwise
+    pass while proving nothing, which is the failure mode this project refuses."""
+    path = R6 / "corpus-crlf-vs-lf-b.md"
+    on_disk = path.read_bytes()
+    assert b"\r\n" in on_disk, f"{path.name} is the CRLF fixture; with no CRLF on disk this proves nothing"
+
+    raw = read_untranslated(path)
+    assert raw.count("\r\n") == on_disk.count(b"\r\n"), "a CRLF was translated away on the way in"
+    assert raw.encode("utf-8") == on_disk, "the reader did not hand back the file's own bytes"
 
 
 def test_corpus_pairs(corpus: list[dict[str, Any]]) -> None:
@@ -29,7 +58,7 @@ def test_fixture_files_reproduce_oracle_build_hash(corpus: list[dict[str, Any]],
     failures = []
     for item in corpus:
         path = R6 / f"corpus-{item['name']}-{side}.md"
-        raw = path.read_text(encoding="utf-8", newline="")
+        raw = read_untranslated(path)
         doc = grammar.parse_markdown(raw, grammar.CARD)
         got = canon.build_hash(doc.head, doc.scope(), frozenset(item.get("gated_x", [])))
         want = doc.history[0]["build"]
@@ -46,7 +75,7 @@ def test_fixture_files_emit_fixed_point(corpus: list[dict[str, Any]], side: str)
     failures = []
     for item in corpus:
         path = R6 / f"corpus-{item['name']}-{side}.md"
-        raw = path.read_text(encoding="utf-8", newline="")
+        raw = read_untranslated(path)
         if "\r\n" in raw and raw.count("\r\n") != raw.count("\n"):
             continue
         doc = grammar.parse_markdown(raw, grammar.CARD)
@@ -57,7 +86,7 @@ def test_fixture_files_emit_fixed_point(corpus: list[dict[str, Any]], side: str)
 
 def test_file_level_equalities() -> None:
     """A TOML comment, an Updates append and CRLF never move the build hash (5.3 corpus minimum)."""
-    raw = (R6 / "corpus-key-order-a.md").read_text(encoding="utf-8", newline="")
+    raw = read_untranslated(R6 / "corpus-key-order-a.md")
     base = grammar.parse_markdown(raw, grammar.CARD)
     h0 = canon.build_hash(base.head, base.scope())
     with_comment = grammar.parse_markdown(raw.replace("schema = 1", "schema = 1 # a comment", 1), grammar.CARD)

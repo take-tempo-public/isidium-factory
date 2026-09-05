@@ -1,43 +1,87 @@
-# The code gate (K8, ruled Q13 2026-09-03: "ci.yml in K8"): the green bar every chunk already runs by hand — the
-# suite, `mypy --strict` over packages/, `ruff check`, `ruff format --check` — as a REQUIRED status check, so nothing
+# The code gate (K8, ruled Q13 2026-09-03): the green bar every chunk already runs by hand — the suite,
+# `mypy --strict` over packages/, `ruff check`, `ruff format --check` — as a REQUIRED status check, so nothing
 # reaches `main` gated by less than it. Same idiom as identity-sweep: a property enforced by a check.
 #
-# **Unpinned on purpose, and K5 owns the fix**: K5 replaces the install below with the locked toolchain
-# (`uv sync --locked`, hashes) and pins the actions by digest. Until then this file is the belt without the lock,
-# and it says so rather than pretending.
+# **Locked as of K5.** The three `pip install` lines this file shipped with are gone: `uv sync --locked` installs the
+# exact versions in `uv.lock`, by hash, and **fails rather than resolves** when the lock and `pyproject.toml`
+# disagree — which is what makes the lock a fact about this repository rather than a snapshot of one machine's
+# afternoon. Every action is pinned to a commit; the trailing comment is the tag that commit carried when it was
+# resolved (2026-09-04), and Renovate keeps both honest.
+#
+# **Two Pythons, ruled by the owner 2026-09-04.** The package declares `>=3.12` and the container ships 3.12, but
+# until this file the suite had only ever run on 3.13. Both ends of the declared range now run: the floor is tested
+# because it is what ships, the ceiling because it is what this workstation has.
 name: ci
 on:
   push:
     branches: [main]
   pull_request:
+  # **The whole file runs on this schedule, and that is deliberate** [K5, 2026-09-04]. A pull-request trigger
+  # only ever asks about code someone is changing, but an advisory published against a version already on
+  # `main` arrives with no pull request attached -- so without this the `advisories` job below could never
+  # see the case it exists for. Letting `suite` and `green-bar` run daily beside it is not a cost worth
+  # avoiding: it is a standing proof that `main` still passes on a runner this repository does not control,
+  # which is the one kind of drift a per-change check cannot see.
+  schedule:
+    - cron: "17 6 * * *" # an odd minute on purpose: the top of the hour is the queue everyone else picked
 permissions: {}
 jobs:
-  green-bar:
+  suite:
+    # The matrix legs. They are deliberately NOT the required check — see `green-bar` below.
+    strategy:
+      fail-fast: false # a 3.12-only failure and a 3.13-only failure are different findings; show both
+      matrix:
+        python-version: ["3.12", "3.13"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # K5 pins the toolchain; this workflow predates it on purpose
-      - uses: actions/setup-python@v5 # likewise
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          # 3.13, not the container's 3.12 — measured on this workflow's first run (2026-09-03, PR #1): the suite
-          # fails on 3.12 with `Path.read_text() got an unexpected keyword argument 'newline'` (3.13+) in
-          # tests/conformance/test_corpus.py, so 3.13 is the only version the suite has ever passed on, while the
-          # package declares >=3.12 and the image ships 3.12. That gap is recorded for K5, which owns the pin;
-          # until it is reconciled the container's runtime is exercised by the live run, not by this check.
-          python-version: "3.13"
-      - name: install
-        run: |
-          set -eu
-          python -m pip install --quiet --upgrade pip
-          # the store first: the factory package names `isidium-store` as a dependency, and this is where it comes from
-          python -m pip install --quiet "./packages/isidium-store[server,telemetry]"
-          python -m pip install --quiet ./packages/isidium-factory
-          python -m pip install --quiet pytest pytest-xdist mypy ruff
+          # uv itself is a version too, and an unpinned resolver is an unpinned build.
+          version: "0.12.9"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: install from the lock, or fail
+        # --locked is the assertion: it does not update the lock, it refuses when the lock is stale.
+        run: uv sync --locked --all-packages --all-extras
       - name: the suite
-        run: python -m pytest tests -q -n auto --dist loadfile
+        # --no-sync: the environment was just built from the lock and must not be quietly amended by a run.
+        run: uv run --no-sync python -m pytest tests -q -n auto --dist loadfile
       - name: mypy --strict over packages/
-        run: python -m mypy packages/isidium-store/src packages/isidium-factory/src
+        run: uv run --no-sync python -m mypy packages/isidium-store/src packages/isidium-factory/src
       - name: ruff
         run: |
           set -eu
-          python -m ruff check packages tests tools
-          python -m ruff format --check packages tests tools
+          uv run --no-sync python -m ruff check packages tests tools
+          uv run --no-sync python -m ruff format --check packages tests tools
+
+  green-bar:
+    # **The one required-check name** (ruleset 22217228), and an aggregator on purpose: a matrix job's checks are
+    # named `suite (3.12)`, `suite (3.13)`, so adding or dropping a Python version would otherwise mean editing a
+    # branch ruleset in another system to match — a coupling that is invisible from this file and breaks silently,
+    # by leaving a required check that nothing ever reports.
+    needs: [suite]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: every matrix leg passed
+        # `always()` above means this step runs even when `suite` failed, was cancelled or was skipped — so it must
+        # assert success positively. A gate that passes because nothing ran is the defect this project names as
+        # passing on silence.
+        run: |
+          set -eu
+          echo "suite: ${{ needs.suite.result }}"
+          test "${{ needs.suite.result }}" = "success"
+
+  advisories:
+    # **Reports; does not gate** — K5's done-when says "the OSV job runs and reports", and it is taken at that
+    # amplitude. Promoting it to a required check would make api.osv.dev's availability a merge blocker, which is a
+    # different decision and the owner's. The schedule is the half a pull-request trigger cannot cover: an advisory
+    # published against a version already on `main` is news nobody asked for.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: every locked version, asked of OSV in one call
+        # Standard library only, so no install step and nothing this scan could itself have pulled in.
+        run: python3 tools/osv_scan.py --lock uv.lock

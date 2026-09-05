@@ -7,14 +7,36 @@
 # socket permission to be the boundary between them, and the entrypoint `exec`s the store as PID 1.
 #
 # The image holds python, git and the store. Nothing else.
+#
+# **Both bases are pinned by digest** (K5, ruling 7bg.5). The tag stays beside the digest because a tag is readable
+# and a digest is not, but it is the digest that is fetched: a tag is a moving name and `python:3.12-slim` is
+# rebuilt weekly, so an unpinned base means two builds of the same commit are two different images. The digest is
+# the **multi-arch index**, not one platform's manifest, so the same line builds on amd64 and arm64. Resolved
+# 2026-09-04 from registry-1.docker.io; Renovate proposes the bump, and a bump here is a rebuild and a restart of
+# every tenant's store, which is why renovate.json refuses to group it with anything.
 
-FROM docker.io/library/python:3.12-slim AS build
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS build
+# uv builds the wheel and writes the hash-pinned requirements the runtime stage installs from. It is copied
+# in as a single static binary from its own image, digest-pinned like every other reference in this file, and
+# it never reaches the runtime stage — the shipped image gains nothing from this line.
+COPY --from=ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8c9193f7014ed71479ee795ff /uv /usr/local/bin/uv
 WORKDIR /src
-COPY packages/isidium-store /src/packages/isidium-store
-RUN python -m pip install --no-cache-dir --upgrade pip build \
- && python -m build --wheel --outdir /wheels /src/packages/isidium-store
+# The whole workspace, because one lock covers it: `uv.lock` resolves `isidium-store` in the company of the
+# sibling it shares a namespace with, so exporting one member's dependencies means reading the manifest both
+# are in. None of this stage survives into the image.
+COPY pyproject.toml uv.lock /src/
+COPY packages /src/packages
+# **The export is the lock, narrowed** [K5, 2026-09-04]: the runtime dependencies of `isidium-store` with both
+# extras, no dev group and no workspace member (the wheel below is the member), every version `==` and every
+# artifact carrying its sha256. `--locked` refuses a lock that no longer matches `pyproject.toml`, so a
+# drifted manifest fails the image build instead of shipping a resolution nobody recorded. The export runs
+# **here, inside the target platform**, so the universal lock's markers are evaluated by the same OS and the
+# same Python that will install them.
+RUN uv export --locked --no-dev --no-emit-workspace --package isidium-store \
+      --extra server --extra telemetry --format requirements-txt -o /wheels/requirements.txt \
+ && uv build --wheel --package isidium-store --out-dir /wheels
 
-FROM docker.io/library/python:3.12-slim
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 # git is the store's own tool: it holds the tenant's partial bare clone and commits governed writes to `main`.
 # **`openssh-client` is what a deploy key needs** (K8): a forge's deploy key is an SSH key, and an origin of the form
 # `git@forge:owner/repo.git` can be neither cloned nor pushed without a client. The image before this line could
@@ -35,7 +57,16 @@ COPY --from=build /wheels /wheels
 # egress stays the deployment's decision, taken in `compose.yaml`, not the image's. What being present buys is that
 # the first start can be made diagnosable with an environment variable instead of a rebuild, which is the whole point
 # of instrumenting before the container stands up. Measured cost of the extra in this image: see deploy/README.md.
-RUN python -m pip install --no-cache-dir "$(printf '%s' /wheels/isidium_store-*.whl)[server,telemetry]" \
+#
+# **Two installs, and the order is the point** [K5, 2026-09-04]. This was one `pip install` of the wheel with
+# its extras, which resolved pydantic, cryptography, httpx, typer and the OpenTelemetry packages against PyPI
+# *at build time* — so the lock this repository checks in CI stopped at the container door, and the artifact
+# that actually runs was the one place nothing was pinned. The dependencies now come from the exported lock
+# under `--require-hashes`, which makes pip refuse anything whose bytes do not match, and the store's own
+# wheel goes in `--no-deps` because everything it needs is already present. `--no-deps` is safe *only* in
+# that order, and only because the line above it cannot silently resolve anything.
+RUN python -m pip install --no-cache-dir --require-hashes -r /wheels/requirements.txt \
+ && python -m pip install --no-cache-dir --no-deps "$(printf '%s' /wheels/isidium_store-*.whl)" \
  && rm -rf /wheels
 
 # The store runs as its own unprivileged user — the container is the identity boundary (03 §1.3).

@@ -1,0 +1,33 @@
+# What never reaches the build (K5, 2026-09-04). Two reasons, and the second is the important one.
+#
+# **Speed.** The context is the repository root (compose.yaml: `context: ..`), so without this file every build
+# uploads `.venv/` and the caches — hundreds of megabytes of things the image rebuilds from the lock anyway.
+#
+# **The deployment's private material.** `deploy/README.md` has the operator write the CA key, the store's signing
+# key, the registration and the deploy key into `deploy/` itself, and `.gitignore` keeps them out of git. Nothing
+# kept them out of the *build context*, which is uploaded whole to whatever builds the image. They are not COPYed
+# into any layer, so this is not a leak that shipped — but a private key that need not travel should not travel.
+# The three files the image genuinely needs from `deploy/` (entrypoint.sh, healthcheck.py, known_hosts) are named
+# by the Containerfile and are not excluded here.
+.git/
+.venv/
+.venv*/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.mutation-in-flight.json
+
+# Not code: the record, the sealed review outputs, and the tenant's governed root.
+docs/
+review-artifacts/
+
+# The deployment's private material — see above.
+deploy/tls/
+deploy/ssh/
+deploy/registration.json
+deploy/signer.key.pem
+deploy/.env
+.isidium/

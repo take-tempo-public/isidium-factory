@@ -1,0 +1,98 @@
+# K5's mutations (2026-09-04) -- dependency determinism: the lock, the scan, the update PRs.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test, and it is what a
+# later edit to `tools/osv_scan.py` must be re-run against. Run one at a time, in the FOREGROUND -- a background
+# batch is killed around ten minutes and leaves the file mutated (`--restore` repairs it).
+#
+#   python tools/mutate.py tools/mutations/k5.toml M1
+#
+# **What this spec can and cannot see, said out loud (the K2 rule).** The suite sees the whole of the scanner's
+# logic, because OSV is a double in every test: the batching, the positional read, the pagination, the control and
+# every refusal path. It cannot see four things, and all four were demonstrated live instead, recorded in the
+# handoff:
+#
+#   1. That `uv sync --locked` refuses a stale lock. That is `uv`'s assertion, not this repository's code; it was
+#      run against a deliberately-drifted `pyproject.toml` and exited 1 with "The lockfile at `uv.lock` needs to be
+#      updated, but `--locked` was provided", then exited 0 once restored.
+#   2. That the real OSV endpoint answers the shape the doubles imitate. Proven by running the scanner for real:
+#      it found CVE-2025-71176 against the lock's first resolution of pytest (8.4.2) and reported clean after the
+#      floor moved to 9.0.3 -- the same code, one variable changed.
+#   3. That the image installs from the lock under `--require-hashes`. A workflow and a Containerfile are not
+#      reachable from pytest; the image was built and its installed versions compared with the lock.
+#   4. That `green-bar` remains the required check's name. That is a fact about ruleset 22217228 at the forge.
+#
+# **M8 SURVIVED its first run, and that is the most useful thing in this spec.** The question it asks is narrow:
+# is `read_bytes().decode()` actually equivalent to the 3.13-only `read_text(newline="")` it replaced, for
+# fixtures whose whole point is their line endings? This header used to answer *yes, and the tests would catch
+# it if it changed*. They would not. Putting `read_text` back translated every CRLF fixture into LF and the
+# entire suite still passed, for three separate reasons and not one:
+#
+#   1. `test_fixture_files_reproduce_oracle_build_hash` cannot see it **by design** -- CRLF does not move a
+#      build hash, which `test_file_level_equalities` asserts on purpose (03 5.3's corpus minimum).
+#   2. `test_fixture_files_emit_fixed_point` skips *mixed* files, and `corpus-crlf-vs-lf-b.md` is the only CRLF
+#      fixture there is. The mutation removes the very mixedness that triggers the skip, so the file stops
+#      being skipped and then passes, because a uniformly-LF file is a fixed point too.
+#   3. `test_file_level_equalities` reads an **all-LF** fixture and builds its CRLF itself with `.replace`, so
+#      it never depended on the reader preserving anything.
+#
+# `test_the_reader_hands_back_the_bytes_the_fixture_actually_holds` was written because of this run, and M8 now
+# dies to it alone. It asserts the fixture still holds CRLF **on disk** before asserting anything about the
+# read, so it cannot one day pass by proving nothing. The K9 handoff said a survived mutation is usually a
+# missing test rather than a missing property; this is the third round running where that held.
+
+[[mutation]]
+id = "M1"
+label = "the control check goes -- a known-vulnerable version coming back clean is accepted"
+file = "tools/osv_scan.py"
+find = "    if CONTROL_ADVISORY not in control_hits:"
+replace = "    if False:  # mutated: a clean answer from the control is good enough"
+
+[[mutation]]
+id = "M2"
+label = "the positional guard goes -- a short answer is zipped against the queries anyway"
+file = "tools/osv_scan.py"
+find = "    if len(results) != len(queries):"
+replace = "    if False:  # mutated: however many results came back, read them positionally"
+
+[[mutation]]
+id = "M3"
+label = "pagination stops at the first page -- advisories past it are silently dropped"
+file = "tools/osv_scan.py"
+find = "        token = result.get(\"next_page_token\")"
+replace = "        token = None  # mutated: only the first page is ever read"
+
+[[mutation]]
+id = "M4"
+label = "an empty lock reports clean instead of refusing"
+file = "tools/osv_scan.py"
+find = "    if not pairs:"
+replace = "    if False:  # mutated: a lock with nothing in it is treated as a clean one"
+
+[[mutation]]
+id = "M5"
+label = "the registry filter goes -- OSV is asked about workspace members it has never heard of"
+file = "tools/osv_scan.py"
+find = "        if \"registry\" not in pkg.get(\"source\", {}):"
+replace = "        if False:  # mutated: every package in the lock is queried, source or not"
+
+[[mutation]]
+id = "M6"
+label = "the control is counted as a finding -- the gate is red forever and real advisories arrive as noise"
+file = "tools/osv_scan.py"
+find = "    findings = [(name, version, ids) for (name, version), ids in zip(pairs, locked_hits, strict=True) if ids]"
+replace = "    findings = [(n, v, i) for (n, v), i in zip([*pairs, control], per_pair, strict=True) if i]  # mutated"
+
+[[mutation]]
+id = "M7"
+label = "a scan that could not run reports clean instead of refusing"
+file = "tools/osv_scan.py"
+find = """        print(f"OSV could not be queried, so nothing was proven: {exc}", file=sys.stderr)
+        return 2"""
+replace = "        return 0  # mutated: an unreachable OSV is as good as a clean one"
+
+[[mutation]]
+id = "M8"
+label = "the corpus reader translates newlines again -- a CRLF fixture arrives as LF"
+file = "tests/conformance/test_corpus.py"
+find = "    return path.read_bytes().decode(\"utf-8\")"
+replace = "    return path.read_text(encoding=\"utf-8\")  # mutated: universal newlines are back"

@@ -25,10 +25,20 @@ AGPL-3.0-or-later — see `LICENSE`. Both distributions declare it.
 
 ## Develop
 
+The dependencies are locked with [uv](https://docs.astral.sh/uv/): `uv.lock` pins every version by hash, and
+`--locked` is an assertion rather than a resolution — it refuses a lock that no longer matches `pyproject.toml`
+instead of quietly updating one. CI runs the same four commands, on 3.12 and on 3.13.
+
 ```
-pip install -e packages/isidium-store -e packages/isidium-factory   # or run from source: pytest uses pythonpath
-python -m pytest
-ruff check . && ruff format --check . && mypy packages
+uv sync --locked --all-packages --all-extras
+uv run python -m pytest tests -q
+uv run python -m ruff check packages tests tools
+uv run python -m ruff format --check packages tests tools
+uv run python -m mypy packages/isidium-store/src packages/isidium-factory/src
 ```
 
-Python ≥ 3.12. Code is LF; the design docs are CRLF; `.gitattributes` preserves both.
+To move a version: edit `pyproject.toml`, run `uv lock`, commit the lock with the change. `python tools/osv_scan.py`
+asks OSV about every version in the lock, in one call. Upstream bumps arrive as pull requests (`renovate.json`).
+
+**Python 3.12 and 3.13.** 3.12 is the floor the distributions declare and the container ships; 3.13 is tested
+beside it, and both are required. Code is LF; the design docs are CRLF; `.gitattributes` preserves both.

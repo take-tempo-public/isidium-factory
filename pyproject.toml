@@ -1,6 +1,33 @@
 # Root: tooling only. The distributions live under packages/ (isidium-store, isidium-factory).
 # Code is LF; the design docs under docs/ are CRLF; .gitattributes keeps bytes as-is either way.
 
+# ---- The lock (K5, ruling 7bg.5: "a deterministic way of tracking all dependencies") ----
+#
+# The root is a **virtual** workspace root: it ships no distribution of its own, it exists so that one `uv.lock`
+# covers both packages and the tools that check them. `uv sync --locked` is what CI runs, and it fails rather than
+# resolves when this file and the lock disagree — that is the whole point.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+# `isidium-factory` depends on `isidium-store` by name; this says the name resolves to the sibling in this tree and
+# never to whatever PyPI happens to hold. Declared at the root because a workspace member inherits it.
+[tool.uv.sources]
+isidium-store = { workspace = true }
+
+# The green bar's own tools, locked with everything else. They are a dependency group and not an extra on purpose:
+# nobody installing the store should get pytest, and PEP 735 groups are never part of a published wheel.
+[dependency-groups]
+dev = [
+  # **>= 9.0.3 is a floor, not a preference** [K5, 2026-09-04]: CVE-2025-71176 is pytest's tmpdir handling, fixed in
+  # 9.0.3, and it was the first thing tools/osv_scan.py found against this lock's own first resolution (8.4.2). The
+  # same shape as `[server]`'s `h11>=0.16` floor, and found by the gate this chunk exists to build rather than by
+  # reading an advisory feed.
+  "pytest>=9.0.3,<10",
+  "pytest-xdist>=3.6,<4",
+  "mypy>=1.11,<2",
+  "ruff>=0.6,<1",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
