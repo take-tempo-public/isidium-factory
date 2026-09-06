@@ -230,6 +230,16 @@ class Journal:
     def applied(self, seq: int) -> None:
         self.db.execute("DELETE FROM pending WHERE seq=?", (seq,))
 
+    def applied_through(self, seq: int) -> None:
+        """Every pending row up to and including `seq` has reached the remote [K7a, F28].
+
+        The store commits on its own ref in journal order, so a push that lands `HEAD` lands every commit under it —
+        including a write whose own push failed earlier and whose row was left pending for the replay. Clearing only
+        the row just written left that earlier row pending, and the replay at the next restart wrote its bytes over
+        everything that had landed since. One `DELETE … WHERE seq <= ?`, at the one place a push is known to have
+        succeeded."""
+        self.db.execute("DELETE FROM pending WHERE seq<=?", (seq,))
+
     def pending_rows(self) -> list[tuple[int, str, bytes]]:
         return [
             (int(s), str(p), bytes(d))

@@ -111,8 +111,15 @@ def test_a_hand_edit_to_a_history_link_is_tampered(tenant: tuple[Path, Store]) -
     assert m, text
     last = m[-1]
     digest = last.group(1)
-    flipped = ("0" if digest[-1] != "0" else "1") + digest[1:]
-    p.write_text(text[: last.start(1)] + flipped + text[last.end(1) :], encoding="utf-8")
+    # The flip decides on the character it replaces [K7a, F11 — the flake]. It decided on the LAST character and
+    # replaced the FIRST, which is a no-op whenever they disagree the wrong way: one run in sixteen wrote the file
+    # back unchanged, the tool rightly said `ok`, and the record carried "1 in 7", "2 in 17", "1 in 15" for three
+    # chunks as a mechanism nobody had established. The assertion below is the positive discriminator: a hand edit
+    # that edits nothing fails here, loudly, instead of failing the tool's verdict on a coin.
+    flipped = ("0" if digest[0] != "0" else "1") + digest[1:]
+    edited = text[: last.start(1)] + flipped + text[last.end(1) :]
+    assert edited != text, "the hand edit changed nothing"
+    p.write_text(edited, encoding="utf-8")
     rc, out = run(work)
     assert rc == 1, out
     assert re.search(r"^tampered\s+cards/\d+-tripwire\.md", out, re.M), out

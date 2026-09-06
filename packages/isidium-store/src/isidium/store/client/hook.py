@@ -100,8 +100,16 @@ def governed_paths(repo: Path, root: str | None = None) -> tuple[str, list[dict[
 
 
 def staged(repo: Path) -> list[str]:
+    """The staged paths — **both ends of a rename** [K7a, F1]. Git's rename detection is on by default and
+    `--name-only` then prints a rename's destination alone, so `git mv` of a card out of the tracking root was a
+    change to an ungoverned path as far as this predicate could see, and the commit passed. `--no-renames` lists
+    the source as a deletion and the destination as an addition, which is what they are to the store."""
     out = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "-z"], cwd=repo, capture_output=True, check=False, text=True
+        ["git", "diff", "--cached", "--name-only", "--no-renames", "-z"],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+        text=True,
     )
     return [p for p in out.stdout.split("\0") if p]
 

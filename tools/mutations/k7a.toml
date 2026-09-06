@@ -1,0 +1,109 @@
+# K7a's mutations (2026-09-06) -- the gate and the write path's atomicity, from the K7 review round
+# (F1, F2, F28, F3, F17, F4, F5). One mutation per invocation:
+#
+#   python tools/mutate.py tools/mutations/k7a.toml M7
+#
+# Each one puts back the defect the review found, or breaks the seam that replaced it, and names the test that must
+# notice. M1-M3 are the three doors going blind to a rename again. M4-M8 are the write path: the phantom policy
+# entry, the sitting keeping its commit or its bytes, the orphan's row surviving the push that carried it, the
+# write door raising before memory is indexed. M9 is every push failure called a moved remote again. M10 is the
+# registration's stat outside its try. M11/M12 are the two layers of the repair target. M13 is the diverged sync
+# recorded as clean. M14 is a shallow checkout passed instead of refused.
+
+[[mutation]]
+id = "M1"
+label = "the hook reads renames as their destination again -- `git mv` of a card passes the commit"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = "[\"git\", \"diff\", \"--cached\", \"--name-only\", \"--no-renames\", \"-z\"]"
+replace = "[\"git\", \"diff\", \"--cached\", \"--name-only\", \"-z\"]"
+
+[[mutation]]
+id = "M2"
+label = "the pull-request check reads renames as their destination again"
+file = "tools/verify_chain.py"
+find = "[\"git\", \"diff\", \"--name-only\", \"--no-renames\", \"-z\", f\"{diff_base}...HEAD\"]"
+replace = "[\"git\", \"diff\", \"--name-only\", \"-z\", f\"{diff_base}...HEAD\"]"
+
+[[mutation]]
+id = "M3"
+label = "the push-to-main check no longer compares against the parent -- a card that left main is a silence"
+file = "tools/verify_chain.py"
+find = "        rep.governed_removed = _removed_since_parent(repo)"
+replace = "        rep.governed_removed = []"
+
+[[mutation]]
+id = "M4"
+label = "the policy entry joins `self.policy` before the row -- the phantom entry after a refused init (F3)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        policy = [*self.policy, entry]\n"
+replace = "        self.policy.append(entry)\n        policy = self.policy\n"
+
+[[mutation]]
+id = "M5"
+label = "the sitting keeps its commit when the push fails -- the next write carries the rolled-back ratification (F2)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            head = self.repo.head\n            if head is not None:\n                self.repo.undo_commit(head, parent)\n"
+replace = ""
+
+[[mutation]]
+id = "M6"
+label = "the sitting keeps the bytes it moved when the push fails -- `raw`/`_blob` ahead of the journal (F2)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            for p, (raw, blob) in held.items():\n                if raw is None:"
+replace = "            for p, (raw, blob) in {}.items():\n                if raw is None:"
+
+[[mutation]]
+id = "M7"
+label = "only the row just written is cleared -- the orphan's row survives the push that carried it, and the replay regresses main (F28)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        self.journal.applied_through(int(row[\"seq\"]))"
+replace = "        self.journal.applied(int(row[\"seq\"]))"
+
+[[mutation]]
+id = "M8"
+label = "the write door raises before it indexes -- memory stale against a journaled act (F28)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        jrow, sha, blobs, deferred = self._apply(caller, at, {path: data}, f\"{d.act} {path}\")\n        self._index(path, after, data, blobs[path], build if is_card else None)"
+replace = "        jrow, sha, blobs, deferred = self._apply(caller, at, {path: data}, f\"{d.act} {path}\")\n        if deferred is not None:\n            raise deferred\n        self._index(path, after, data, blobs[path], build if is_card else None)"
+
+[[mutation]]
+id = "M9"
+label = "every push failure is a moved remote again (F17)"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "            if any(mark in r.detail for mark in (\"[rejected]\", \"non-fast-forward\", \"fetch first\", \"stale info\")):"
+replace = "            if True:"
+
+[[mutation]]
+id = "M10"
+label = "the registration's stat is outside its try again -- an absent file kills every connection silently (F4)"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "        try:\n            stamp: tuple[int, int, int] | None = _stamp(self._path)\n        except OSError:\n            stamp = None"
+replace = "        stamp: tuple[int, int, int] | None = _stamp(self._path)"
+
+[[mutation]]
+id = "M11"
+label = "the repair target is not checked at the boundary (F5, the store's layer)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            if len(journal) != width or any(c not in \"0123456789abcdef\" for c in journal):"
+replace = "            if False:"
+
+[[mutation]]
+id = "M12"
+label = "`diff-tree` takes the value as an option again (F5, the git layer)"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "            \"diff-tree\", \"--no-commit-id\", \"-r\", \"--root\", \"-m\", \"--first-parent\", \"--end-of-options\", sha"
+replace = "            \"diff-tree\", \"--no-commit-id\", \"-r\", \"--root\", \"-m\", \"--first-parent\", sha"
+
+[[mutation]]
+id = "M13"
+label = "a diverged sync records as a clean fast-forward (F17)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "            sp.set_attribute(telemetry.DIVERGED, not self.repo.fast_forward(tip))"
+replace = "            self.repo.fast_forward(tip)\n            sp.set_attribute(telemetry.DIVERGED, False)"
+
+[[mutation]]
+id = "M14"
+label = "a shallow checkout passes the push-to-main check instead of being refused"
+file = "tools/verify_chain.py"
+find = "        if shallow.stdout.strip() == \"true\":\n            raise Refusal(\"verify.shallow\", \"HEAD^\", \"a shallow checkout cannot compare against the parent\")\n        return []"
+replace = "        return []"

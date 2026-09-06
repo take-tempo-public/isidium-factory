@@ -430,7 +430,11 @@ class Store:
             if moved is not None:
                 telemetry.record_refusal_on(sp, "git.push-rejected")
                 raise Refusal("git.push-rejected", tip[:12], f"a governed path moved on the remote: {moved}")
-            self.repo.fast_forward(tip)
+            # A ref that has diverged — this store holding a commit the remote does not — is left where it is
+            # (`fast_forward` never resets). Since K7a that is a legitimate state: a `write` whose push failed
+            # keeps its commit and its pending row, and the next push carries both. It is recorded on the span
+            # rather than refused, so an operator can see a store that is journaling ahead of its forge (F17).
+            sp.set_attribute(telemetry.DIVERGED, not self.repo.fast_forward(tip))
             telemetry.record_ok()
 
     def _push_or_rebuild(self, changes: dict[str, bytes], author: str, at: str, message: str, sha: str) -> str:
@@ -491,10 +495,23 @@ class Store:
         message: str,
         repairs: str | None = None,
         in_txn: bool = False,
-    ) -> tuple[dict[str, Any], str, dict[str, str]]:
+    ) -> tuple[dict[str, Any], str, dict[str, str], Refusal | None]:
         """Re-read `main` (K9) → journal write-ahead (one row) → files → one commit → one push, or one bounded
         rebuild on a rejected push → the row applied. Opens the tenant's transaction unless the caller already
-        holds it (`ratify`, across the signer's round trip)."""
+        holds it (`ratify`, across the signer's round trip).
+
+        **What a failed push means depends on where the row is, and that decides the fourth value** [K7a, F2 and
+        F28]. On the `write` doors the row is committed in its own transaction *before* the commit and the push, so
+        by the time a push fails the act has happened — 03b §2: *"a half-land — row written, commit never followed —
+        is replayed from the row."* The old code raised there, with `raw` and `_blob` already moved and `docs` not,
+        and the caller's next write then carried the orphan commit onto `main` while the orphan's row stayed pending
+        for a replay that wrote its bytes back over everything since. Now a failed push on a `write` door **keeps
+        the commit and the row, returns normally, and hands the refusal back as the fourth value**: the caller
+        indexes the act into memory (it happened), then raises the refusal to the caller (the contract until Q18
+        is ruled), and the next successful push clears every pending row it carried (`applied_through`). Inside the
+        sitting (`in_txn`) the row is part of the transaction the failure rolls back, so the act did *not* happen:
+        the commit is un-built, `raw` and `_blob` are restored, and the refusal is raised here — the fourth value
+        is never set on that path."""
         # (a): re-read `main` first, so the commit below is built on the tip the remote holds rather than on
         # whatever this container cloned when it started. Placed ahead of the journal row on purpose — an
         # origin this store cannot reach refuses here, before a row is written and before a commit is made,
@@ -524,14 +541,31 @@ class Store:
                     repairs=repairs,
                     pending=dict(files),
                 )
+        held = {p: (self.raw.get(p), self._blob.get(p)) for p in files}  # what the sitting's rollback restores
         for p, d in files.items():
             self.raw[p] = d
             self._blob[p] = blobs[p]
         repo_files = {self.rp(p): d for p, d in files.items()}
+        parent = self.repo.head
         sha = self.repo.commit(repo_files, caller.principal, at, message)
-        sha = self._push_or_rebuild(repo_files, caller.principal, at, message, sha)
-        self.journal.applied(int(row["seq"]))
-        return row, sha, blobs
+        try:
+            sha = self._push_or_rebuild(repo_files, caller.principal, at, message, sha)
+        except Refusal as r:
+            if not in_txn:
+                return row, sha, blobs, r  # journaled: the act happened; `main` lags until the next push (F28)
+            head = self.repo.head
+            if head is not None:
+                self.repo.undo_commit(head, parent)
+            for p, (raw, blob) in held.items():
+                if raw is None:
+                    self.raw.pop(p, None)
+                    self._blob.pop(p, None)
+                else:
+                    self.raw[p] = raw
+                    self._blob[p] = blob if blob is not None else self._blob.get(p, "")
+            raise
+        self.journal.applied_through(int(row["seq"]))
+        return row, sha, blobs, None
 
     def _entry(
         self,
@@ -677,10 +711,12 @@ class Store:
             data = append_history_line(self.raw[path].decode("utf-8"), entry).encode("utf-8")  # the line insertion
         else:
             data = emit_markdown(after, schema).encode("utf-8")
-        jrow, sha, blobs = self._apply(caller, at, {path: data}, f"{d.act} {path}")
+        jrow, sha, blobs, deferred = self._apply(caller, at, {path: data}, f"{d.act} {path}")
         self._index(path, after, data, blobs[path], build if is_card else None)
         if reason:
             self._mark_signed(path, after, blobs[path], seq)
+        if deferred is not None:
+            raise deferred  # after the index: the act is journaled and memory says so (F28); the caller is told
         return WriteResult(path, entry, {"seq": seq, "h": entry["h"]}, int(jrow["seq"]), sha)
 
     @staticmethod
@@ -843,10 +879,13 @@ class Store:
                 "entries_since": [],
             }
             entry["sig"] = self._sign(entry["h"], at, [("config.toml", act, entry["build"], display)])
-            return self._commit_policy(entry, caller, at)[0]
+            wr, _blobs, deferred = self._commit_policy(entry, caller, at)
         except Refusal:
-            self._set_config(previous)
+            self._set_config(previous)  # refused before the row: nothing happened, and the tree says so
             raise
+        if deferred is not None:
+            raise deferred  # journaled, not yet on `main`: the tree and the chain keep the act (F28)
+        return wr
 
     def _commit_policy(
         self,
@@ -855,13 +894,19 @@ class Store:
         at: str,
         extra_files: Mapping[str, bytes] | None = None,
         in_txn: bool = False,
-    ) -> tuple[WriteResult, dict[str, str]]:
-        self.policy.append(entry)
+    ) -> tuple[WriteResult, dict[str, str], Refusal | None]:
+        # **The entry joins `self.policy` after the row is durable, not before** [K7a, F3]. Appended first, a
+        # refusal anywhere in `_apply` — the fetch failing before the row, the sitting's push failing inside its
+        # transaction — left a phantom entry whose `h` the next policy write compared its base against, so `init`
+        # after an unreachable origin answered `write.stale` until a restart.
+        policy = [*self.policy, entry]
         nl = "\r\n" if b"\r\n" in self.raw.get("config.toml", b"") else "\n"
-        data = emit_config(self.config_tree, self.policy, cfg.CONFIG_ORDERS, nl).encode("utf-8")
+        data = emit_config(self.config_tree, policy, cfg.CONFIG_ORDERS, nl).encode("utf-8")
         files = {"config.toml": data, **(extra_files or {})}
-        jrow, sha, blobs = self._apply(caller, at, files, str(entry["act"]), in_txn=in_txn)
-        return WriteResult("config.toml", entry, {"seq": entry["seq"], "h": entry["h"]}, int(jrow["seq"]), sha), blobs
+        jrow, sha, blobs, deferred = self._apply(caller, at, files, str(entry["act"]), in_txn=in_txn)
+        self.policy.append(entry)
+        wr = WriteResult("config.toml", entry, {"seq": entry["seq"], "h": entry["h"]}, int(jrow["seq"]), sha)
+        return wr, blobs, deferred
 
     def bind(self, realm_signer: Signer, key_fpr: str, grant: str, frm: str, until: str | None = None) -> Entry:
         """The realm's act (1.12, 1.15): a `binding` entry in the policy chain, `ref = Binding{...}`, signed
@@ -884,7 +929,9 @@ class Store:
             [("config.toml", "binding", e["build"], {"binding": dict(ref)})],
             self.time_skew(),
         )
-        self._commit_policy(e, realm, at)
+        _wr, _blobs, deferred = self._commit_policy(e, realm, at)
+        if deferred is not None:
+            raise deferred
         return e
 
     # ---- record-slot documents (the inbox) -----------------------------------------------------------------------
@@ -913,8 +960,10 @@ class Store:
         rec.pop("h", None)
         rec["h"] = chain.link(self.inbox[-1]["h"] if self.inbox else chain.genesis("inbox", self.tenant), rec)
         data = self.raw.get(path, b"") + emit_jsonl_line(rec).encode("utf-8")
-        jrow, sha, _blobs = self._apply(caller, at, {path: data}, rec["type"])
+        jrow, sha, _blobs, deferred = self._apply(caller, at, {path: data}, rec["type"])
         self.inbox.append(rec)
+        if deferred is not None:
+            raise deferred
         return WriteResult(path, rec, {"seq": rec["seq"], "h": rec["h"]}, int(jrow["seq"]), sha)
 
     # ---- init (04 §3) --------------------------------------------------------------------------------------------
@@ -1373,7 +1422,7 @@ class Store:
                 e["batch"] = man["seq"]
                 m.after.history = [*m.before.history, e] if m.before else [e]
                 files[m.path] = emit_markdown(m.after, schema).encode("utf-8")
-            wr, blobs = self._commit_policy(man, caller, at, files, in_txn=True)
+            wr, blobs, _never = self._commit_policy(man, caller, at, files, in_txn=True)  # in_txn never defers
         for m, e in zip(members, entries, strict=True):
             self._index(m.path, m.after, files[m.path], blobs[m.path], m.build)
             self._mark_signed(m.path, m.after, blobs[m.path], int(e["seq"]))
@@ -1510,6 +1559,13 @@ class Store:
         self._require(caller, "repair")
         at = self.now()
         if journal is not None:
+            # **A commit is a full hex object id, and nothing else reaches git** [K7a, F5]. The value used to go
+            # to `diff-tree`'s argv as written: `--output=<file>` truncated the file before git refused, and a ref
+            # name was accepted where the design says *commit*. Checked here, at the typed boundary (C-7), against
+            # the repository's own object format; `GitCli` puts `--end-of-options` before it as well.
+            width = 64 if self.repo.object_format == "sha256" else 40
+            if len(journal) != width or any(c not in "0123456789abcdef" for c in journal):
+                raise Refusal("repair.target", "journal", f"a full {width}-character hex commit id")
             touched = self.repo.touched(journal)
             prows = []
             for rp, (b, a) in touched.items():
@@ -1565,8 +1621,10 @@ class Store:
         e["h"] = chain.link(h_k, e)
         e["sig"] = self._sign(str(e["h"]), at, [(history, "repaired", build, {"restart_from": k, "note": note})])
         data = append_history_line(self.raw[p].decode("utf-8"), e).encode("utf-8")
-        jrow, sha, blobs = self._apply(caller, at, {p: data}, "repaired")
+        jrow, sha, blobs, deferred = self._apply(caller, at, {p: data}, "repaired")
         doc.history.append(e)
         self._index(p, doc, data, blobs[p], build)
         self._mark_signed(p, doc, blobs[p], seq)
+        if deferred is not None:
+            raise deferred
         return {"entry": e, "commit": sha, "journal_seq": int(jrow["seq"])}

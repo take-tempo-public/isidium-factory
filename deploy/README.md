@@ -179,9 +179,12 @@ common name matches nothing — `openssl x509 -in <cert> -noout -subject -nameop
 
 **The store re-reads this file** (K6): it checks the file's stamp on every connection and re-parses it when it moved,
 so revoking a caller is deleting their line — the next connection is refused `auth.unknown-client`, with no restart.
-A file that stops parsing — a torn edit, a grant that is not one of the three — **registers nobody until it parses
-again**: the store fails closed rather than keep serving the mapping it last read, because the line just mistyped
-may be the revocation. The reason goes to stderr with the rule id. At start-up the same defect stops the store before
+A file that stops parsing — a torn edit, a grant that is not one of the three — **or that is absent** (deleted, or
+replaced by a rename on a host where the old inode goes away) **registers nobody until it parses again**: the store
+fails closed rather than keep serving the mapping it last read, because the line just mistyped may be the
+revocation. The reason goes to stderr with the rule id, once; `/health` keeps answering, and every caller meets
+`auth.unknown-client` [absence added by K7a, 2026-09-06 — before it, an absent file ended every connection
+silently, the probe's included]. At start-up the same defect stops the store before
 it listens. What the store checks on the certificate itself: it chains to the CA (the handshake), it is inside its
 validity window by the store's own clock, and it carries the `clientAuth` extended key usage — `auth.expired`,
 `auth.not-yet-valid`, `auth.no-client-auth` otherwise, each terse.
@@ -416,6 +419,14 @@ X Pull request … is not mergeable: the base branch policy prohibits the merge.
 Two mechanisms fired on the one hand edit: the diff check (any governed change off `main`), and the grammar (a
 comment after `[history]` — the store's own rule that the history is the last thing in the file). Either alone
 would have blocked the merge.
+
+**A rename is a change to both of its paths** [K7a, 2026-09-06]. Until then the diff check and the hook read
+`git diff --name-only`, which under git's default rename detection lists a rename's destination alone, so
+`git mv` of a card out of the tracking root passed the hook, passed `verify` on the pull request, and passed
+`verify` on `main` — the card left the governed set with every check green. Both doors now read
+`--no-renames` and name the source; and on a push to `main` the check refuses any governed path the parent
+commit had and `HEAD` does not (`removed`), so a disappearance is a verdict rather than a silence. A shallow
+checkout, which cannot see the parent, is refused rather than passed.
 
 **Override, and what there is not.** There is no standing bypass for the owner: `gh`'s hint that `--admin` merges a
 blocked pull request is generic advice for branch protection, and a ruleset exempts nobody who is not in its bypass

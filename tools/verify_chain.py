@@ -78,6 +78,7 @@ class Report:
     root: str
     lines: list[Line] = field(default_factory=list)
     governed_changed: list[str] = field(default_factory=list)
+    governed_removed: list[str] = field(default_factory=list)  # on `main`: governed paths the parent had (K7a)
     ungoverned: int = 0
 
     def count(self, verdict: str) -> int:
@@ -85,7 +86,9 @@ class Report:
 
     @property
     def passed(self) -> bool:
-        return self.count(TAMPERED) == 0 and not self.governed_changed and self.count(OK) > 0
+        return (
+            self.count(TAMPERED) == 0 and not self.governed_changed and not self.governed_removed and self.count(OK) > 0
+        )
 
 
 def doc_schema(registry: Registry, ref: str) -> DocSchema:
@@ -187,16 +190,51 @@ def verify(repo: Path, diff_base: str | None = None) -> Report:
             rep.ungoverned += 1
             continue
         rep.lines.append(_one(p, rel, str(row["schema"]), registry))
+    # **Both ends of a rename, at both doors** [K7a, F1]. `--name-only` under git's default rename detection prints
+    # a rename's destination alone, so `git mv` of a card out of the tracking root was invisible here and in the
+    # hook: it passed the pull request, merged, and passed the push-to-`main` run, and the card was gone from the
+    # governed set with every check green. `--no-renames` lists the source as a deletion and the destination as
+    # an addition — the hook's predicate then names the source.
     if diff_base is not None:
         out = subprocess.run(
-            ["git", "diff", "--name-only", "-z", f"{diff_base}...HEAD"],
+            ["git", "diff", "--name-only", "--no-renames", "-z", f"{diff_base}...HEAD"],
             cwd=repo,
             capture_output=True,
             check=True,
             text=True,
         )
         rep.governed_changed = hook.offending(repo, [p for p in out.stdout.split("\0") if p])
+    else:
+        rep.governed_removed = _removed_since_parent(repo)
     return rep
+
+
+def _removed_since_parent(repo: Path) -> list[str]:
+    """On `main`: every governed path the first parent had and `HEAD` does not — a disappearance is a verdict, not
+    a silence [K7a, F1]. The walk over the root can only see what is there; a card that left the governed set
+    by rename or deletion is caught nowhere else on this branch, because the store never deletes a governed
+    document and the pull request's diff check runs off `main`. A root commit has no parent and nothing to
+    compare; a **shallow** checkout has a parent it cannot see, and that is refused rather than passed — the
+    forge's own workflow fetches full depth, and a pass on a truncated history would be the silence this exists
+    to close."""
+    parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "HEAD^"], cwd=repo, capture_output=True, check=False, text=True
+    )
+    if parent.returncode != 0:
+        shallow = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"], cwd=repo, capture_output=True, check=False, text=True
+        )
+        if shallow.stdout.strip() == "true":
+            raise Refusal("verify.shallow", "HEAD^", "a shallow checkout cannot compare against the parent")
+        return []
+    out = subprocess.run(
+        ["git", "diff", "--name-only", "--no-renames", "--diff-filter=D", "-z", "HEAD^", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return hook.offending(repo, [p for p in out.stdout.split("\0") if p])
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -218,11 +256,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{ln.verdict:9}{ln.path}  [{ln.schema}]  {ln.detail}")
     for p in rep.governed_changed:
         print(f"changed  {p}  — a governed path changed off main; the store is its only writer")
+    for p in rep.governed_removed:
+        print(f"removed  {p}  — a governed path left main; the store never deletes one")
     print(
         f"isidium: {rep.count(OK)} ok, {rep.count(TAMPERED)} tampered, {rep.count(PARSED) + rep.count(SKIPPED)} "
         f"parsed/skipped, {rep.ungoverned} ungoverned files under {rep.root or './'}"
     )
-    if rep.count(OK) == 0 and rep.count(TAMPERED) == 0 and not rep.governed_changed:
+    if rep.count(OK) == 0 and rep.count(TAMPERED) == 0 and not rep.governed_changed and not rep.governed_removed:
         print("isidium: nothing verified — a root with no intact chained document is not a pass")
     return 0 if rep.passed else 1
 
