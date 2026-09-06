@@ -58,6 +58,10 @@ class Repo(Protocol):
     # and returns whether it moved; it is never a reset, so a ref that is not an ancestor of `to` stays where it is.
     def fetch(self) -> str | None: ...
     def fast_forward(self, to: str) -> bool: ...
+    # K7a (F2): the sitting's one commit, un-built when its push fails inside the transaction that rolls its row
+    # back — `update-ref <ref> <parent> <sha>`, the same compare-and-swap `commit` used to build it, run backwards.
+    # Never a reset: it names the commit it removes, and a ref that has moved since loses the swap (`git.ref-moved`).
+    def undo_commit(self, sha: str, parent: str | None) -> None: ...
     def parents(self, sha: str) -> list[str]: ...
     def commit_time(self, sha: str) -> str: ...
     def touched(self, sha: str) -> dict[str, tuple[str | None, str | None]]: ...
@@ -136,6 +140,12 @@ class MemGit:
         """Unreachable through the store, because `fetch` above returns `None`, and refused rather than silently
         implemented so that a future caller finds out here instead of moving a head the double never checked."""
         raise Refusal("git.unsupported", "fast-forward", "the in-memory double has no remote to fast-forward to")
+
+    def undo_commit(self, sha: str, parent: str | None) -> None:
+        if self._head != sha:
+            raise Refusal("git.ref-moved", "undo", f"head is {self._head}, not the commit being un-built")
+        self.commits.pop(sha, None)
+        self._head = parent
 
     def read(self, path: str, sha: str | None = None) -> bytes | None:
         b = self.tree(sha or self._head).get(path)
@@ -413,7 +423,7 @@ class GitCli:
         trees alone, so this holds under the footprint on a clone that has no blob for most of what it lists.
         """
         out: dict[str, tuple[str, str]] = {}
-        for entry in self._git("ls-tree", "-r", "-z", rev).split("\0"):
+        for entry in self._git("ls-tree", "-r", "-z", "--end-of-options", rev).split("\0"):
             if not entry:
                 continue
             meta, path = entry.split("\t", 1)
@@ -468,7 +478,7 @@ class GitCli:
             entry = self._tree().get(path)
             return None if entry is None else entry[1]
         try:
-            return self._git("rev-parse", "--verify", f"{sha}:{path}").strip()
+            return self._git("rev-parse", "--verify", "--end-of-options", f"{sha}:{path}").strip()
         except Refusal:
             return None
 
@@ -656,9 +666,37 @@ class GitCli:
         try:
             self._git("push", "--quiet", self.remote, f"HEAD:{self.branch}")
         except Refusal as r:
-            raise Refusal(
-                "git.push-rejected", f"{self.remote}/{self.branch}", "the remote moved under the store"
-            ) from r
+            # **Two failures, two ids** [K7a, F17]. This used to call every failure of `git push` a moved remote,
+            # which told the caller — and `_push_or_rebuild`, which branches on the id — that a second writer existed
+            # when the origin was merely unreachable. A rejection is git's own word for it (`[rejected]`,
+            # `non-fast-forward`, `fetch first`); anything else is the network, the key or the forge, and stays
+            # `git.failed` with git's words, so the deploy README's diagnosis step has something to diagnose.
+            if any(mark in r.detail for mark in ("[rejected]", "non-fast-forward", "fetch first", "stale info")):
+                raise Refusal(
+                    "git.push-rejected", f"{self.remote}/{self.branch}", "the remote moved under the store"
+                ) from r
+            raise Refusal("git.failed", f"push {self.remote}", r.detail) from r
+
+    def undo_commit(self, sha: str, parent: str | None) -> None:
+        """Un-build the commit `commit` just built — **the sitting's rollback** [K7a, F2].
+
+        `ratify` journals its row inside the transaction it holds across the signer's round trip, so a push that
+        fails inside it rolls the row back; the commit that row would have explained must go with it, or the store
+        is left holding an unpushed commit that no row describes and the next write carries onto `main`. This is
+        `update-ref <ref> <parent> <sha>`: the same third-argument compare-and-swap that built the commit, run the
+        other way, so it can only remove the commit it names. A ref that moved since loses the swap and says so.
+        `write`'s door never calls this: its row is durable before the push, so a failed push there is a deferred
+        landing (`Store._apply`), not a rollback.
+        """
+        ref = f"refs/heads/{self.branch}"
+        try:
+            if parent is None:
+                self._git("update-ref", "-d", ref, sha)
+            else:
+                self._git("update-ref", ref, parent, sha)
+        except Refusal as r:
+            raise Refusal("git.ref-moved", ref, "the ref moved under the store; the commit was not un-built") from r
+        self._tree_cache = None
 
     # ---- re-reading `main` (K9, Q14 (c)) ---------------------------------------------------------------------------
 
@@ -751,16 +789,25 @@ class GitCli:
 
     # ---- the walk (object-level already) -------------------------------------------------------------------------
 
+    # **`--end-of-options` before every revision a caller can name** [K7a, F5]. `repair --journal <value>` reached
+    # `diff-tree`'s argv as written, and `--output=<file>` truncated the file before git noticed it had no tree to
+    # diff; the ledger cursor in the sidecar is a value a file supplies too. The marker makes what follows a
+    # revision and nothing else (git ≥ 2.24; the image ships 2.39) — measured: `--output=zzz` after it is refused
+    # and the file is not created. `Store.repair` refuses a value that is not a full hex id before it gets here;
+    # this is the layer that holds when a caller does not go through `Store`.
     def parents(self, sha: str) -> list[str]:
-        return self._git("rev-list", "--parents", "-n", "1", sha).split()[1:]
+        return self._git("rev-list", "--parents", "-n", "1", "--end-of-options", sha).split()[1:]
 
     def commit_time(self, sha: str) -> str:
-        return self._git("show", "-s", "--format=%cI", sha).strip()
+        return self._git("show", "-s", "--format=%cI", "--end-of-options", sha).strip()
 
     def touched(self, sha: str) -> dict[str, tuple[str | None, str | None]]:
         out: dict[str, tuple[str | None, str | None]] = {}
         zero = "0" * (64 if self.object_format == "sha256" else 40)
-        for ln in self._git("diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", sha).splitlines():
+        lines = self._git(
+            "diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", "--end-of-options", sha
+        ).splitlines()
+        for ln in lines:
             if not ln.startswith(":"):
                 continue
             meta, path = ln.split("\t", 1)
@@ -774,4 +821,4 @@ class GitCli:
 
     def first_parent_walk(self, since: str | None, until: str | None = None) -> list[str]:
         rng = f"{since}..{until or 'HEAD'}" if since else (until or "HEAD")
-        return self._git("rev-list", "--first-parent", "--reverse", rng).split()
+        return self._git("rev-list", "--first-parent", "--reverse", "--end-of-options", rng).split()

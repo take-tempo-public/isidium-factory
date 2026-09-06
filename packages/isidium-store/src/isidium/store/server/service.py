@@ -195,7 +195,15 @@ class Registration:
     def _refresh(self) -> None:
         if self._path is None:
             return
-        stamp = _stamp(self._path)
+        # **The stat is inside the failure arm too** [K7a, F4]. It sat outside it, so a registration that was
+        # deleted or replaced by rename raised `FileNotFoundError` out of `credential()` into the connection
+        # handler's `except OSError` — every connection, `/health` included, died with no counter, no span and no
+        # row. An absent file is the same case as one that will not parse: it names nobody, once, in the record,
+        # and every caller then meets `auth.unknown-client`, which is what `deploy/README.md` promises.
+        try:
+            stamp: tuple[int, int, int] | None = _stamp(self._path)
+        except OSError:
+            stamp = None
         if stamp == self._stamp:
             return
         self._stamp = stamp
@@ -205,7 +213,7 @@ class Registration:
             self.principals = {}
             telemetry.note(
                 "auth.unknown-client",
-                f"the registration at {self._path} no longer parses and names nobody until it does: "
+                f"the registration at {self._path} is absent or no longer parses and names nobody until it does: "
                 f"{type(e).__name__}: {e}",
             )
 

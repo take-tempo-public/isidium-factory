@@ -62,6 +62,10 @@ SYNC_SPAN: Final = "isidium.store.sync"
 # same reason the sync has one: an operator reading a slow stop should see the drain as a phase, not as time missing.
 STOP_SPAN: Final = "isidium.store.stop"
 DRAINED: Final = "isidium.drained"  # on the stop span: whether every connection finished inside the grace
+# K7a (F17): on the fast-forward sync span — the store's own ref was ahead of the remote's tip and stayed where it
+# was. Not a refusal: a write whose push failed leaves exactly this (its row is pending and the next push carries
+# it), but an operator reading a sync that recorded `OK` could not see it, and it is the state F2 grew from.
+DIVERGED: Final = "isidium.diverged"
 
 _tracer = trace.get_tracer(SCOPE)
 _meter = metrics.get_meter(SCOPE)
