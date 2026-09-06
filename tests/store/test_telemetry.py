@@ -125,7 +125,7 @@ def test_the_refusal_counter_moves_for_an_identified_caller(svc: tuple[Service, 
 
 
 def test_a_pre_identification_refusal_carries_no_detail(
-    svc: tuple[Service, Harness], caplog: pytest.LogCaptureFixture
+    svc: tuple[Service, Harness], caplog: pytest.LogCaptureFixture, otel: Telemetry
 ) -> None:
     """C-12 rule 1: **before the caller is identified, a refusal carries its rule id and nothing else.**
 
@@ -133,10 +133,14 @@ def test_a_pre_identification_refusal_carries_no_detail(
     being empty and `detail` not being a key at all are different facts, and only the second one is the ruling. An
     empty string still says "we have a detail for you and it is nothing".
 
-    **The discriminator is that the withheld words still exist.** A store that never had an operator message would
-    pass an absence check too, so each arm also proves the sentence survived, in the log record where C-12 sends it.
-    That is the floor: trimming a response only relocates information if something catches it."""
+    **The discriminator is that the withheld words still exist — and, since K7b, where.** A store that never had an
+    operator message would pass an absence check too, so each arm also proves the sentence survived. The line is
+    the registration [Q19, ruled 2026-09-06]: the words of a refusal a CA-issued peer the registration does not
+    name can drive go on the **span**, bounded, and never into a row — `auth.unknown-client`'s and the route's
+    below. The one exception is the store's own misconfiguration (`auth.no-client-certificate`), which no peer can
+    produce against a `CERT_REQUIRED` listener and an operator with no exporter must still see on stderr."""
     service, _hz = svc
+    otel.clear()
     with caplog.at_level("WARNING", logger=telemetry.SCOPE):
         status, body = call(service, "show", {"target": "queue"}, None)
         assert (status, body) == (401, {"rule": "auth.no-client-certificate"})
@@ -148,8 +152,17 @@ def test_a_pre_identification_refusal_carries_no_detail(
     assert "CERT_REQUIRED" in records and "misconfigured" in records, (
         "the deployment diagnosis was discarded rather than relocated to where the operator is"
     )
-    assert "no registration entry" in records
-    assert "/call/show" in records, "the route the caller asked for reached neither the caller nor the record"
+    assert "no registration entry" not in records and "/call/show" not in records, (
+        "a refusal an unregistered peer can drive wrote its words as a row (Q19)"
+    )
+    spans = otel.spans(telemetry.CALL_SPAN)
+    assert [s.attributes.get(telemetry.RULE) for s in spans] == [
+        "auth.no-client-certificate",
+        "auth.unknown-client",
+        "service.route",
+    ]
+    assert spans[1].attributes[telemetry.DETAIL] == "no registration entry for this certificate"
+    assert spans[2].attributes[telemetry.DETAIL] == "/call/show", "the route reached neither the caller nor the span"
 
 
 def test_a_validation_refusal_still_names_its_field(svc: tuple[Service, Harness]) -> None:

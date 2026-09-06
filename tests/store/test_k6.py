@@ -342,7 +342,9 @@ def test_a_config1_tenant_writes_v1_rows_until_the_policy_act_moves_it(tmp_path:
     path = tmp_path / "journal.sqlite"
     ack = "software-grade signatures are acceptable for this tenant for now"
 
-    v1 = Store("k6mig", repo, Journal(path, "k6mig"), registry_without(tmp_path, "config@2"), clock, signer, root="")
+    v1 = Store(
+        "k6mig", repo, Journal(path, "k6mig"), registry_without(tmp_path, "config@2"), clock, signer, root="docs/work/"
+    )
     v1.init(OWNER, software_key_ack=ack)
     assert v1.config_tree["schema"] == 1 and cfg.journal_schema(v1.eff) == 1
     v1.write(NewCard("before"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER)
@@ -350,7 +352,7 @@ def test_a_config1_tenant_writes_v1_rows_until_the_policy_act_moves_it(tmp_path:
     assert len(old) == 2 and all(set(r) == {"seq", "at", "caller", "paths", "h"} for r in old), old
 
     # the K6 store over the same tenant: config@1 is what the file adopts, so the rows stay journal@1
-    st = Store("k6mig", repo, Journal(path, "k6mig"), REGISTRY, clock, signer, root="")
+    st = Store("k6mig", repo, Journal(path, "k6mig"), REGISTRY, clock, signer, root="docs/work/")
     assert st.config_tree["schema"] == 1 and cfg.journal_schema(st.eff) == 1
     assert st.journal.genesis == chain.genesis("journal", "k6mig", 1)
     service = Service(Api(st), registration(clock), "k6mig")

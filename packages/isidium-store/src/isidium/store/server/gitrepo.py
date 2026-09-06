@@ -20,7 +20,7 @@ import os
 import subprocess
 import tempfile
 import weakref
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
@@ -66,6 +66,17 @@ class Repo(Protocol):
     def commit_time(self, sha: str) -> str: ...
     def touched(self, sha: str) -> dict[str, tuple[str | None, str | None]]: ...
     def first_parent_walk(self, since: str | None, until: str | None = None) -> list[str]: ...
+    # K7b (F8): the first-parent commits after `since` that changed `path`, oldest first, each with the blob it
+    # replaced and the blob it wrote — what `check`'s walk used to assemble from one `touched()` per commit. One
+    # git for the whole history rather than one per commit; the double answers from its dict.
+    def history_of(self, path: str, since: str | None) -> list[tuple[str, str | None, str | None]]: ...
+    # K7b (F8): the merge commits on the first-parent line after `since`, oldest first — `merges_pending`'s
+    # question, answered by one `rev-list` rather than a `rev-list --parents` per commit.
+    def merges_since(self, since: str | None) -> list[str]: ...
+    # K7b (F7): hold these objects locally before they are read — one round trip for all of them rather than one
+    # per object at the first `blob()`. Every oid must have been resolved from a path inside the root (the same
+    # gate `blob()` keeps); returns how many were actually fetched, 0 on a warm clone and on the double.
+    def prefetch(self, oids: Iterable[str]) -> int: ...
     def paths(self) -> list[str]: ...
 
 
@@ -182,6 +193,25 @@ class MemGit:
         parent = self.tree(c.parents[0]) if c.parents else {}
         paths = set(parent) | set(c.tree)
         return {p: (parent.get(p), c.tree.get(p)) for p in sorted(paths) if parent.get(p) != c.tree.get(p)}
+
+    def history_of(self, path: str, since: str | None) -> list[tuple[str, str | None, str | None]]:
+        """From the dict: the same first-parent walk, keeping the commits where `path`'s blob differs from the
+        first parent's — which is exactly the rows `GitCli`'s one `log --raw` prints."""
+        out: list[tuple[str, str | None, str | None]] = []
+        for sha in self.first_parent_walk(since):
+            c = self.commits[sha]
+            before = self.tree(c.parents[0]).get(path) if c.parents else None
+            after = c.tree.get(path)
+            if before != after:
+                out.append((sha, before, after))
+        return out
+
+    def merges_since(self, since: str | None) -> list[str]:
+        return [sha for sha in self.first_parent_walk(since) if len(self.commits[sha].parents) > 1]
+
+    def prefetch(self, oids: Iterable[str]) -> int:
+        """The double holds every blob it ever wrote; there is nothing to fetch and no remote to fetch from."""
+        return 0
 
 
 # ---- git via subprocess ----------------------------------------------------------------------------------------
@@ -501,10 +531,10 @@ class GitCli:
         ordinary git failure, and an agent that reads *"bad file"* learns nothing. The `git` namespace discloses
         tersely (C-12), so the rule id carries the whole meaning, and this one does.
 
-        **Declared limit (C-10):** hydration is per object and lazy — N fetches on a cold clone for N governed
-        paths, none on a warm one. Batching them into a single fetch needs the whole governed set in hand before the
-        first read, which is `store.py`'s to give and not this class's to take; recorded as a finding rather than
-        guessed at here.
+        **This is the per-object fallback since K7b** (F7). `store.py` names the governed set before its first
+        read and hands it to `prefetch`, one round trip for all of it; a blob asked for outside that set — a
+        historical blob `check` reads, a card written after the load — still arrives through here, one fetch each,
+        which is the lazy shape and the right one for a read nobody batched.
         """
         data = self._reader().read(oid)
         if data is None:
@@ -531,6 +561,51 @@ class GitCli:
             check=False,
             env=self._fetch_env,
         )
+
+    def prefetch(self, oids: Iterable[str]) -> int:
+        """Hold these objects locally, in **one** round trip [K7b, F7]. Returns how many were fetched.
+
+        The shipped start-up hydrated the governed set through `_hydrate`, one object at a time: git runs two
+        processes per lazy fetch and the origin answers one round trip per object, so tenant #0's start cost
+        ~1.5 s per governed document over SSH and a tenant with forty of them would have failed its own
+        healthcheck's `start_period`. Measured here on a `file://` origin: 7 objects, one at a time, 3.8 s and 7
+        fetch processes; the batch, 0.7 s and one.
+
+        Two gits, both under the guard. `cat-file --batch-check` names the objects this clone does **not** hold —
+        one spawn for N oids, and `GIT_NO_LAZY_FETCH` is what keeps the check from fetching what it checks. Then one
+        `fetch … --stdin` with the missing ids, which is an *explicit* fetch and runs under the guard too (measured:
+        the guard forbids the lazy fetch of a missing object, not a fetch by name). On stdin, as bytes, with no
+        argument-length ceiling to chunk for; the K7 record's note that `--stdin` refuses on Windows was Python's
+        text-mode `\\n` → `\\r\\n` on the pipe, and git reporting the `\\r` as `?` — not git.
+
+        **The same gate as `blob()`**: every oid must have been resolved from a path inside the root. A batch door
+        that fetched whatever it was handed would be the way a code blob is named and pulled in (Q3), so an oid
+        this instance did not vouch is refused before any git runs, and nothing else in the batch is fetched.
+        """
+        wanted = list(dict.fromkeys(oids))
+        for oid in wanted:
+            if oid not in self._vouched:
+                raise Refusal("git.outside-footprint", oid, "this object was not resolved from a governed path")
+        if not wanted:
+            return 0
+        listing = self._git("cat-file", "--batch-check", data="\n".join(wanted).encode("ascii") + b"\n")
+        missing = [ln.split(" ", 1)[0] for ln in listing.splitlines() if ln.endswith(" missing")]
+        if not missing:
+            return 0
+        try:
+            self._git(
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-write-fetch-head",
+                "--filter=blob:none",
+                "--stdin",
+                self.remote,
+                data="\n".join(missing).encode("ascii") + b"\n",
+            )
+        except Refusal as r:
+            raise Refusal("git.fetch-failed", f"{self.remote} {len(missing)} objects", r.detail) from r
+        return len(missing)
 
     # ---- the write -----------------------------------------------------------------------------------------------
 
@@ -822,3 +897,69 @@ class GitCli:
     def first_parent_walk(self, since: str | None, until: str | None = None) -> list[str]:
         rng = f"{since}..{until or 'HEAD'}" if since else (until or "HEAD")
         return self._git("rev-list", "--first-parent", "--reverse", "--end-of-options", rng).split()
+
+    def merges_since(self, since: str | None) -> list[str]:
+        """One `rev-list` with `--min-parents=2` [K7b, F8], where `merges_pending` ran `rev-list --parents` once per
+        commit on the line — a spawn per merged pull request, forever, inside `show queue`."""
+        rng = f"{since}..HEAD" if since else "HEAD"
+        return self._git("rev-list", "--first-parent", "--reverse", "--min-parents=2", "--end-of-options", rng).split()
+
+    def history_of(self, path: str, since: str | None) -> list[tuple[str, str | None, str | None]]:
+        """One `git log --raw` for the whole history of one path [K7b, F8].
+
+        `check` walked every first-parent commit since the cursor and ran `touched()` — one `diff-tree` spawn — on
+        each, to find the few that changed the card: 26 processes on tenant #0 the day this was written, one more
+        per merged pull request for as long as the tenant lives, on the verb ingest and CI call per card. `log`
+        with a pathspec answers the same question in one process: the commits on the first-parent line that
+        changed the path, each with the blob before and after.
+
+        The flags are the ones `touched()` carries, spelled for `log`: `--first-parent` with
+        `--diff-merges=first-parent` so a merge contributes its diff against the tip it landed on; `--no-abbrev` so
+        the ids are whole; `--reverse` for oldest first, the order the walk has always read; `--end-of-options`
+        before the revision, like every caller-named revision here (K7a, F5). Measured on git 2.53: the sha on its
+        own line, then the raw rows, a blank line between. Runs on a filtered clone under the guard — it reads
+        trees, never blobs.
+
+        **A card renamed away reads as a deletion at its path, and it is the pathspec that makes it one.** `log`
+        detects renames where `diff-tree` does not, but a diff confined to one path holds no second path to pair
+        it with — measured (K7b, one variable at a time): without `--no-renames` and a one-path pathspec the last
+        row is `D`; with the whole root as the pathspec it is `R100` and only `--no-renames` turns it back into
+        `D` + `A`. So the flag changes nothing for this method's shape today (K7b's M8 was an equivalent mutant,
+        recorded in `tools/mutations/k7b.toml`) and is kept for the caller that widens the pathspec: K7a's F1 is
+        the property, and a flag is cheaper than the day someone rediscovers it.
+
+        The blobs it names under the root are vouched, as `touched()` vouches them: `check` reads them back through
+        `blob()`, and a restarted store could not reconcile its own history otherwise.
+        """
+        rng = f"{since}..HEAD" if since else "HEAD"
+        out: list[tuple[str, str | None, str | None]] = []
+        zero = "0" * (64 if self.object_format == "sha256" else 40)
+        sha = ""
+        for ln in self._git(
+            "log",
+            "--first-parent",
+            "--diff-merges=first-parent",
+            "--raw",
+            "--no-abbrev",
+            "--no-renames",
+            "--reverse",
+            "--format=%H",
+            "--end-of-options",
+            rng,
+            "--",
+            path,
+        ).splitlines():
+            if not ln:
+                continue
+            if not ln.startswith(":"):
+                sha = ln.strip()
+                continue
+            meta, changed = ln.split("\t", 1)
+            _m1, _m2, b1, b2, _status = meta[1:].split(" ", 4)
+            if changed != path:
+                continue
+            before, after = (None if b1 == zero else b1), (None if b2 == zero else b2)
+            out.append((sha, before, after))
+            if path.startswith(self.root):
+                self._vouched.update(b for b in (before, after) if b)
+        return out

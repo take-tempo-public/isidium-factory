@@ -36,15 +36,20 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
+import queue
 import signal
 import ssl
-from collections.abc import Mapping
+import threading
+import weakref
+from collections.abc import Callable, Mapping
+from concurrent.futures import Executor, Future
 from dataclasses import dataclass
 from enum import Enum
 from http import HTTPStatus
 from pathlib import Path
 from types import MappingProxyType
-from typing import Final, Protocol
+from typing import Any, Final, Protocol
 
 import h11
 
@@ -233,19 +238,78 @@ def allowance_for(credential: Credential, limits: Limits) -> tuple[str, int]:
     return key, limits.max_per_caller if credential.registered else limits.max_per_probe
 
 
+class Worker(Executor):
+    """**One thread, and every store call runs on it** [K7b, Q15, ruled 2026-09-06: *"One worker thread, now"*].
+
+    Until K7b every verb ran on the event loop's own thread: a write's fetch (1.5 s on tenant #0) stalled every
+    other connection and the healthcheck with it — measured, `/health` answered in 10–30 ms idle and in 2.3 s
+    behind a 3 s call — and a ratify through the `remote-totp` signer, which polls for up to ten minutes for the
+    owner's code, would have held every caller and marked the container unhealthy for the whole sitting. Now the
+    loop keeps accepting, timing out and answering the probe while the one worker runs the call.
+
+    **One thread is the point, not a limit to raise.** The store is one writer by the journal's row lock, written
+    for a single thread and re-read for this change rather than assumed: `Journal.transaction` refuses re-entry
+    with a flag, `Store` keeps its in-memory copy with no lock at all, and the `cat-file --batch` pipe is one
+    process with one stdin. Two workers would need every one of those to grow a lock; one worker needs none, and
+    serialises calls exactly as the loop did — no new concurrency, only a loop that is free while a call runs.
+
+    A plain `concurrent.futures.Executor`, so `loop.run_in_executor` takes it, and **a daemon thread**, which is
+    what a `ThreadPoolExecutor` is not: its workers are joined at interpreter exit, so a call blocked in the signer
+    would hold the process open past K6b's grace and `podman stop` would be back to SIGKILL. A daemon thread is
+    abandoned with the process, which is what "a connection still open when the grace ends is abandoned by the
+    process exit" already meant — the journal's write-ahead makes the cut-off write replayable.
+    """
+
+    def __init__(self) -> None:
+        self._queue: queue.SimpleQueue[tuple[Future[Any], Callable[..., Any], tuple[Any, ...]] | None] = (
+            queue.SimpleQueue()
+        )
+        self.thread = threading.Thread(target=self._run, name="isidium-store-calls", daemon=True)
+        self.thread.start()
+
+    def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future[Any]:
+        if kwargs:
+            raise TypeError("the store's worker takes positional arguments only")
+        fut: Future[Any] = Future()
+        self._queue.put((fut, fn, args))
+        return fut
+
+    def _run(self) -> None:
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            fut, fn, args = item
+            if not fut.set_running_or_notify_cancel():
+                continue
+            try:
+                fut.set_result(fn(*args))
+            except BaseException as e:
+                fut.set_exception(e)
+
+    def shutdown(self, wait: bool = True, *, cancel_futures: bool = False) -> None:
+        self._queue.put(None)
+        if wait:
+            self.thread.join()
+
+
 async def start(
     service: Service, host: str, port: int, context: ssl.SSLContext, limits: Limits = LIMITS
 ) -> asyncio.Server:
     """Bind and start accepting. The caller owns the returned server (the CLI serves forever; a test closes it).
 
     A **plain TCP** listener: the store starts TLS itself inside the handler (Q1), which is what makes a refused
-    handshake observable and what puts the ceiling ahead of the handshake."""
+    handshake observable and what puts the ceiling ahead of the handshake. One `Worker` per listener, ended when
+    the server object goes; it is a daemon thread either way."""
     admission = Admission(limits)
+    worker = Worker()
 
     async def on_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await _connection(service, reader, writer, context, limits, admission)
+        await _connection(service, reader, writer, context, limits, admission, worker)
 
-    return await asyncio.start_server(on_connect, host, port)
+    server = await asyncio.start_server(on_connect, host, port)
+    weakref.finalize(server, worker.shutdown, wait=False)
+    return server
 
 
 async def serve_forever(
@@ -326,6 +390,7 @@ async def _connection(
     context: ssl.SSLContext,
     limits: Limits,
     admission: Admission,
+    worker: Worker,
 ) -> None:
     """One connection, one request, then closed. Nothing raised here may reach the accept loop: a peer that hangs
     up, times out or speaks nonsense ends its own connection and nothing else."""
@@ -350,7 +415,9 @@ async def _connection(
             # No request has been read — refusing at admission is the point — so h11 has nothing to frame and
             # `_respond` writes the answer itself. The peer still gets a status and a rule id (C-5).
             telemetry.CONNECTION_REFUSED.add(1, {telemetry.REASON: _PER_PEER})
-            await _respond(writer, None, Response.refusal(Refusal("service.too-many-connections")), limits)
+            # `Response.admission`, not `.refusal` [K7b, F16]: the line above is this event's counter, and
+            # `payload()` would add a second on `isidium.store.refusal` and set the status of a span not yet open.
+            await _respond(writer, None, Response.admission(Refusal("service.too-many-connections")), limits)
             return
         held = key
         connection = h11.Connection(h11.SERVER, max_incomplete_event_size=limits.max_header_bytes)
@@ -360,7 +427,7 @@ async def _connection(
         # is inside its own allowance, so the work the store is about to spend is worth a span.
         with telemetry.span(telemetry.REQUEST_SPAN) as sp:
             try:
-                response, head = await _one_request(service, reader, connection, limits, credential)
+                response, head = await _one_request(service, reader, connection, limits, credential, worker)
                 sp.set_attribute(_HTTP_STATUS, response.status)
                 await _respond(writer, connection, response, limits, head)
             except (TimeoutError, OSError, h11.ProtocolError):
@@ -385,6 +452,7 @@ async def _one_request(
     connection: h11.Connection,
     limits: Limits,
     credential: Credential,
+    worker: Worker,
 ) -> tuple[Response, bool]:
     """The response, and whether the request was a `HEAD` (which is answered with headers and no body)."""
     body = bytearray()
@@ -447,13 +515,20 @@ async def _one_request(
         return Response.refusal(Refusal("service.malformed", "", "the request is not well-formed HTTP/1.1")), False
     if request is None:  # the peer closed before sending anything
         raise ConnectionResetError
-    return (
-        service.handle(
-            Request(request.method.decode("ascii"), request.target.decode("ascii", "replace"), bytes(body)),
-            credential,
-        ),
-        request.method == b"HEAD",
-    )
+    parsed = Request(request.method.decode("ascii"), request.target.decode("ascii", "replace"), bytes(body))
+    if service.is_liveness(parsed):
+        # The probe is answered on the loop [K7b, Q15]: it reads a constant, and behind the one worker it would
+        # queue behind the very call it exists to report the listener alive during.
+        return service.handle(parsed, credential), request.method == b"HEAD"
+    # The call runs on the one worker thread, **inside this task's context**: `copy_context().run` carries the
+    # OpenTelemetry context across, so the call span nests under the request span opened above and the journal row
+    # reads the same trace (K6, C-9). Without it the worker's span would be a root of its own.
+    context = contextvars.copy_context()
+
+    def call() -> Response:
+        return context.run(service.handle, parsed, credential)
+
+    return await asyncio.get_running_loop().run_in_executor(worker, call), request.method == b"HEAD"
 
 
 def _framing(request: h11.Request, limits: Limits) -> Refusal | None:

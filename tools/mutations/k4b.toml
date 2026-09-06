@@ -38,36 +38,29 @@ replace = "        if rule == \"ref.unresolved\":\n            why = _WHY.get((r
 id = "M4"
 label = "a path that is not in the working tree is refused locally -- existence checked a second way, with the false positive"
 file = "packages/isidium-store/src/isidium/store/client/locus.py"
-find = "        if data is None:\n            continue\n        checked += 1"
-replace = "        if data is None:\n            out.append(Refusal(\"ref.unresolved\", \"refs\", text))\n            continue\n        checked += 1"
+find = "        if locus is None:\n            continue\n        checked += 1"
+replace = "        if locus is None:\n            out.append(Refusal(\"ref.unresolved\", \"refs\", text))\n            continue\n        checked += 1"
 
+# M5 was re-spelled by K7b (F27): the shared function takes a `Locus` now, and the copy the door grows is a copy
+# of the function as it is today — three lookups against the indexed text. Re-run 2026-09-06 after that change.
 [[mutation]]
 id = "M5"
 label = "the door grows its own copy of the check -- byte-for-byte the same today, and free to drift tomorrow; dies ONLY to the substitution test"
 file = "packages/isidium-store/src/isidium/store/client/locus.py"
-find = "        rule = refs_mod.locus_check(ref, data)"
-replace = '''        def _own_copy(ref: refs_mod.Ref, data: bytes) -> str | None:
+find = "        rule = refs_mod.locus_check(ref, locus)"
+replace = '''        def _own_copy(ref: refs_mod.Ref, locus: refs_mod.Locus) -> str | None:
             if ref.kind == "path":
                 return None
-            lines = data.decode("utf-8", "replace").split("\n")
             if ref.kind == "lines":
-                return None if ref.l2 <= len(lines) else "ref.unresolved"
+                return None if ref.l2 <= len(locus.lines) else "ref.unresolved"
             if ref.kind == "anchor":
-                for ln in lines:
-                    m = refs_mod._HEADING.match(ln)
-                    if m and (m.group("explicit") == ref.anchor or refs_mod.github_slug(m.group("text")) == ref.anchor):
-                        return None
-                return "ref.unresolved"
-            hits = 0
-            for ln in lines:
-                m = refs_mod._SYMBOL_DEF.match(ln) or refs_mod._ASSIGN_DEF.match(ln)
-                if m and m.group("name") == ref.symbol:
-                    hits += 1
+                return None if ref.anchor in locus.anchors else "ref.unresolved"
+            hits = locus.symbols.get(ref.symbol, 0)
             if hits == 0:
                 return "ref.unresolved"
             return None if hits == 1 else "ref.ambiguous"
 
-        rule = _own_copy(ref, data)'''
+        rule = _own_copy(ref, locus)'''
 
 [[mutation]]
 id = "M6"
@@ -87,8 +80,8 @@ replace = "    if key != \"refs\" or val:\n        return []"
 id = "M8"
 label = "THE SHARED FUNCTION: a line range is checked by its first line, not its last -- must die to the assembler's test and to the door's"
 file = "packages/isidium-store/src/isidium/store/core/refs.py"
-find = "        return None if ref.l2 <= len(lines) else \"ref.unresolved\""
-replace = "        return None if ref.l1 <= len(lines) else \"ref.unresolved\""
+find = "        return None if ref.l2 <= len(locus.lines) else \"ref.unresolved\""
+replace = "        return None if ref.l1 <= len(locus.lines) else \"ref.unresolved\""
 
 [[mutation]]
 id = "M9"
@@ -108,8 +101,8 @@ replace = "            raise refusal"
 id = "M11"
 label = "`checked` counts every ref, read or not -- a pass that looked at nothing reports that it looked"
 file = "packages/isidium-store/src/isidium/store/client/locus.py"
-find = "        if data is None:\n            continue\n        checked += 1"
-replace = "        checked += 1\n        if data is None:\n            continue"
+find = "        if locus is None:\n            continue\n        checked += 1"
+replace = "        checked += 1\n        if locus is None:\n            continue"
 
 [[mutation]]
 id = "M12"

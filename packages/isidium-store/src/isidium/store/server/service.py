@@ -78,6 +78,20 @@ class Response:
         """
         return cls.json(status_of(r.rule), r.payload())
 
+    @classmethod
+    def unidentified(cls, r: Refusal) -> Response:
+        """A refusal to a peer the registration has not named [K7b, Q19]: counted, the words on the span, no row.
+        The route a stranger asked for and the `auth.*` family come through here; nothing after `caller_of`."""
+        return cls.json(status_of(r.rule), r.unidentified())
+
+    @classmethod
+    def admission(cls, r: Refusal) -> Response:
+        """A refusal at admission [K7b, F16]: the body through the filter and **not** through `payload()`. The event
+        is already counted, on `connection.refused` by the bound that was met; `payload()` would count it a second
+        time on `isidium.store.refusal` — one event, two counters, and a dashboard summing refusals double-counts
+        every admission — and would set the status of a span that is not open yet, which is the invalid no-op."""
+        return cls.json(status_of(r.rule), r.disclosed())
+
 
 @dataclass(frozen=True)
 class Credential:
@@ -304,20 +318,23 @@ class Service:
         K6 adds the fourth and fifth — a certificate outside its window, one without `clientAuth` — built where the
         certificate is read (`_defect`) and raised here."""
         if not credential.present:
-            raise Refusal(
-                "auth.no-client-certificate",
-                "",
-                # This sentence is a **deployment diagnosis** and it does not go to the caller: `auth.*` is terse
-                # (C-12), so it reaches the operator on stderr, where the operator is, via `telemetry.withheld`.
+            # This sentence is a **deployment diagnosis** and it does not go to the caller: `auth.*` is terse
+            # (C-12). It is the one pre-identification refusal that still writes a row [K7b, Q19]: the condition is
+            # the store's own — a listener built without `CERT_REQUIRED` — and no peer can produce it against one
+            # `serve` built, so it is not the peer-driven surface the ruling moves to the span, and an operator
+            # with no exporter must still see it on stderr, once per connection of a store that is broken anyway.
+            diagnosis = (
                 "no client certificate on this connection: the store requires one issued by the CA named in the "
                 "tenant registration, and the TLS handshake gates every byte before it. Reaching this refusal means "
-                "the listener was built without CERT_REQUIRED — the store is misconfigured, not the caller.",
+                "the listener was built without CERT_REQUIRED — the store is misconfigured, not the caller."
             )
+            telemetry.note("auth.no-client-certificate", diagnosis)
+            raise Refusal("auth.no-client-certificate", "", diagnosis)
         if credential.parse_error is not None:
-            # Authored. The parser’s own words never reach the peer; they reach the record here (C-12), which is the
-            # half K1b-ii left for this chunk — carried on the credential, and now landed.
-            telemetry.note("auth.malformed-certificate", credential.parse_error)
-            raise Refusal("auth.malformed-certificate", "", "the client certificate is not a certificate")
+            # Authored. The parser’s own words never reach the peer; since K7b (Q19) they reach the **span**, cut to
+            # the bound, and not the record — a peer holding a certificate this CA issued is not yet a caller, and
+            # a row per attempt is what C-11 forbids. The detail is the diagnosis; `unidentified()` places it.
+            raise Refusal("auth.malformed-certificate", "", credential.parse_error)
         if credential.refusal is not None:
             raise credential.refusal
         if credential.principal is None or credential.grant is None or credential.fingerprint is None:
@@ -326,26 +343,43 @@ class Service:
         # name after that credential is gone should also say how it was digested (the spelling `h` and `build` use).
         return Caller(credential.principal, credential.grant, credential="sha256:" + credential.fingerprint)
 
+    @staticmethod
+    def is_liveness(request: Request) -> bool:
+        """`GET /health` and `HEAD /health` — the probe, answered from a constant and never from the store. Named
+        once here because two layers read it: `handle` below answers it, and `server/http.py` keeps it on the event
+        loop instead of queueing it behind the one call worker [K7b, Q15], which is what makes the healthcheck
+        honest about the listener while a ratify waits on the signer."""
+        return request.method in ("GET", "HEAD") and request.target == "/health"
+
     def handle(self, request: Request, credential: Credential) -> Response:
         """One call, and **one span** — the second of C-11's two phases (`server/http.py` opens the first).
 
         The span's attributes are the journal's own vocabulary (03b §2): the principal is the *subject*, the verb is
         the *action*, the path or card the arguments name is the *resource*. The outcome is the span's status and the
         rule id is an attribute (C-11) — both set by `Refusal.payload()`, which every refusal passes through, so no
-        branch below has to remember to record itself."""
+        branch below has to remember to record itself.
+
+        **Two refusals are answered before a principal is named, and they take the other door** [K7b, Q19, ruled
+        2026-09-06]: a target that is not a call, and a credential `caller_of` will not turn into a caller. Both go
+        through `Response.unidentified` — counted like any refusal, the words on the span cut to a bound, and never a
+        row — because the peer at that point holds a certificate this CA issued and nothing more, which is the
+        healthcheck's class and a leaked probe certificate's, and either can drive these at will."""
         call = request.target[len("/call/") :] if request.target.startswith("/call/") else ""
         with telemetry.span(telemetry.CALL_SPAN, **{telemetry.TENANT: self.tenant, telemetry.ACTION: call}) as sp:
-            if request.method in ("GET", "HEAD") and request.target == "/health":
+            if self.is_liveness(request):
                 # liveness only: the tenant’s name is not published, even to a peer the CA vouched for (the review’s
                 # S8). `HEAD` gets the same status and the same headers and no body — the framing is `_respond`’s.
                 telemetry.record_ok()
                 return Response.json(200, {"ok": True})
             if not request.target.startswith("/call/") or request.method != "POST":
                 # The target is the caller's own string and it does not come back: `service.route` is terse, so the
-                # target reaches the record and not the response (C-12).
-                return Response.refusal(Refusal("service.route", "", request.target))
+                # target reaches the span — bounded — and not the response (C-12), and not a row (Q19).
+                return Response.unidentified(Refusal("service.route", "", request.target))
             try:
                 caller = self.caller_of(credential)
+            except Refusal as r:
+                return Response.unidentified(r)
+            try:
                 sp.set_attribute(telemetry.SUBJECT, caller.principal)
                 sp.set_attribute(telemetry.GRANT, caller.grant)
                 args = json.loads(request.body or b"{}")
@@ -357,10 +391,11 @@ class Service:
                 return Response.json(200, {"result": result})
             except Refusal as r:
                 return Response.refusal(r)
-            except (KeyError, ValueError, TypeError) as e:  # a malformed call is data too
+            except (KeyError, ValueError, TypeError, RecursionError) as e:  # a malformed call is data too
                 # **Authored, then full** (C-12). What went back was `str(e)[:200]` — Python's words, not ours, and
                 # the only responses whose content we did not write. The exception goes to the record; the caller
                 # gets a sentence we wrote, about their own request, which is the half that is theirs.
+                # `RecursionError` is a body nested past the parser's depth [K7b, F12]: the caller's, not a bug.
                 telemetry.note("service.arguments", f"{type(e).__name__}: {e}")
                 return Response.refusal(
                     Refusal("service.arguments", "", "the arguments are not the typed arguments this call takes")

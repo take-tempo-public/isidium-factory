@@ -80,9 +80,10 @@ the store's clone at `32217bd`; after `podman restart` it was at `6b6f3ba`, the 
 would have gone on serving whatever branch it last saw.
 
 **The cost, stated rather than discovered:** a fresh clone is cold, and a filtered clone holds no governed blob
-either, so the first load hydrates the governed set one object at a time — N round trips to the origin at every
-start. It is paid at start-up rather than on a call path. Batching those fetches is a recorded finding against
-`store.py`, not something this file can fix.
+either, so the first load fetches every blob under the tracking root in **one** round trip before it reads
+anything [K7b, 2026-09-06 — until then it hydrated one object at a time, N round trips at every start, and a
+tenant of forty governed documents would have outrun its own `start_period`]. It is paid at start-up rather
+than on a call path, and it no longer grows with the tenant.
 
 The journal and the id counter are **not** derived, and they live in a named volume (`isidium-state-<tenant>`) that
 survives restarts — verified: one journal row before the restart above, one after. A named volume rather than a

@@ -17,10 +17,11 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 
 import typer
 
+from ..core import telemetry
 from ..core.refusal import Refusal
 from . import locus
 from .config import ClientConfig
@@ -45,6 +46,20 @@ def _transport() -> tuple[Transport, ClientConfig, Path]:
     return Transport(cfg, workdir), cfg, workdir
 
 
+def _refuse(r: Refusal) -> NoReturn:
+    """The CLI's one refusal site [K7b, F14]: recorded, printed whole, exit 2.
+
+    **Recorded through `telemetry.record_refusal`, not through `payload()`.** K2b settled that this door prints
+    `str(r)` — a human at their own terminal reads every word — and that is still right for *disclosure*; the
+    *counter* is a separate fact, and four sites that printed and never recorded left `isidium.store.refusal` a lie
+    about its CLI callers by exactly their share. `payload()` would move the counter too, but its filter relocates a
+    terse refusal's words into a WARNING record — which at a terminal means printing them twice. So this calls the
+    recorder the filter calls, once, and prints the words once."""
+    telemetry.record_refusal(r.rule)
+    typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it
+    raise typer.Exit(code=2) from None
+
+
 def _run(name: str, args: Mapping[str, Any], text: bool = False) -> None:
     try:
         cfg, workdir = ClientConfig.find()
@@ -55,8 +70,7 @@ def _run(name: str, args: Mapping[str, Any], text: bool = False) -> None:
         locus.preflight(name, args, workdir, cfg.root)
         _out(Transport(cfg, workdir).call(name, args), text)
     except Refusal as r:
-        typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it (the other three sites already)
-        raise typer.Exit(code=2) from None
+        _refuse(r)
 
 
 def config_write_args(path: Path) -> dict[str, Any]:
@@ -120,8 +134,7 @@ def init(
     try:
         _out(do_init(repo, cfg, {"software_key_ack": ack} if ack else {}))
     except Refusal as r:
-        typer.echo(str(r), err=True)
-        raise typer.Exit(code=2) from None
+        _refuse(r)
 
 
 @app.command()
@@ -185,8 +198,7 @@ def show(
         else:
             _out(result)
     except Refusal as r:
-        typer.echo(str(r), err=True)
-        raise typer.Exit(code=2) from None
+        _refuse(r)
 
 
 @app.command()
@@ -203,8 +215,7 @@ def check(id: Annotated[int, typer.Argument(help="the card id")]) -> None:
         if result["integrity"] or result.get("profile"):
             raise typer.Exit(code=1)
     except Refusal as r:
-        typer.echo(str(r), err=True)
-        raise typer.Exit(code=2) from None
+        _refuse(r)
 
 
 @app.command()

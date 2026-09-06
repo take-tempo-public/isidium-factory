@@ -216,31 +216,66 @@ def _set_dup(rs: list[Refusal], v: Any, path: str) -> None:
         _r(rs, "canon.set-duplicate", path, "a set; duplicates refused")
 
 
-def _check_row_value(rs: list[Refusal], v: Any, row: Mapping[str, Any], path: str) -> bool:
+def _short(v: Any, bound: int = 80) -> str:
+    """A value's repr for a refusal's detail, cut [K7b, F13]: the value is the caller's own — the review sent 900 KB
+    as an enum member — and a detail that echoes it whole sends it back whole and writes it whole into the record."""
+    text = repr(v)
+    return text if len(text) <= bound else text[:bound] + "…"
+
+
+def _check_row_value(rs: list[Refusal], v: Any, row: Mapping[str, Any], path: str, ns: str = "config") -> bool:
     """One value against one schema-document key row: the mechanical members of the Y3 vocabulary. The generic four
-    ids each carry the offending key path (K-5)."""
+    ids each carry the offending key path (K-5). `ns` is the rule ids' namespace — `config` for the policy file,
+    `record` for a record-slot document's rows [K7b, F13], so a caller reads which document refused it.
+
+    **A `range` on a string bounds its length, in code points** [K7b, F13]. It bounded integers and list lengths
+    only, so `inbox@1`'s `title` (max 120) and `reason` (max 500) were declared and never enforced by this pass; no
+    `config@*` string key carries a range (checked, 2026-09-06), so nothing the policy file says changes."""
     t = row.get("type")
     if t in _PY_TYPE and not is_type(v, str(t)):
-        _r(rs, "config.type", path, f"expected {t}, got {type(v).__name__}")
+        _r(rs, f"{ns}.type", path, f"expected {t}, got {type(v).__name__}")
         return False
     if "enum" in row and v not in row["enum"]:
-        _r(rs, "config.enum", path, f"{v!r} not in {row['enum']}")
+        _r(rs, f"{ns}.enum", path, f"{_short(v)} not in {row['enum']}")
     if "pattern" in row and isinstance(v, str) and not re.fullmatch(row["pattern"], v):
-        _r(rs, "config.pattern", path, f"{v!r} does not match {row['pattern']!r}")
+        _r(rs, f"{ns}.pattern", path, f"{_short(v)} does not match {row['pattern']!r}")
     if "range" in row:
         b = row["range"]
-        n = len(v) if isinstance(v, list) else v
+        n = len(v) if isinstance(v, (list, str)) else v
         if isinstance(n, int) and not isinstance(n, bool):
             if "min" in b and n < b["min"]:
-                _r(rs, "config.range", path, f"must be >= {b['min']}, got {n}")
+                _r(rs, f"{ns}.range", path, f"must be >= {b['min']}, got {n}")
             if "max" in b and n > b["max"]:
-                _r(rs, "config.range", path, f"must be <= {b['max']}, got {n}")
+                _r(rs, f"{ns}.range", path, f"must be <= {b['max']}, got {n}")
     so = row.get("subset-of")
     if so and "of" in so and isinstance(v, list):
         for x in v:
             if x not in so["of"]:
-                _r(rs, "config.enum", f"{path}[]", f"{x!r} not in {so['of']}")
+                _r(rs, f"{ns}.enum", f"{path}[]", f"{x!r} not in {so['of']}")
     return True
+
+
+def check_record(rec: Mapping[str, Any], doc: SchemaDoc) -> list[Refusal]:
+    """A record-slot row against the `[[record]]` rows its schema document declares [K7b, F13; deployment record
+    H-5]: a closed key set, and every present key through the same mechanical pass the policy file gets. Which keys
+    a given record *type* requires is the writer's (03b §3, `required_when` ranges over kind/status/shape only), so
+    presence is not judged here — value shape is. `refs` is declared an array; its members are paths, so each must
+    be a string: a list is the one type the Y3 vocabulary does not look inside.
+
+    The K7 review put 900 KB into `kind` through `suggest` and watched it reach `main` in one commit: the schema had
+    said `enum` all along, and nothing read it."""
+    rows = {str(r["name"]): r for r in doc.get("record", [])}
+    rs: list[Refusal] = []
+    for k, v in rec.items():
+        row = rows.get(k)
+        if row is None:
+            _r(rs, "record.unknown-key", k, f"not a key of {doc.get('name')}@{doc.get('version')}")
+            continue
+        if _check_row_value(rs, v, row, k, ns="record") and row.get("type") == "array":
+            for j, x in enumerate(v):
+                if not isinstance(x, str):
+                    _r(rs, "record.type", f"{k}[{j}]", f"expected string, got {type(x).__name__}")
+    return rs
 
 
 def _table_rows(doc: SchemaDoc, name: str) -> Mapping[str, Any]:

@@ -62,7 +62,7 @@ def test_c2_x1_display_is_durable_across_a_restart(tmp_path: Any) -> None:
     repo = MemGit()
     repo.commit(dict(REF_FILES), "seed@example", "2026-08-01T00:00:00Z", "seed the ref targets")
     jpath = tmp_path / "j.sqlite"
-    st = Store("t", repo, Journal(jpath, "t"), Registry.shipped(), clock, signer)
+    st = Store("t", repo, Journal(jpath, "t"), Registry.shipped(), clock, signer, root="docs/work/")
     st.init(OWNER, software_key_ack="ok")
     r = st.write(NewCard("durable"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER)
     cid = r.id
@@ -70,7 +70,7 @@ def test_c2_x1_display_is_durable_across_a_restart(tmp_path: Any) -> None:
     st.ratify([cid], OWNER)
     st.write_set(cid, ['hold.kind="blocked"', "hold.on.owner=true"], PLANNER)
     # a fresh store over the same repo + journal: the last-signed baseline comes from the journal, not memory
-    st2 = Store("t", repo, Journal(jpath, "t"), Registry.shipped(), clock, signer)
+    st2 = Store("t", repo, Journal(jpath, "t"), Registry.shipped(), clock, signer, root="docs/work/")
     doc, head = st2.show(cid)
     after = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
     after.head.pop("hold")
@@ -173,7 +173,7 @@ def test_c7_refs_resolve_at_ratification(hz: Harness) -> None:
     verdicts = st.ratify([gone], PLANNER, dry_run=True)["verdicts"][gone]
     assert [v.split(" @ ")[0] for v in verdicts] == ["ref.unresolved"]
     refuses("ratify.invalid", lambda: st.ratify([gone], OWNER))
-    inside = hz.draft("refs-inside", refs=["cards/0001-x.md"])
+    inside = hz.draft("refs-inside", refs=["docs/work/cards/0001-x.md"])  # a repo path, under the harness's root
     assert st.ratify([inside], PLANNER, dry_run=True)["verdicts"][inside][0].startswith("ref.inside-root")
     # **the store recorded the blob the tree names** — the fingerprint's input, and drift's, is unchanged by any of
     # this, which is the claim Q11 turns on
@@ -199,15 +199,16 @@ def test_c7_the_locus_check_still_catches_what_the_store_no_longer_can(hz: Harne
     The refs are the four the store above accepted. Every one of them is still caught, and `ref.ambiguous` — which
     the store can no longer raise at all — is still raised here.
     """
-    bytes_of = {"src/thing.py": CODE, "docs/notes.md": NOTES}
+    # one `Locus` per file — the text indexed once for every ref that cites it (K7b, F27)
+    locus_of = {"src/thing.py": refs_mod.Locus(CODE), "docs/notes.md": refs_mod.Locus(NOTES)}
     verdicts = [
-        refs_mod.locus_check(refs_mod.Ref.parse(text), bytes_of[text.split(":")[0].split("#")[0]])
+        refs_mod.locus_check(refs_mod.Ref.parse(text), locus_of[text.split(":")[0].split("#")[0]])
         for text in ["src/thing.py:1-99", "docs/notes.md#missing", "src/thing.py::Twice", "src/thing.py::absent"]
     ]
     assert verdicts == ["ref.unresolved", "ref.unresolved", "ref.ambiguous", "ref.unresolved"]
     # and the four the store accepted for real reasons still pass here, so this is not a check that refuses anything
     good = ["src/thing.py", "src/thing.py:1-2", "docs/notes.md#the-anchor-here", "src/thing.py::resolve_me"]
-    assert [refs_mod.locus_check(refs_mod.Ref.parse(t), bytes_of[t.split(":")[0].split("#")[0]]) for t in good] == [
+    assert [refs_mod.locus_check(refs_mod.Ref.parse(t), locus_of[t.split(":")[0].split("#")[0]]) for t in good] == [
         None,
         None,
         None,
@@ -247,7 +248,7 @@ def test_c9_check_runs_the_whole_set_rules(hz: Harness) -> None:
     p = str(st.path_of(a))
     # a second file claiming the same id, committed outside the store
     dup_path = st.card_path(a, "dup-b")
-    st.repo.commit({dup_path: st.raw[p]}, "someone", st.now(), "duplicate id")
+    st.repo.commit({st.rp(dup_path): st.raw[p]}, "someone", st.now(), "duplicate id")
     st.load()  # a CI checkout: the store re-reads the tree
     res = st.check(a)
     assert any(r.startswith("id.unique") for r in res["profile"])
@@ -263,7 +264,7 @@ def test_c10_writes_preserve_the_files_line_endings(hz: Harness) -> None:
     out = emit_markdown(doc, CARD)
     assert "\r\n" in out and out.count("\r\n") == out.count("\n")
     # a hand-committed CRLF card (e.g. checked out by a Windows client): the store keeps CRLF on its next write
-    st.repo.commit({p: crlf.encode("utf-8")}, "someone", st.now(), "crlf checkout")
+    st.repo.commit({st.rp(p): crlf.encode("utf-8")}, "someone", st.now(), "crlf checkout")
     st.load()
     r = st.write_set(cid, ['summary="kept"'], PLANNER)
     data = st.raw[p]

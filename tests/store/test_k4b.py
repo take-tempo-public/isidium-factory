@@ -212,8 +212,9 @@ def test_the_cli_door_and_the_mcp_door_run_the_assemblers_one_function(
     seen: list[bytes] = []
     the_one = refs_mod.locus_check
 
-    def refuse_resolve_me(ref: refs_mod.Ref, data: bytes) -> str | None:
-        seen.append(data)
+    def refuse_resolve_me(ref: refs_mod.Ref, locus: refs_mod.Locus) -> str | None:
+        # the `Locus` is the file's text indexed once (K7b, F27); its lines re-joined are the bytes the door read
+        seen.append("\n".join(locus.lines).encode("utf-8"))
         return "ref.unresolved" if ref.symbol == "resolve_me" else None
 
     monkeypatch.setattr(refs_mod, "locus_check", refuse_resolve_me)

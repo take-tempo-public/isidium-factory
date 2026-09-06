@@ -81,8 +81,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      # The first start clones and then hydrates its governed set one object at a time, so it is slower than a
-      # steady-state start. `start_period` is what keeps that from being reported as unhealthy.
+      # The first start clones and then fetches every blob under the tracking root in one round trip [K7b — it used
+      # to hydrate one object at a time, N round trips], so it is slower than a steady-state start by about one
+      # fetch. `start_period` is what keeps that from being reported as unhealthy.
       start_period: 60s
 
 volumes:

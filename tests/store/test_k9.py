@@ -31,13 +31,14 @@ from pathlib import Path
 
 import pytest
 
+from isidium.store.core import telemetry
 from isidium.store.core.grammar import Document
 from isidium.store.core.refusal import Refusal
 from isidium.store.server import gitrepo
 from isidium.store.server.gitrepo import GitCli, MemGit, blob_id
 from isidium.store.server.store import NewCard, Store
 
-from .conftest import BASE_SCOPE, OWNER, PLANNER, base_head, git, store_on_disk, tenant_checkout
+from .conftest import BASE_SCOPE, OWNER, PLANNER, Telemetry, base_head, git, store_on_disk, tenant_checkout
 
 ROOT = "docs/work/"
 
@@ -248,17 +249,26 @@ def test_a_merge_between_the_fetch_and_the_push_is_rebuilt_once_and_lands(store:
     assert "docs/dev/raced.md" in repo.paths(), "the rebuild reverted the commit it rebuilt onto"
 
 
-def test_a_governed_change_that_arrives_in_the_race_is_refused_and_never_rebuilt(store: Store, tmp_path: Path) -> None:
+def test_a_governed_change_that_arrives_in_the_race_is_not_landed_and_never_rebuilt(
+    store: Store, tmp_path: Path, otel: Telemetry
+) -> None:
     """The same race, with the one thing that must stop it: the commit that landed touched a governed path.
 
     The discriminator is the origin — a rebuild would have put the store's commit on top of the bypass, which is
-    the silent outcome K4's rule exists to prevent — and the rule id, which stays `git.push-rejected` rather than
-    becoming a new id for the same condition seen one step later.
+    the silent outcome K4's rule exists to prevent — and the rule id, `git.push-rejected`, which the operator sees
+    on the unlanded counter rather than a new id for the same condition seen one step later.
+
+    **What the caller gets changed with Q18** [K7b, ruled 2026-09-06]. The row was journaled before the push, so
+    the act happened; the write answers its result with `landed = False` instead of a refusal, memory holds the
+    card, and the store's own ref is left where it was. The condition is then reported where it bites: the *next*
+    write is refused `git.push-rejected` at the sync, before any row, because a governed path moved on the remote —
+    the second-writer condition K4 ruled must be reported, now a standing one an operator has to resolve.
     """
     repo = store.repo
     assert isinstance(repo, GitCli)
     raced: list[str] = []
     original = GitCli.push
+    before = otel.count("isidium.store.write.unlanded", **{telemetry.RULE: "git.push-rejected"})
 
     def push_after_a_bypass(self: GitCli) -> None:
         if not raced:
@@ -267,13 +277,19 @@ def test_a_governed_change_that_arrives_in_the_race_is_refused_and_never_rebuilt
 
     GitCli.push = push_after_a_bypass  # type: ignore[method-assign]
     try:
-        with pytest.raises(Refusal) as ei:
-            draft(store, "raced-by-a-bypass")
+        r = store.write(
+            NewCard("raced-by-a-bypass"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER
+        )
     finally:
         GitCli.push = original  # type: ignore[method-assign]
 
-    assert ei.value.rule == "git.push-rejected"
+    assert r.landed is False and r.id is not None and store.path_of(r.id) == r.path
+    assert otel.count("isidium.store.write.unlanded", **{telemetry.RULE: "git.push-rejected"}) == before + 1
     assert git(tmp_path / "origin.git", "rev-parse", "main").strip() == raced[0], "the store wrote over a bypass"
+    assert repo.head == r.commit, "the store's own commit was rebuilt or dropped"
+    with pytest.raises(Refusal) as ei:
+        draft(store, "after-the-race")
+    assert ei.value.rule == "git.push-rejected" and "0009-raced-bypass" in ei.value.detail
 
 
 def test_the_walk_reaches_every_commit_the_store_is_behind_and_not_only_the_tip(store: Store, tmp_path: Path) -> None:
@@ -305,9 +321,11 @@ def test_a_second_rejection_after_the_rebuild_is_the_refusal_and_not_another_rou
     store's first push *and* before its rebuilt second one, so the rebuild is rejected too. The answer is the
     refusal, not a third attempt.
 
-    The discriminator is the pair: exactly two pushes were attempted, and the caller was refused. A retry loop
-    passes the second half by exhausting itself quietly and then returning as though the write had landed — which
-    is the worse failure, because the journal row is marked applied and `main` never received the commit.
+    The discriminator is the pair: exactly two pushes were attempted, and the caller was told the write did not
+    land [K7b, Q18: the result with `landed = False`, where K9 refused — the row is journaled, so the act happened].
+    A retry loop passes the second half by exhausting itself quietly and then returning as though the write had
+    landed — which is the worse failure, because the journal row is marked applied and `main` never received the
+    commit; here the row stays pending and the counter says so.
     """
     repo = store.repo
     assert isinstance(repo, GitCli)
@@ -323,14 +341,16 @@ def test_a_second_rejection_after_the_rebuild_is_the_refusal_and_not_another_rou
 
     GitCli.push = push_into_a_moving_remote  # type: ignore[method-assign]
     try:
-        with pytest.raises(Refusal) as ei:
-            draft(store, "raced-twice")
+        r = store.write(
+            NewCard("raced-twice"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER
+        )
     finally:
         GitCli.push = original  # type: ignore[method-assign]
 
-    assert ei.value.rule == "git.push-rejected"
+    assert r.landed is False
     assert len(attempts) == 2, f"the store pushed {len(attempts)} times; the rebuild is one round, not a loop"
     assert git(tmp_path / "origin.git", "rev-parse", "main").strip() == landed[-1]
+    assert [s for s, _p, _d in store.journal.pending_rows()] == [r.journal_seq], "the unlanded row is not pending"
 
 
 def test_the_rebuild_refuses_when_the_store_carries_more_than_its_own_one_commit(store: Store, tmp_path: Path) -> None:
@@ -349,10 +369,11 @@ def test_the_rebuild_refuses_when_the_store_carries_more_than_its_own_one_commit
     orphan = quiet.commit({f"{ROOT}cards/0008-unpushed.md": b"# unpushed\n"}, "s@e", store.now(), "never pushed")
     stranger_pushes(tmp_path, "docs/dev/late.md", b"a merge arrives\n")
 
-    with pytest.raises(Refusal) as ei:
-        draft(store, "with-history-in-hand")
-
-    assert ei.value.rule == "git.push-rejected"
+    # journaled, so answered with `landed = False` rather than refused [K7b, Q18]; the bound is what is under test
+    r = store.write(
+        NewCard("with-history-in-hand"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER
+    )
+    assert r.landed is False
     assert orphan in git(repo.gitdir, "rev-list", "HEAD"), "the store dropped an unpushed commit of its own"
 
 
