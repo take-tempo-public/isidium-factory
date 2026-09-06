@@ -5,8 +5,9 @@ and nothing else is guaranteed; every other isidium part is a group that dispatc
     isidium init | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
     isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
 
-Output is JSON by default (agents and scripts read it); `--text` renders the human forms the design pins — the board,
-the queue, a card. A refusal prints its rule id and exits non-zero.
+Output is JSON by default (agents and scripts read it); `--text` renders the board's human form — the board only,
+today: a card and the queue answer JSON until their renderers exist (03 §1.5 pins their forms) [K7c, F23]. A refusal
+prints its rule id and exits non-zero.
 """
 
 from __future__ import annotations
@@ -182,7 +183,13 @@ def show(
     target: Annotated[str, typer.Argument(help="card | board | queue | inbox | schema")] = "board",
     id: Annotated[int, typer.Argument(help="the card id, for `card`")] = 0,
     name: Annotated[str, typer.Option(help="name@version, for `schema`")] = "",
-    text: Annotated[bool, typer.Option("--text", help="render the human form")] = False,
+    text: Annotated[
+        bool,
+        typer.Option(
+            "--text",
+            help="render the board's human form (board only: card and queue answer JSON until their renderers exist)",
+        ),
+    ] = False,
 ) -> None:
     """The one typed read (03 §1.2)."""
     args: dict[str, Any] = {"target": target}

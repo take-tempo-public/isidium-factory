@@ -76,4 +76,5 @@ exclude = ["review-artifacts"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["packages/isidium-store/src", "packages/isidium-factory/src"]
-addopts = "-q"
+# No `addopts = "-q"` [K7c, F21]: every recorded command, CI and `tools/mutate.py` pass `-q` themselves, and a second
+# one here made each of them `-qq`, which drops the `N passed in ...` summary line. One `-q` is the command line's.
