@@ -257,10 +257,16 @@ def test_only_the_root_the_operator_chose_reaches_the_governed_file(open_channel
     `install.init`, which runs over the channel now.
 
     `.isidium/client.toml` is the CLIENT's file and must hold a concrete root — a blank one sends the hook to the
-    repo root, silently (S5). `config.toml` is GOVERNED, and a key written there is the tenant's adopted policy:
-    writing the resolved default into it would put a second copy of `config@1`'s declared value in the tenant's own
-    file, where it would survive a later change to that default. That is C-1's failure mode one layer out. So the
-    operator's choice is captured **before** resolution and only a real choice is passed on.
+    repo root, silently (S5). `config.toml` is GOVERNED, and a key written there is the tenant's adopted policy.
+
+    **What the governed file names is the store's own root, and nothing the client resolved** [K7b, Q16, ruled
+    2026-09-06]. Until K7b the client passed on only a real operator choice and the file stayed silent otherwise,
+    so that no copy of `config@1`'s default reached the tenant's file (C-1 one layer out); the K7 review then moved
+    `root` by one signed policy write and the store accepted it. Now the store writes the root it was started with
+    (`serve --root`) into every tenant it initialises and refuses a tree naming another, so the file's `root` is
+    the store's by construction — and the client's resolved root agrees with it because both are the one value
+    the operator gave the deployment. The client still passes on only a real choice: this test's client sends
+    none, and the file carries the store's.
 
     Paired with the test above, which is what stops this one passing by sending nothing at all.
     """
@@ -269,9 +275,9 @@ def test_only_the_root_the_operator_chose_reaches_the_governed_file(open_channel
     pull(channel.checkout)  # the store writes in its own clone now (K4)
 
     declared = str(Registry.for_checkout(channel.checkout).defaults_of("config@1")["root"])
-    assert "root" not in (channel.checkout / declared / "config.toml").read_text(encoding="utf-8"), (
-        "the tenant's governed file names a root it never chose"
-    )
+    governed = (channel.checkout / declared / "config.toml").read_text(encoding="utf-8")
+    assert f'root = "{channel.store.root}"' in governed, "the tenant's governed file does not name the store's root"
+    assert channel.store.root == declared
     assert f'root = "{declared}"' in (channel.checkout / CLIENT_FILE).read_text(encoding="utf-8")
 
 

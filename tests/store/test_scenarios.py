@@ -45,7 +45,9 @@ def cells(r: Refusal) -> list[str]:
 
 
 def rows_for(hz: Harness) -> Any:
-    return lambda path: hz.st.journal.rows_for(path)
+    # the reconciler hands over REPO paths (`touched()`'s) and the journal keys its rows by store-relative path:
+    # the caller maps between them, which is why the functions take a callable (root non-empty since K7b)
+    return lambda path: hz.st.journal.rows_for(path[len(hz.st.root) :])
 
 
 def test_write_basics(hz: Harness) -> None:
@@ -140,7 +142,7 @@ def test_reratification(hz: Harness) -> None:
     per_commit = []
     for sha in st.repo.first_parent_walk(None):
         for path, (bb, ab) in st.repo.touched(sha).items():
-            if path == p and ab:
+            if p is not None and path == st.rp(p) and ab:  # the double's paths sit under the root since K7b
                 n_after = len(parse_markdown(st.repo.blob(ab).decode(), CARD).history)
                 n_before = len(parse_markdown(st.repo.blob(bb).decode(), CARD).history) if bb else 0
                 per_commit.append(n_after - n_before)
@@ -487,7 +489,7 @@ def test_repair_history(hz: Harness) -> None:
     doc.history[1]["h"] = "sha256:" + "0" * 64
     st.raw[p] = emit_markdown(doc, CARD).encode("utf-8")
     st.docs[p] = doc
-    st.repo.commit({p: st.raw[p]}, "someone", st.now(), "damage outside the store")
+    st.repo.commit({st.rp(p): st.raw[p]}, "someone", st.now(), "damage outside the store")
     assert "tampered" in st.check(cid)["integrity"]
     refuses("write.grant", lambda: st.repair(PLANNER, history=cid, restart_from=1))  # the grant matrix, not a
     # hand-written owner test: `repair` moved onto the seam in K1b-iii, so the rule id is the matrix gate's
@@ -505,12 +507,13 @@ def test_reconcile(hz: Harness) -> None:
     st = hz.st
     cid = IDS["c3"]
     p = str(st.path_of(cid))
+    rp = st.rp(p)  # the double's paths sit under the root since K7b; the journal's rows stay store-relative
     rr = reconcile.reconcile_range(st.repo, None, rows_for(hz), st.is_governed_repo_path)
     unexpl = [(sha, path) for sha, m in rr.items() for path, v in m.items() if v != "explained"]
-    assert all(path == p for _, path in unexpl), unexpl  # the damage commit above is the only one
+    assert all(path == rp for _, path in unexpl), unexpl  # the damage commit above is the only one
     hand = st.raw[p].replace(b"## Scope", b"## Scope\n\nhand-edited")
-    sha = st.repo.commit({p: hand}, "someone", st.now(), "hand edit")
-    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[p] == "unjournaled"
+    sha = st.repo.commit({rp: hand}, "someone", st.now(), "hand edit")
+    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[rp] == "unjournaled"
     refuses("write.grant", lambda: st.repair(PLANNER, journal=sha))
     r = st.repair(OWNER, journal=sha)
     row = r["journal_row"]
@@ -519,13 +522,13 @@ def test_reconcile(hz: Harness) -> None:
     prev = rows[-2]["h"]
     assert chain.link(prev, {k: v for k, v in row.items() if k not in ("h", "sig")}) == row["h"]
     assert chain.link(prev, {k: v for k, v in row.items() if k not in ("h", "sig", "repairs")}) != row["h"]
-    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[p] == "explained"
+    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[rp] == "explained"
     assert st.journal.verify()
     doc, head = st.show(cid)
     prior = Document(copy.deepcopy(doc.head), copy.deepcopy(doc.sections))
     prior.sections["Scope"] = str(prior.sections["Scope"]).replace("hand-edited\n\n", "", 1)
     r2 = st.write(p, prior, head, None, OWNER)
-    assert reconcile.reconcile_commit(st.repo, r2.commit, rows_for(hz), st.is_governed_repo_path)[p] == "explained"
+    assert reconcile.reconcile_commit(st.repo, r2.commit, rows_for(hz), st.is_governed_repo_path)[rp] == "explained"
     doc, head = st.show(cid)
     fake = copy.deepcopy(doc.history[-1])
     fake["seq"] += 1
@@ -537,8 +540,8 @@ def test_reconcile(hz: Harness) -> None:
     from isidium.store.core.grammar import append_history_line
 
     data = append_history_line(st.raw[p].decode(), fake).encode()
-    sha = st.repo.commit({p: data}, OWNER.principal, fake["at"], "hand-written line")
-    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[p] == "unjournaled"
+    sha = st.repo.commit({rp: data}, OWNER.principal, fake["at"], "hand-written line")
+    assert reconcile.reconcile_commit(st.repo, sha, rows_for(hz), st.is_governed_repo_path)[rp] == "unjournaled"
     for r_ in st.journal.rows():
         # journal@2's shape (K6): `schema` inside the content; `credential` only when a channel wrote the row, and
         # this store is driven directly. `test_k6.py` covers the credential and the trace.
@@ -857,7 +860,9 @@ def test_d6_gate_refusals(hz: Harness) -> None:
         }
         fake["h"] = chain.link(doc.history[-1]["h"], fake)
         doc.history.append(fake)
-        st.repo.commit({p: emit_markdown(doc, CARD).encode()}, PLANNER.principal, str(fake["at"]), "outside the store")
+        st.repo.commit(
+            {st.rp(p): emit_markdown(doc, CARD).encode()}, PLANNER.principal, str(fake["at"]), "outside the store"
+        )
         return doc
 
     def gate(cid: int) -> None:
@@ -903,7 +908,7 @@ def test_d6_gate_refusals(hz: Harness) -> None:
     gate(c)
     d = hz.draft("gate-deleted")
     st.ratify([d], OWNER)
-    st.repo.commit({str(st.path_of(d)): None}, "someone", st.now(), "rm")
+    st.repo.commit({st.rp(str(st.path_of(d))): None}, "someone", st.now(), "rm")
     refuses("write.deletion", lambda: derive.derive(st.docs[str(st.path_of(d))], None, None))
     gate(d)
     e = hz.draft("gate-same-day")

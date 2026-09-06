@@ -73,7 +73,13 @@ STATE = REPO / ".mutation-in-flight.json"
 # is the property those tests actually depend on. Plain `-n 8` reports five failures that are the runner's, not the
 # mutation's — which would read as a mutation dying to a test it never touched.
 WORKERS = 8  # the author's workstation has 8 cores; more workers only add interpreter startup, which is slow here.
-PARALLEL = ["-n", str(WORKERS), "--dist", "loadfile"]
+# `--workers` overrides it [K7b, 2026-09-06]: with a gigabyte free the eight-worker suite was killed for memory
+# twice, mid-run, and a killed run is a mutation that proved nothing. Two workers took the whole suite in ~450 s.
+
+
+def parallel(workers: int) -> list[str]:
+    return ["-n", str(workers), "--dist", "loadfile"]
+
 
 FAILED = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
 
@@ -164,7 +170,7 @@ def restorer(m: Mutation, pristine: bytes) -> Callable[[int, FrameType | None], 
     return on_signal
 
 
-def run_suite(serial: bool) -> tuple[int, str]:
+def run_suite(serial: bool, workers: int = WORKERS) -> tuple[int, str]:
     # **Both ends are pinned to UTF-8, and the decode cannot raise** [K5, 2026-09-04]. `text=True` alone
     # decodes the child's pipe with the *locale* codec -- cp1252 on this workstation -- so one character
     # pytest echoes back from a failing test's docstring is enough to kill the reader thread, leave
@@ -181,7 +187,7 @@ def run_suite(serial: bool) -> tuple[int, str]:
     # down into the subprocesses the *suite itself* spawns, and it broke a test in `test_verify_chain.py` that
     # matches on an em dash. A harness that changes the environment of the thing it measures reports the
     # change and not the mutation. It read as a killer for M5 and was this file's doing.
-    argv = [sys.executable, "-m", "pytest", "-q", "--no-header", "-rf", *([] if serial else PARALLEL)]
+    argv = [sys.executable, "-m", "pytest", "-q", "--no-header", "-rf", *([] if serial else parallel(workers))]
     p = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
@@ -197,6 +203,7 @@ def main() -> int:
     ap.add_argument("ids", nargs="*", help="mutation ids to run; default all of them")
     ap.add_argument("--restore", action="store_true", help="repair a tree a killed run left mutated, then stop")
     ap.add_argument("--serial", action="store_true", help="run the suite in one process (slower; for a suspect run)")
+    ap.add_argument("--workers", type=int, default=WORKERS, help=f"pytest-xdist workers (default {WORKERS})")
     args = ap.parse_args()
 
     found = repair()
@@ -221,7 +228,7 @@ def main() -> int:
         previous = [(s, signal.signal(s, on_signal)) for s in (signal.SIGINT, signal.SIGTERM)]
         try:
             m.path.write_bytes(pristine.replace(m.find, m.replace))
-            code, out = run_suite(args.serial)
+            code, out = run_suite(args.serial, args.workers)
         finally:
             release(m, pristine)
             for s, handler in previous:

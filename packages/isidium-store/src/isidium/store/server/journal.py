@@ -67,7 +67,13 @@ Row = dict[str, Any]
 class Journal:
     def __init__(self, path: str | Path, tenant: str) -> None:
         self.tenant = tenant
-        self.db = sqlite3.connect(str(path), isolation_level=None)  # autocommit; explicit BEGIN below
+        # `check_same_thread=False` [K7b, Q15]: the journal is opened by `serve` on the main thread — `Store.load`
+        # replays pending rows there, before the listener exists — and every call after that runs on the store's
+        # one worker thread (`server/http.py`, `Worker`). Python's default check would refuse the second thread
+        # outright; SQLite itself is built serialized and is fine with two threads that never overlap, which these
+        # do not: the main thread's last touch is before the first call is accepted. The row lock (`transaction`
+        # below, `_in_txn`) was written for one thread at a time and that is still exactly what it gets.
+        self.db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)  # autocommit; BEGIN below
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA_SQL)

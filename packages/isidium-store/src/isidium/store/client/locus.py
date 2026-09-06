@@ -144,7 +144,9 @@ def verdicts(refs: Sequence[str], workdir: Path) -> tuple[list[Refusal], int]:
     tell apart on its own."""
     out: list[Refusal] = []
     checked = 0
-    bytes_of: dict[str, bytes | None] = {}  # one read per path per call, however many refs cite it
+    # One read and one `Locus` per path per call, however many refs cite it: the file is decoded once and each
+    # index over it is built once, on first use (F27) — six symbol refs into one module cost one scan, not six.
+    locus_of: dict[str, refs_mod.Locus | None] = {}
     base = workdir.resolve()
     for text in refs:
         try:
@@ -154,13 +156,14 @@ def verdicts(refs: Sequence[str], workdir: Path) -> tuple[list[Refusal], int]:
             continue
         if ref.kind == "path":
             continue
-        if ref.path not in bytes_of:
-            bytes_of[ref.path] = _read_inside(base, ref.path)
-        data = bytes_of[ref.path]
-        if data is None:
+        if ref.path not in locus_of:
+            data = _read_inside(base, ref.path)
+            locus_of[ref.path] = refs_mod.Locus(data) if data is not None else None
+        locus = locus_of[ref.path]
+        if locus is None:
             continue
         checked += 1
-        rule = refs_mod.locus_check(ref, data)
+        rule = refs_mod.locus_check(ref, locus)
         if rule is not None:
             why = _WHY.get((ref.kind, rule))
             out.append(Refusal(rule, "refs", f"{text}: {why}" if why else text))

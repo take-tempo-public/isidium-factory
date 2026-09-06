@@ -66,6 +66,18 @@ DRAINED: Final = "isidium.drained"  # on the stop span: whether every connection
 # was. Not a refusal: a write whose push failed leaves exactly this (its row is pending and the next push carries
 # it), but an operator reading a sync that recorded `OK` could not see it, and it is the state F2 grew from.
 DIVERGED: Final = "isidium.diverged"
+# K7b (Q18, ruled 2026-09-06): on a write's call span — whether the act reached the remote's `main` in this call.
+# `False` is a journaled act whose push failed: memory holds it, the next push carries it, and the caller was told
+# so in the result rather than refused. An operator reading `landed = false` is looking at a store journaling ahead
+# of its forge, which is the state F28 grew from and the one thing the span exists to make visible.
+LANDED: Final = "isidium.landed"
+# K7b (Q19, ruled 2026-09-06): the words a refusal raised **before the caller is identified** would have sent to
+# the record — the route a stranger asked for, the subject of an expired certificate. They go on the span, bounded,
+# and never into a row: a CA-issued peer the registration does not name can drive that refusal at will, and a row
+# per attempt is the denial of service through the logging that C-11 forbids. 256 holds a certificate subject or
+# the head of a request target; the remainder is the peer's own bytes and is cut.
+DETAIL: Final = "isidium.detail"
+DETAIL_BOUND: Final = 256
 
 _tracer = trace.get_tracer(SCOPE)
 _meter = metrics.get_meter(SCOPE)
@@ -96,6 +108,14 @@ REFUSED_CALLS: Final = _meter.create_counter(
     "isidium.store.refusal",
     unit="{call}",
     description="refusals returned to a caller the handshake admitted, by rule id",
+)
+# K7b (Q18): governed writes journaled and indexed whose push did not land on the remote's `main` in the same
+# call — the store is ahead of its forge by that many acts until a push carries them. Keyed on the push failure's
+# own rule id, so a dashboard tells an unreachable origin from a moved remote.
+UNLANDED_WRITES: Final = _meter.create_counter(
+    "isidium.store.write.unlanded",
+    unit="{write}",
+    description="governed writes journaled but not yet on the remote's main, by the push failure's rule id (Q18)",
 )
 
 
@@ -153,14 +173,41 @@ def record_ok() -> None:
     trace.get_current_span().set_status(Status(StatusCode.OK))
 
 
+def detail_on_span(detail: str) -> None:
+    """A pre-identification refusal's words, on the running span and cut at `DETAIL_BOUND` [K7b, Q19]. The one
+    place an unregistered peer's own bytes reach telemetry, and the bound is what makes that acceptable: a span
+    attribute of fixed size per refusal, counted against the peer's admission allowance like the refusal itself."""
+    if detail:
+        trace.get_current_span().set_attribute(DETAIL, detail[:DETAIL_BOUND])
+
+
+def record_landed(landed: bool, rule: str = "", detail: str = "") -> None:
+    """A governed write's landing, on its call span — and, when it did **not** land, on the counter and in the
+    record [K7b, Q18, ruled 2026-09-06].
+
+    `landed = false` is a journaled act whose push failed: the row is durable, memory holds it, the local commit
+    is kept and the next push carries it (K7a, F28) — the caller gets its result and is told `main` lags. What an
+    operator needs is the two things the caller no longer receives: that it happened, as a counter keyed on the
+    push failure's own id (`git.failed` for the network, `git.push-rejected` for a moved remote), and git's words,
+    which go to the record through `note` because they are ours to keep and not the caller's to act on."""
+    trace.get_current_span().set_attribute(LANDED, landed)
+    if not landed:
+        UNLANDED_WRITES.add(1, {RULE: rule})
+        note(rule, f"journaled, not landed: {detail}")
+
+
 def withheld(rule: str, path: str, detail: str) -> None:
     """**The floor under C-12.** The words a refusal does not send stay here, where the operator is.
 
     WARNING rather than DEBUG on purpose: `logging`'s last-resort handler emits WARNING and above to stderr with no
     configuration at all, and "the withheld detail goes to the record" is worth nothing if the record needs a
-    deployment step before it exists. This is not the "record per hostile connection" C-11 forbids: a refusal only
-    reaches `payload()` after the handshake, so the peer already holds a certificate this CA issued. The
-    pre-handshake surface — refused handshakes, the two admission bounds — is counted and never written as rows."""
+    deployment step before it exists. This is not the "record per hostile connection" C-11 forbids, and **the line
+    is the registration** [K7b, Q19, ruled 2026-09-06]: a refusal reaches `payload()` only after `caller_of` has
+    named a principal, so every row this writes is bounded by the registration's caller count. Holding a
+    certificate this CA issued is *not* the line — the container's healthcheck holds one, and so would a leaked
+    probe certificate; the refusals such a peer can reach (`service.route`, the `auth.*` family) go through
+    `Refusal.unidentified()`, which counts, puts the words on the span cut to `DETAIL_BOUND`, and writes no row.
+    The pre-handshake surface — refused handshakes, the two admission bounds — is counted and never written."""
     if path or detail:
         _log.warning("%s withheld from the caller: path=%r detail=%r", rule, path, detail)
 

@@ -1,0 +1,168 @@
+# K7b's mutations (2026-09-06) -- the efficiency shapes and the counters from the K7 review (F7, F8, F9, F27, F12,
+# F13, F14, F16) and the code the five rulings of 2026-09-06 call for (Q15-Q19). One mutation per invocation:
+#
+#   python tools/mutate.py tools/mutations/k7b.toml M7
+#
+# Each one puts back the defect the review measured, or breaks the seam that replaced it, and names the test that
+# must notice. M1/M2 are the per-file index (F27): ambiguity lost, and the door indexing per ref again. M3/M4 are one
+# card's projection (F9): every card's label computed again, and the members index going stale. M5/M6 are the batch
+# fetch (F7): the load hydrating per object again, and the batch door fetching an unvouched object. M7/M8 are the
+# history walk (F8): a diff-tree per commit again -- and M8, dropping `--no-renames` from the log, which SURVIVED
+# as an equivalent mutant: a `log` confined to one path holds no second path to pair a rename with, so the row is
+# `D` with or without the flag (measured 2026-09-06, one variable at a time; the flag matters only with a wider
+# pathspec, and is kept for that caller). Deleted rather than given a test it could not have: a test that passes
+# with the flag and without it proves nothing. M9/M10 are the typed readers (F12).
+# M11 is the inbox record unchecked (F13). M12 is the CLI counter (F14). M13 is the admission refusal counted twice
+# (F16). M14-M17 are the worker (Q15): the call back on the loop, the probe queued behind the worker, the context
+# not carried, a thread that would hold the exit. M18 is the root moved by policy again (Q16). M19 is the sitting
+# un-burning its id (Q17). M20 is an unlanded write reported as landed (Q18). M21/M22 are the pre-identification
+# row (Q19): the target written as a row again, and the span attribute unbounded.
+#
+# K4b's M5 and M8 were re-spelled for the `Locus` signature and re-run beside these (tools/mutations/k4b.toml).
+
+[[mutation]]
+id = "M1"
+label = "the symbol index keeps only the first definition -- `ref.ambiguous` can never be raised again (F27)"
+file = "packages/isidium-store/src/isidium/store/core/refs.py"
+find = "                    counts[name] = counts.get(name, 0) + 1"
+replace = "                    counts[name] = 1"
+
+[[mutation]]
+id = "M2"
+label = "the door builds a Locus per ref -- the file is decoded and indexed once per citation again (F27)"
+file = "packages/isidium-store/src/isidium/store/client/locus.py"
+find = "        if ref.path not in locus_of:\n            data = _read_inside(base, ref.path)"
+replace = "        if True:\n            data = _read_inside(base, ref.path)"
+
+[[mutation]]
+id = "M3"
+label = "`project_one` labels every card in the set -- one card costs the tenant again (F9)"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = "    pr = projected(cid)\n    if inp.kids is not None:"
+replace = "    for every in inp.cards:\n        core_of(every)\n    pr = projected(cid)\n    if inp.kids is not None:"
+
+[[mutation]]
+id = "M4"
+label = "the members index never forgets a card's old parent -- a reparented card rolls up under both (F9)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        if isinstance(was, int):\n            self._kids.get(was, set()).discard(cid)\n"
+replace = ""
+
+[[mutation]]
+id = "M5"
+label = "the load hydrates one object at a time again -- N round trips at every start (F7)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        self.repo.prefetch(o for o in (self.repo.oid_of(p) for p in under_root) if o is not None)\n"
+replace = ""
+
+[[mutation]]
+id = "M6"
+label = "the batch door fetches whatever it is handed -- an object outside the root can be named and pulled in (F7, Q3)"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = "        for oid in wanted:\n            if oid not in self._vouched:\n                raise Refusal(\"git.outside-footprint\", oid, \"this object was not resolved from a governed path\")\n        if not wanted:"
+replace = "        if not wanted:"
+
+[[mutation]]
+id = "M7"
+label = "the walk spawns a diff-tree per commit again -- `check` grows with the tenant's history (F8)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        history = self.repo.history_of(rp, since)\n        self.repo.prefetch(b for _sha, bb, ab in history for b in (bb, ab) if b)\n        for _sha, bb, ab in history:"
+replace = "        history = []\n        for sha in self.repo.first_parent_walk(since):\n            touched = self.repo.touched(sha)\n            if rp in touched:\n                history.append((sha, *touched[rp]))\n        for _sha, bb, ab in history:"
+
+[[mutation]]
+id = "M9"
+label = "`ids` as a string iterates as characters again -- `\"12\"` ratifies cards 1 and 2 (F12)"
+file = "packages/isidium-store/src/isidium/store/server/api.py"
+find = "    if not isinstance(v, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in v):\n        raise _wrong(key, \"a list of integers\", v)\n    return v"
+replace = "    if isinstance(v, str):\n        return [int(x) for x in v]\n    if not isinstance(v, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in v):\n        raise _wrong(key, \"a list of integers\", v)\n    return v"
+
+[[mutation]]
+id = "M10"
+label = "a body nested past the parser's depth is a bug in us again -- `service.internal` with Python's words (F12)"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "            except (KeyError, ValueError, TypeError, RecursionError) as e:  # a malformed call is data too"
+replace = "            except (KeyError, ValueError, TypeError) as e:  # a malformed call is data too"
+
+[[mutation]]
+id = "M11"
+label = "the inbox record is copied through unchecked again -- 900 KB into `kind` reaches main (F13)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        rs = cfg.check_record(rec, self.registry.get(schema_ref))\n        if rs:\n            raise ValidationRefusal(rs, path)\n"
+replace = ""
+
+[[mutation]]
+id = "M12"
+label = "the CLI prints and never records -- the refusal counter lies about its CLI callers again (F14)"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = "    telemetry.record_refusal(r.rule)\n    typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it"
+replace = "    typer.echo(str(r), err=True)  # `Refusal.render`, not a second copy of it"
+
+[[mutation]]
+id = "M13"
+label = "the admission refusal goes through `payload()` again -- one event, two counters (F16)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "            await _respond(writer, None, Response.admission(Refusal(\"service.too-many-connections\")), limits)"
+replace = "            await _respond(writer, None, Response.refusal(Refusal(\"service.too-many-connections\")), limits)"
+
+[[mutation]]
+id = "M14"
+label = "the call runs on the event loop again -- a slow call stalls the probe and every other caller (Q15)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "    return await asyncio.get_running_loop().run_in_executor(worker, call), request.method == b\"HEAD\""
+replace = "    return call(), request.method == b\"HEAD\""
+
+[[mutation]]
+id = "M15"
+label = "the probe queues behind the one worker -- `/health` waits for the call in flight (Q15)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "    if service.is_liveness(parsed):\n        # The probe is answered on the loop [K7b, Q15]: it reads a constant, and behind the one worker it would\n        # queue behind the very call it exists to report the listener alive during.\n        return service.handle(parsed, credential), request.method == b\"HEAD\"\n"
+replace = ""
+
+[[mutation]]
+id = "M16"
+label = "the context is not carried to the worker -- every call span is a root of its own (Q15, K6's join)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "    def call() -> Response:\n        return context.run(service.handle, parsed, credential)"
+replace = "    def call() -> Response:\n        return service.handle(parsed, credential)"
+
+[[mutation]]
+id = "M17"
+label = "the worker is not a daemon thread -- a call blocked in the signer holds the process open past the grace (Q15, K6b)"
+file = "packages/isidium-store/src/isidium/store/server/http.py"
+find = "        self.thread = threading.Thread(target=self._run, name=\"isidium-store-calls\", daemon=True)"
+replace = "        self.thread = threading.Thread(target=self._run, name=\"isidium-store-calls\", daemon=False)"
+
+[[mutation]]
+id = "M18"
+label = "a signed policy write moves the root again -- the hook and the store disagree about what is governed (Q16)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        if not rs and eff_root != self.root:"
+replace = "        if False:"
+
+[[mutation]]
+id = "M19"
+label = "the sitting allocates inside its transaction again -- a refused ratify un-burns its id (Q17)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        allocated = [self.journal.new_id() if isinstance(req.path, NewCard) else None for req in reqs]\n        with self.journal.transaction():\n            members = [self._compose_member(req, caller, pid) for req, pid in zip(reqs, allocated, strict=True)]"
+replace = "        with self.journal.transaction():\n            allocated = [self.journal.new_id() if isinstance(req.path, NewCard) else None for req in reqs]\n            members = [self._compose_member(req, caller, pid) for req, pid in zip(reqs, allocated, strict=True)]"
+
+[[mutation]]
+id = "M20"
+label = "an unlanded write is reported as landed -- no counter, no attribute, the caller told main has it (Q18)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "        if deferred is None:\n            telemetry.record_landed(True)\n            return True\n        telemetry.record_landed(False, deferred.rule, deferred.render())\n        return False"
+replace = "        telemetry.record_landed(True)\n        return True"
+
+[[mutation]]
+id = "M21"
+label = "the route refusal goes through `payload()` again -- a stranger's target is written whole into a row (Q19)"
+file = "packages/isidium-store/src/isidium/store/server/service.py"
+find = "                return Response.unidentified(Refusal(\"service.route\", \"\", request.target))"
+replace = "                return Response.refusal(Refusal(\"service.route\", \"\", request.target))"
+
+[[mutation]]
+id = "M22"
+label = "the span attribute is not cut at the bound -- 6 KB of a stranger's bytes on every span (Q19)"
+file = "packages/isidium-store/src/isidium/store/core/telemetry.py"
+find = "        trace.get_current_span().set_attribute(DETAIL, detail[:DETAIL_BOUND])"
+replace = "        trace.get_current_span().set_attribute(DETAIL, detail)"

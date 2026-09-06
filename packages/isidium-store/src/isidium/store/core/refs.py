@@ -23,6 +23,7 @@ the other. `server/refs.py` keeps `resolve`, the half that needs a tree.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -75,33 +76,76 @@ def github_slug(text: str) -> str:
     return t.replace(" ", "-")
 
 
-def locus_check(ref: Ref, data: bytes) -> str | None:
-    """The other half [Q11]: does the line range, the anchor or the symbol land on anything in these bytes?
+class Locus:
+    """One file's text, indexed **once** for every ref that cites it [K7b, F27].
+
+    The cost of a locus check is a regex pass over every line — 17 ms for a symbol, 5 ms for an anchor, on a 600 KB
+    file — and the shipped shape paid it *per ref*: three refs into one module scanned it three times, and a card
+    that cites six functions in one file would have scanned it six. The decode (2.5 ms of 23) was the finding K4b
+    recorded; the K7 reproduction found it was 11% of the bill and the passes were the rest. So the passes are here,
+    one per file per kind, and a ref is then a set membership or a dict lookup.
+
+    **Each index is built on first use and never before** (C-13, judged here): a file cited by line ranges only is
+    never scanned at all; one cited by symbols pays the symbol pass and not the heading pass. Building both eagerly
+    would charge every line-range ref a scan it does not need. `lines` is the decoded text, kept because every
+    index reads it and the range check needs its length.
+    """
+
+    __slots__ = ("_anchors", "_symbols", "lines")
+
+    def __init__(self, data: bytes) -> None:
+        self.lines: Sequence[str] = data.decode("utf-8", "replace").split("\n")
+        self._anchors: frozenset[str] | None = None
+        self._symbols: Mapping[str, int] | None = None
+
+    @property
+    def anchors(self) -> frozenset[str]:
+        """Every heading's GitHub slug, and its explicit `{#id}` where it has one — one pass, on first use."""
+        if self._anchors is None:
+            found: set[str] = set()
+            for ln in self.lines:
+                m = _HEADING.match(ln)
+                if m:
+                    if m.group("explicit"):
+                        found.add(m.group("explicit"))
+                    found.add(github_slug(m.group("text")))
+            self._anchors = frozenset(found)
+        return self._anchors
+
+    @property
+    def symbols(self) -> Mapping[str, int]:
+        """Every definition's name → how many times it is defined — one pass, on first use. The count is what tells
+        `ref.unresolved` from `ref.ambiguous`, and it is why this is a map and not a set."""
+        if self._symbols is None:
+            counts: dict[str, int] = {}
+            for ln in self.lines:
+                m = _SYMBOL_DEF.match(ln) or _ASSIGN_DEF.match(ln)
+                if m:
+                    name = m.group("name")
+                    counts[name] = counts.get(name, 0) + 1
+            self._symbols = counts
+        return self._symbols
+
+
+def locus_check(ref: Ref, locus: Locus) -> str | None:
+    """The other half [Q11]: does the line range, the anchor or the symbol land on anything in this file?
 
     `None` when it does, else the rule id — `ref.unresolved` or `ref.ambiguous`. A whole-file `Path` ref has no
     locus, so it always passes; the tree already proved the file exists.
 
-    **Pure, and public because it has callers outside the server half.** It takes the bytes rather than a reader
-    precisely so the caller supplies them from wherever it legitimately has them: the assembler from the project
-    checkout at dispatch, the author's terminal from the working tree (K4b). The store is the one participant that
-    cannot call it, which is why the check is not there any more — not because it stopped mattering.
+    **Pure, and public because it has callers outside the server half.** It takes a `Locus` — the file's text,
+    indexed once — rather than a reader, precisely so the caller supplies it from wherever it legitimately has the
+    bytes: the assembler from the project checkout at dispatch, the author's terminal from the working tree (K4b).
+    The store is the one participant that cannot call it, which is why the check is not there any more — not
+    because it stopped mattering. N refs into one file cost one `Locus` and N lookups (F27).
     """
     if ref.kind == "path":
         return None
-    lines = data.decode("utf-8", "replace").split("\n")
     if ref.kind == "lines":
-        return None if ref.l2 <= len(lines) else "ref.unresolved"
+        return None if ref.l2 <= len(locus.lines) else "ref.unresolved"
     if ref.kind == "anchor":
-        for ln in lines:
-            m = _HEADING.match(ln)
-            if m and (m.group("explicit") == ref.anchor or github_slug(m.group("text")) == ref.anchor):
-                return None
-        return "ref.unresolved"
-    hits = 0
-    for ln in lines:
-        m = _SYMBOL_DEF.match(ln) or _ASSIGN_DEF.match(ln)
-        if m and m.group("name") == ref.symbol:
-            hits += 1
+        return None if ref.anchor in locus.anchors else "ref.unresolved"
+    hits = locus.symbols.get(ref.symbol, 0)
     if hits == 0:
         return "ref.unresolved"
     return None if hits == 1 else "ref.ambiguous"

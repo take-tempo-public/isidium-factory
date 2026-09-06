@@ -75,6 +75,10 @@ class WriteResult:
     journal_seq: int
     commit: str
     id: int | None = None  # `{id, path, head}` for a NewCard creation
+    # K7b (Q18, ruled 2026-09-06): whether the act reached the remote's `main` in this call. `False` is a journaled
+    # act whose push failed — the row is durable, memory is indexed, the local commit is held and the next push
+    # carries it (K7a, F28). The caller holds the entry and the head either way; what differs is that `main` lags.
+    landed: bool = True
 
 
 @dataclass
@@ -138,6 +142,9 @@ class Store:
         self.events: list[dict[str, Any]] = []
         self.unreadable: dict[str, Refusal] = {}  # governed paths that do not parse: reported by `check`, never fatal
         self._by_id: dict[int, str] = {}  # card id -> path (E3)
+        # parent card id -> the ids whose `parent` names it [K7b, F9]: what one card's roll-up reads, kept as the
+        # documents are indexed so `show card` never scans the set for them (E3's shape, for the other direction).
+        self._kids: dict[int, set[int]] = {}
         self._blob: dict[str, str] = {}  # path -> the blob id of the bytes the store holds (E4)
         self._build: dict[str, str] = {}  # card path -> its build hash (E1: hashed once, cached by blob)
         self.signed_doc: dict[str, Document] = {}  # path -> the document at its last signed entry (X1, E5)
@@ -235,8 +242,20 @@ class Store:
 
     def load(self) -> None:
         """Read the governed copy from the repo: config first (it names the manifest), then every governed path;
-        build hashes come from the blob cache when warm (9.4: 0 hashes), else once."""
+        build hashes come from the blob cache when warm (9.4: 0 hashes), else once.
+
+        **Every blob under the root is fetched in one round trip before the first read** [K7b, F7]. The shipped load
+        hydrated per object — two git processes and one round trip each, ~1.5 s over SSH on tenant #0 — so start-up
+        grew with the tenant and a tenant of forty governed documents would have failed its own healthcheck's
+        `start_period`. The governed set is not known until `config.toml` is read, and `config.toml` is under the
+        root; fetching the root's whole tree first is what makes it *one* round trip rather than two, at the cost of
+        also holding a file under the root the manifest does not govern — which `read` already allows, because the
+        root is the footprint's boundary (`GitCli`). Eager here because the collection is the answer: this method
+        reads every governed path, so a per-object fetch would be a spawn in a loop (C-13's third case).
+        """
         self._replay_pending()
+        under_root = [p for p in self.repo.paths() if p.startswith(self.root)]
+        self.repo.prefetch(o for o in (self.repo.oid_of(p) for p in under_root) if o is not None)
         raw_cfg = self.repo.read(self.rp("config.toml"))
         if raw_cfg is not None:
             text = raw_cfg.decode("utf-8")
@@ -256,9 +275,7 @@ class Store:
             rs = cfg.startup_check(self.eff, binary)
             if rs:
                 raise ValidationRefusal(rs, "config.toml")
-        for repo_path in self.repo.paths():
-            if not repo_path.startswith(self.root):
-                continue
+        for repo_path in under_root:
             path = repo_path[len(self.root) :]
             if path == "config.toml":
                 continue
@@ -287,6 +304,7 @@ class Store:
             if ref.startswith("card@"):
                 self._by_id[int(doc.head["id"])] = path
                 self._build[path] = self._cached_build(blob, doc)
+                self._reparent(int(doc.head["id"]), None, doc)
         elif ref.startswith("inbox@"):
             self.inbox = parse_jsonl(data.decode("utf-8"))
         elif ref.startswith("sidecar-events@"):
@@ -306,13 +324,25 @@ class Store:
         self.journal.cache_put(blob, build, seq, h, ext, canon.CANON)
         return build
 
+    def _reparent(self, cid: int, old: Document | None, new: Document) -> None:
+        """Keep `_kids` right across a write that sets, moves or clears a card's `parent` (F9)."""
+        was, now = (old.head.get("parent") if old is not None else None), new.head.get("parent")
+        if was == now:
+            return
+        if isinstance(was, int):
+            self._kids.get(was, set()).discard(cid)
+        if isinstance(now, int):
+            self._kids.setdefault(now, set()).add(cid)
+
     def _index(self, path: str, doc: Document, data: bytes, after_blob: str, build: str | None) -> None:
         self.raw[path] = data
+        previous = self.docs.get(path)
         self.docs[path] = doc
         self._blob[path] = after_blob
         if build is not None:
             self._by_id[int(doc.head["id"])] = path
             self._build[path] = build
+            self._reparent(int(doc.head["id"]), previous, doc)
             self.journal.cache_put(
                 after_blob,
                 build,
@@ -601,6 +631,23 @@ class Store:
         if not allowed(caller.grant, call):
             raise Refusal("write.grant", "", f"{caller.grant} may not {call}")
 
+    @staticmethod
+    def _landing(deferred: Refusal | None) -> bool:
+        """What a write door tells its caller about the push [K7b, Q18, ruled 2026-09-06: *"Result + counter + span
+        attribute"*] — the one site every door passes through, so no door has to remember.
+
+        Until Q18 was ruled a write whose row was journaled and whose push then failed was *refused* — the rule id
+        alone, for an act that had happened and would land, and the caller's retry with the head they held answered
+        `write.stale`. The act is not a refusal: the row is durable, memory is indexed, the local commit is kept and
+        the next push carries it (K7a, F28). So the door returns its result with `landed = False`; the push
+        failure's own id counts on `isidium.store.write.unlanded` and its words go to the record, and the call span
+        says `landed` either way, so an operator can see a store journaling ahead of its forge."""
+        if deferred is None:
+            telemetry.record_landed(True)
+            return True
+        telemetry.record_landed(False, deferred.rule, deferred.render())
+        return False
+
     # ---- write (1.2) ---------------------------------------------------------------------------------------------
 
     def write(
@@ -629,7 +676,7 @@ class Store:
         if form == "markdown" and ref_name != "board@1":
             return self._write_markdown(path, row, document, base, ref, caller)
         if ref_name.startswith("inbox@"):
-            return self._write_record(path, document, caller)
+            return self._write_record(path, document, caller, ref_name)
         raise Refusal("write.lander-only", path, "the sidecar and the board are written by `land`")
 
     def _write_markdown(
@@ -715,9 +762,11 @@ class Store:
         self._index(path, after, data, blobs[path], build if is_card else None)
         if reason:
             self._mark_signed(path, after, blobs[path], seq)
-        if deferred is not None:
-            raise deferred  # after the index: the act is journaled and memory says so (F28); the caller is told
-        return WriteResult(path, entry, {"seq": seq, "h": entry["h"]}, int(jrow["seq"]), sha)
+        # after the index: the act is journaled and memory says so (F28); the caller gets the result, and whether
+        # `main` has it yet (Q18)
+        return WriteResult(
+            path, entry, {"seq": seq, "h": entry["h"]}, int(jrow["seq"]), sha, landed=self._landing(deferred)
+        )
 
     @staticmethod
     def _first_write_display(after: Document) -> dict[str, Any]:
@@ -852,6 +901,19 @@ class Store:
             rs.append(Refusal("config.tenant-immutable", "tenant"))
         if self.config_tree:
             rs.extend(cfg.immutable_changed(self.config_tree, after, self.registry))
+        # **The tracking root is this store's, by construction** [K7b, Q16, ruled 2026-09-06: *"Both"* — the code
+        # half here, `immutable = true` on `root` at the next schema bump]. The K7 review moved `root` by one signed
+        # policy write and the store accepted it: its own root is fixed at construction (`serve --root`), so every
+        # checkout that pulled the file got a hook protecting the new root while the store kept writing the old one
+        # (F10; K3 had named the seam). The *effective* root is compared — a tree that omits the key names the
+        # schema's default, and that default is a root too — so `init` and every later policy act pass the one gate.
+        eff_root = str(cfg.resolve_effective(after, self.registry).get("root", ""))
+        if not rs and eff_root != self.root:
+            rs.append(
+                Refusal(
+                    "config.root-mismatch", "root", f"this store governs {self.root!r}; the tree names {eff_root!r}"
+                )
+            )
         if rs:
             raise ValidationRefusal(rs, "config.toml")
         before = self.config_tree or None
@@ -883,8 +945,7 @@ class Store:
         except Refusal:
             self._set_config(previous)  # refused before the row: nothing happened, and the tree says so
             raise
-        if deferred is not None:
-            raise deferred  # journaled, not yet on `main`: the tree and the chain keep the act (F28)
+        wr.landed = self._landing(deferred)  # journaled either way: the tree and the chain keep the act (F28, Q18)
         return wr
 
     def _commit_policy(
@@ -930,13 +991,12 @@ class Store:
             self.time_skew(),
         )
         _wr, _blobs, deferred = self._commit_policy(e, realm, at)
-        if deferred is not None:
-            raise deferred
+        self._landing(deferred)  # the entry is the realm's act and is returned whole; `main` may lag (Q18)
         return e
 
     # ---- record-slot documents (the inbox) -----------------------------------------------------------------------
 
-    def _write_record(self, path: str, record: Mapping[str, Any], caller: Caller) -> WriteResult:
+    def _write_record(self, path: str, record: Mapping[str, Any], caller: Caller, schema_ref: str) -> WriteResult:
         rec = dict(record)
         if rec.get("type") not in ("intake", "disposition"):
             raise Refusal("inbox.type", path, str(rec.get("type")))
@@ -948,10 +1008,19 @@ class Store:
                 raise Refusal("inbox.bound", path)
             canon.check_string(str(rec.get("title", "")), "title")
             canon.check_string(str(rec.get("body", "")), "body")
+        elif not any(r.get("id") == rec.get("on") for r in self.inbox):
+            raise Refusal("inbox.unknown-suggestion", path, str(rec.get("on")))
+        # **The record against its own schema's rows** [K7b, F13; deployment record H-5]. `inbox@1` declared `kind`
+        # as an enum of seven names and `refs` as an array from the day it was written, and this method checked the
+        # type, the source and the two prose bounds above and copied the rest through: the K7 review put 900 KB into
+        # `kind` and watched it land on a public `main` in one commit. Same pass the policy file gets, as `record.*`;
+        # after the checks above, whose ids (`inbox.bound` on the prose, in bytes) the scenarios pin.
+        rs = cfg.check_record(rec, self.registry.get(schema_ref))
+        if rs:
+            raise ValidationRefusal(rs, path)
+        if rec["type"] == "intake":
             rec["id"] = f"s{1 + sum(1 for r in self.inbox if r['type'] == 'intake')}"
         else:
-            if not any(r.get("id") == rec.get("on") for r in self.inbox):
-                raise Refusal("inbox.unknown-suggestion", path, str(rec.get("on")))
             rec["id"] = f"d{1 + sum(1 for r in self.inbox if r['type'] == 'disposition')}"
         at = self.now()
         rec.update({"seq": len(self.inbox) + 1, "at": at, "by": caller.principal})
@@ -962,9 +1031,9 @@ class Store:
         data = self.raw.get(path, b"") + emit_jsonl_line(rec).encode("utf-8")
         jrow, sha, _blobs, deferred = self._apply(caller, at, {path: data}, rec["type"])
         self.inbox.append(rec)
-        if deferred is not None:
-            raise deferred
-        return WriteResult(path, rec, {"seq": rec["seq"], "h": rec["h"]}, int(jrow["seq"]), sha)
+        return WriteResult(
+            path, rec, {"seq": rec["seq"], "h": rec["h"]}, int(jrow["seq"]), sha, landed=self._landing(deferred)
+        )
 
     # ---- init (04 §3) --------------------------------------------------------------------------------------------
 
@@ -994,8 +1063,10 @@ class Store:
                 "object_id": self.repo.object_format,
             },
         }
-        if root is not None:
-            tree["root"] = root
+        # The tracking root is written, and it is this store's [K7b, Q16]: an operator's `--root` that is not the
+        # root this store was started with is refused by `_write_policy`, and a tenant born with no `--root` records
+        # the store's rather than inheriting the schema's default in silence.
+        tree["root"] = root if root is not None else self.root
         # config@2 (K6) records the version the policy chain opens under, because a later migration moves `schema`
         # and a genesis cannot move with it. Written only when the adopted version declares the key (04 §4.1).
         if any(r["name"] == "chain_opened_under" for r in self.registry.get(f"config@{tree['schema']}")["scalars"]):
@@ -1055,19 +1126,26 @@ class Store:
             frozenset(self.software_fprs),
             builds,
             str(self.card_defaults().get("kind", "")),
+            self._kids,
         )
 
     def projections(self) -> dict[int, status.Projection]:
         return status.project(self._inputs())
 
+    def projection_of(self, card_id: int) -> status.Projection:
+        """One card's projection in one card's time [K7b, F9] — `status.project_one` over the same inputs, with the
+        parent → members index the store keeps so the roll-up never scans the set. `show.unknown` for an id the
+        store has never seen, as `show` answers it."""
+        if self.path_of(card_id) is None:
+            raise Refusal("show.unknown", str(card_id))
+        return status.project_one(self._inputs(), card_id)
+
     # ---- X2: the land after the merge (the observation half; `land` itself is v1b) -----------------------------
 
     def merges_pending(self) -> list[str]:
-        return [
-            sha
-            for sha in self.repo.first_parent_walk(self.state.get("ledger_cursor"))
-            if len(self.repo.parents(sha)) > 1
-        ]
+        # One `rev-list --min-parents=2` [K7b, F8], where this ran a `rev-list --parents` per commit on the line —
+        # inside `show queue` and `show board`, the moment a sidecar exists.
+        return self.repo.merges_since(self.state.get("ledger_cursor"))
 
     def dispatch(self, card_id: int) -> dict[str, int]:
         """The factory's dispatch precondition on this tenant: fail-closed while a land is pending (X2 pin 2)."""
@@ -1153,7 +1231,13 @@ class Store:
 
     def _walk(self, path: str, since: str | None) -> set[str]:
         """CI's / ingest's recompute + the reconciliation in ONE walk (never the hook's — 9.6): parent-blob →
-        commit-blob through the SAME derive, refusals included; the journal's rows for the path read once."""
+        commit-blob through the SAME derive, refusals included; the journal's rows for the path read once.
+
+        **And one git for the history, one for the blobs** [K7b, F8, F7]. The walk used to spawn a `diff-tree` per
+        first-parent commit since the cursor — every commit on the tenant, of which the ones that touched this card
+        are a handful — 26 processes on tenant #0 and one more per merged pull request, forever, on the verb ingest
+        calls per card. `history_of` is one `log --raw` naming exactly those commits with their blob pairs, and
+        `prefetch` brings every blob the walk will read in one round trip on a cold clone instead of one each."""
         out: set[str] = set()
         rp = self.rp(path)
         schema = self.doc_schema("card@1")
@@ -1165,11 +1249,9 @@ class Store:
                 parsed[oid] = parse_markdown(self.repo.blob(oid).decode("utf-8"), schema)
             return parsed[oid]
 
-        for sha in self.repo.first_parent_walk(since):
-            touched = self.repo.touched(sha)
-            if rp not in touched:
-                continue
-            bb, ab = touched[rp]
+        history = self.repo.history_of(rp, since)
+        self.repo.prefetch(b for _sha, bb, ab in history for b in (bb, ab) if b)
+        for _sha, bb, ab in history:
             if reconcile.reconcile_path(bb, ab, rows) != "explained":
                 out.add("unjournaled")
             try:
@@ -1386,11 +1468,14 @@ class Store:
             return self._ratify_result(members, True)
         if caller.grant != "owner":
             raise Refusal("write.requires-owner", "", "ratify")
+        # **Allocation precedes validation, at this door too** [K7b, Q17, ruled 2026-09-06: *"Both doors burn"*].
+        # The ids used to be allocated inside the transaction below, so a refused sitting rolled the counter back
+        # and this door alone did not burn — where 03 §1.6 says a refused creation burns an id, and `write` does.
+        # Each allocation is its own committed transaction here, exactly as `write`'s; a gap in the sequence is the
+        # design's own evidence that something was refused. The dry run allocates nothing: it is not a door.
+        allocated = [self.journal.new_id() if isinstance(req.path, NewCard) else None for req in reqs]
         with self.journal.transaction():
-            members = []
-            for req in reqs:
-                pid = self.journal.new_id() if isinstance(req.path, NewCard) else None
-                members.append(self._compose_member(req, caller, pid))
+            members = [self._compose_member(req, caller, pid) for req, pid in zip(reqs, allocated, strict=True)]
             result = self._ratify_result(members, False)
             if any(m.verdict for m in members):
                 raise Refusal("ratify.invalid", "", str(result["verdicts"]))
@@ -1435,6 +1520,7 @@ class Store:
                 "commit": wr.commit,
                 "journal_seq": wr.journal_seq,
                 "ids": [m.id for m in members],
+                "landed": True,  # the sitting lands or rolls back whole (K7a, F2); it never defers
             }
         )
         return result
@@ -1625,6 +1711,4 @@ class Store:
         doc.history.append(e)
         self._index(p, doc, data, blobs[p], build)
         self._mark_signed(p, doc, blobs[p], seq)
-        if deferred is not None:
-            raise deferred
-        return {"entry": e, "commit": sha, "journal_seq": int(jrow["seq"])}
+        return {"entry": e, "commit": sha, "journal_seq": int(jrow["seq"]), "landed": self._landing(deferred)}

@@ -85,10 +85,10 @@ def test_journal_replays_a_half_applied_write(tmp_path: Path) -> None:
     signer = SoftwareKeyAck(SoftwareKey.generate(), clock)
     journal = Journal(tmp_path / "j.sqlite", "t")
     repo = MemGit()
-    st = Store("t", repo, journal, REGISTRY, clock, signer)
+    st = Store("t", repo, journal, REGISTRY, clock, signer, root="docs/work/")
     st.init(OWNER, software_key_ack="ok")
     # simulate the crash: a row with pending bytes whose commit never happened
-    current = repo.read("config.toml")
+    current = repo.read("docs/work/config.toml")
     assert current is not None
     replayed = b"# replayed after a crash" + bytes([10]) + current  # a leading comment: legal, byte-different
     with journal.transaction():
@@ -101,8 +101,8 @@ def test_journal_replays_a_half_applied_write(tmp_path: Path) -> None:
             pending={"config.toml": replayed},
         )
     assert journal.pending_rows()[0][0] == row["seq"]
-    Store("t", repo, journal, REGISTRY, clock, signer)  # loading replays
-    assert journal.pending_rows() == [] and repo.read("config.toml") == replayed
+    Store("t", repo, journal, REGISTRY, clock, signer, root="docs/work/")  # loading replays
+    assert journal.pending_rows() == [] and repo.read("docs/work/config.toml") == replayed
 
 
 def test_remote_totp_client_half() -> None:

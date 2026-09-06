@@ -146,7 +146,11 @@ def fresh(tenant: str = "sartor") -> Harness:
         REGISTRY,
         clock,
         signer,
-        root="",
+        # `docs/work/`, the schema's own default, and not `""` [K7b, Q16]: the store now refuses a policy tree whose
+        # effective root is not the root it was built with, so a harness store must be built with a root the
+        # config can name — and `""` is not one (`valid_root` wants a trailing `/`). Store-relative paths
+        # (`cards/0001-…`) are what every test reads; only the double's repo paths moved under the root.
+        root="docs/work/",
         realm_principal="realm-svc@agents.example",
     )
     st.init(

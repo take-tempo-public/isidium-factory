@@ -41,6 +41,21 @@ class Refusal(Exception):
     def __repr__(self) -> str:
         return f"Refusal({self.rule!r}, {self.path!r}, {self.detail!r})"
 
+    def unidentified(self) -> dict[str, Any]:
+        """The refusal as the value a peer the registration does **not** name receives [K7b, Q19, ruled 2026-09-06]:
+        the rule id and nothing else, recorded on the running span and the counter like any refusal — and the
+        detail put on the span as a bounded attribute, **never written as a row**.
+
+        `payload()` above relocates a terse refusal's words into a log record, and that is right for a caller the
+        registration names: the row is bounded by the registration. Before `caller_of` has named a principal the
+        peer is a certificate this CA issued and nothing more — the container's healthcheck, a leaked probe
+        certificate — and the K7 review measured a 6 KB request target written whole into a WARNING row by such a
+        peer, twice per connection allowance, forever. The ruling draws the line at the registration: the two
+        refusals reachable before it, `service.route` and the `auth.*` family, come through here."""
+        telemetry.record_refusal(self.rule)
+        telemetry.detail_on_span(self.detail)
+        return {"rule": self.rule}
+
     def payload(self) -> dict[str, Any]:
         """The refusal as the value a caller receives, built in ONE place — **and filtered here** (C-12, K2b).
 

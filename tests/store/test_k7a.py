@@ -157,15 +157,20 @@ def test_a_write_whose_push_fails_is_journaled_indexed_and_carried_by_the_next_p
     """The row is durable before the push, so the act happened. The old code raised with `raw` moved and `docs`
     not, and left the row pending; the next write carried the orphan commit onto `main`, and the restart's replay
     wrote the orphan's bytes over everything since — `check` read `tampered, unjournaled` on a card nobody had
-    bypassed anything to reach. Now: refused to the caller (until Q18 rules otherwise), **indexed**, carried by the
-    next successful push, which clears the pending row; a restart replays nothing and the chain explains itself."""
+    bypassed anything to reach. Now: **indexed**, answered to the caller as its result with `landed = False`
+    [K7b, Q18, ruled 2026-09-06 — until then a refusal, which K7a kept], counted on the unlanded counter by the
+    push failure's own id (`git.failed`: absent, not moved — F17), carried by the next successful push, which clears
+    the pending row and answers `landed = True`; a restart replays nothing and the chain explains itself."""
     path = draft(store, "deferred")
     before = git(tmp_path / "origin.git", "rev-parse", "main").strip()
+    unlanded_before = otel.count("isidium.store.write.unlanded", **{telemetry.RULE: "git.failed"})
     outage.arm()
-    with pytest.raises(Refusal) as refused:
-        store.write(path, amended(store, path, "P2"), store.docs[path].head_of(), None, PLANNER)
-    assert refused.value.rule == "git.failed", str(refused.value)  # absent, not moved (F17)
+    with telemetry.span(telemetry.CALL_SPAN, **{telemetry.ACTION: "write"}) as call:
+        r2 = store.write(path, amended(store, path, "P2"), store.docs[path].head_of(), None, PLANNER)
+    assert r2.landed is False and r2.entry["seq"] == 2 and r2.head == store.docs[path].head_of()
     assert outage.fired == 1
+    assert otel.count("isidium.store.write.unlanded", **{telemetry.RULE: "git.failed"}) == unlanded_before + 1
+    assert call.attributes[telemetry.LANDED] is False, "the call span did not say the write had not landed"  # type: ignore[attr-defined]
     assert git(tmp_path / "origin.git", "rev-parse", "main").strip() == before, "nothing reached the origin"
     # the act happened: the row is pending, memory is indexed, the commit is held
     assert [s for s, _p, _d in store.journal.pending_rows()] == [3]
@@ -174,7 +179,7 @@ def test_a_write_whose_push_fails_is_journaled_indexed_and_carried_by_the_next_p
 
     otel.clear()
     r3 = store.write(path, amended(store, path, "P3"), store.docs[path].head_of(), None, PLANNER)
-    assert r3.entry["seq"] == 3
+    assert r3.entry["seq"] == 3 and r3.landed is True
     sync = [s for s in otel.spans(telemetry.SYNC_SPAN) if s.attributes.get(telemetry.ACTION) == "fast-forward"]
     assert sync and sync[0].attributes[telemetry.DIVERGED] is True, "the diverged sync was not said out loud"
     assert store.journal.pending_rows() == [], "the push that carried the orphan did not clear its row"

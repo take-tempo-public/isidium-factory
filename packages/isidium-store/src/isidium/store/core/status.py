@@ -12,7 +12,7 @@ is verified once; the guards are a second, hash-free pass over the labels."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
 
@@ -139,6 +139,9 @@ class Inputs:
     software_fprs: frozenset[str] = frozenset()
     builds: Mapping[int, str] = field(default_factory=dict)  # build hash per card when known (the blob cache)
     kind_default: str = ""  # `card@1`'s declared default for `kind`; supplied by the caller, never written here
+    # parent id → its members, when the caller keeps that index (the store does, E3's shape); `None` means
+    # `project_one` scans the heads for them — linear in the set, at a fraction of one label's cost (F9).
+    kids: Mapping[int, Collection[int]] | None = None
 
 
 def _state_card(st: Mapping[str, Any], cid: int) -> Mapping[str, Any]:
@@ -295,28 +298,48 @@ def _core_label(cid: int, doc: Document, inp: Inputs) -> tuple[Label, str]:
     return Label("ratified"), kind
 
 
+def _projected(
+    cid: int, doc: Document, core: tuple[Label, str], inp: Inputs, labels: Mapping[int, Label]
+) -> Projection:
+    """The guard pass for one card (row 10, and row 11's ready/ratified split), given its core label and the labels
+    of the cards its guards read — one function for the whole-set pass and the one-card pass, so the two cannot
+    drift (F9)."""
+    label, kind = core
+    status = str(doc.head.get("status"))
+    sw = any(chain.is_signed(e) and _fpr_of(e) in inp.software_fprs for e in doc.history)
+    if label.row == "draft":
+        return Projection(cid, kind, status, label, _guards(doc, inp.cards, labels), False, sw)
+    if label.row == "ratified" and label.modifier is None:
+        guards = _guards(doc, inp.cards, labels)
+        if guards:
+            return Projection(cid, kind, status, label, guards, False, sw)
+        if kind == "story":
+            return Projection(cid, kind, status, Label("ready"), (), True, sw)
+        return Projection(cid, kind, status, label, (), False, sw)
+    return Projection(cid, kind, status, label, (), False, sw)
+
+
+def _rolled_up(pr: Projection, kid_labels: Sequence[Label]) -> Projection:
+    """The container roll-up (1.5) for one parent, given its members' labels."""
+    if pr.label.row in ("integrity", "unratified", "withdrawn") or pr.status == "draft" or pr.guards:
+        return pr
+    if kid_labels and all(is_terminal(lbl) for lbl in kid_labels):
+        return Projection(pr.id, pr.kind, pr.status, Label("closed"), (), False, pr.software_grade)
+    if pr.status == "closed" and any(not is_terminal(lbl) for lbl in kid_labels):
+        return Projection(pr.id, pr.kind, pr.status, Label("disputed"), (), False, pr.software_grade)
+    return pr
+
+
+def _depends_on(doc: Document) -> list[int]:
+    return [d for d in doc.head.get("depends_on", []) if isinstance(d, int)]
+
+
 def project(inp: Inputs) -> dict[int, Projection]:
     """Every card's projection: one hashing pass for the core labels; one hash-free pass for the guards (row 10) and
     row 11's ready/ratified split; then the container roll-up (1.5)."""
     core: dict[int, tuple[Label, str]] = {cid: _core_label(cid, doc, inp) for cid, doc in inp.cards.items()}
     labels = {cid: lbl for cid, (lbl, _k) in core.items()}
-    out: dict[int, Projection] = {}
-    for cid, doc in inp.cards.items():
-        label, kind = core[cid]
-        status = str(doc.head.get("status"))
-        sw = any(chain.is_signed(e) and _fpr_of(e) in inp.software_fprs for e in doc.history)
-        if label.row == "draft":
-            out[cid] = Projection(cid, kind, status, label, _guards(doc, inp.cards, labels), False, sw)
-        elif label.row == "ratified" and label.modifier is None:
-            guards = _guards(doc, inp.cards, labels)
-            if guards:
-                out[cid] = Projection(cid, kind, status, label, guards, False, sw)
-            elif kind == "story":
-                out[cid] = Projection(cid, kind, status, Label("ready"), (), True, sw)
-            else:
-                out[cid] = Projection(cid, kind, status, label, (), False, sw)
-        else:
-            out[cid] = Projection(cid, kind, status, label, (), False, sw)
+    out: dict[int, Projection] = {cid: _projected(cid, doc, core[cid], inp, labels) for cid, doc in inp.cards.items()}
     members: dict[int, list[int]] = {}
     for cid, doc in inp.cards.items():
         par = doc.head.get("parent")
@@ -324,14 +347,52 @@ def project(inp: Inputs) -> dict[int, Projection]:
             members.setdefault(par, []).append(cid)
     for cid, kids in members.items():
         pr = out.get(cid)
-        if pr is None or pr.label.row in ("integrity", "unratified", "withdrawn") or pr.status == "draft" or pr.guards:
+        if pr is None:
             continue
-        kid_labels = [out[k].label for k in kids if k in out]
-        if kid_labels and all(is_terminal(lbl) for lbl in kid_labels):
-            out[cid] = Projection(cid, pr.kind, pr.status, Label("closed"), (), False, pr.software_grade)
-        elif pr.status == "closed" and any(not is_terminal(lbl) for lbl in kid_labels):
-            out[cid] = Projection(cid, pr.kind, pr.status, Label("disputed"), (), False, pr.software_grade)
+        out[cid] = _rolled_up(pr, [out[k].label for k in kids if k in out])
     return out
+
+
+def project_one(inp: Inputs, cid: int) -> Projection:
+    """One card's projection **in one card's time** [K7b, F9] — the same rows as `project`, computed for this card
+    and the cards its verdict actually reads, and for no other.
+
+    `show card` rendered one label by projecting every card: a chain verification and a signature verification per
+    card, linear in the tenant (measured 10 → 78 ms from 10 to 200 cards, for a document that was a dict lookup).
+    C-13 says asking one question about one member must not pay for every member, and the label's inputs are
+    few: its own core label; the core labels of the cards it `depends_on` (the `blocked_by` guard reads whether
+    they are terminal); its parent's head (the `held_by` guard, no label needed); and, for the roll-up, the
+    projected label of each member whose `parent` it is. Everything else in the set is irrelevant to this card's
+    row, and is not computed.
+
+    A member's label is its guard-pass label, which is what `project` reads for the roll-up too — except that
+    `project` rolls containers up in card order and reads a member that is itself a container *after* its own
+    roll-up when the member's id is lower, and before it otherwise. That order dependence is `project`'s, older
+    than this function, and is recorded rather than copied; on a set with no container inside a container the two
+    agree on every card, which is what `tests/store/test_k7b.py` asserts.
+    """
+    if cid not in inp.cards:
+        raise KeyError(cid)
+    core: dict[int, tuple[Label, str]] = {}
+
+    def core_of(c: int) -> tuple[Label, str]:
+        if c not in core:
+            core[c] = _core_label(c, inp.cards[c], inp)
+        return core[c]
+
+    def projected(c: int) -> Projection:
+        d = inp.cards[c]
+        labels = {x: core_of(x)[0] for x in _depends_on(d) if x in inp.cards}
+        return _projected(c, d, core_of(c), inp, labels)
+
+    pr = projected(cid)
+    if inp.kids is not None:
+        kids = sorted(inp.kids.get(cid, ()))
+    else:
+        kids = [k for k, d in inp.cards.items() if d.head.get("parent") == cid]
+    if not kids:
+        return pr
+    return _rolled_up(pr, [projected(k).label for k in kids if k in inp.cards])
 
 
 @dataclass(frozen=True)
