@@ -63,9 +63,10 @@ esac
 # acknowledged, so there is nothing in here to keep.
 #
 # **The cost, stated rather than discovered** (C-8, and K4's second finding): a fresh clone is cold, and a filtered
-# clone holds no governed blob either, so the store's first load hydrates its governed set one object at a time —
-# N round trips to the origin on every start. That is the price of a store that cannot serve a stale branch, and it
-# is paid at start-up rather than on a call path. Batching those fetches is K4's recorded finding, not this file's.
+# clone holds no governed blob either, so the store's first load fetches every blob under the tracking root in
+# **one** round trip before it reads anything [K7b, 2026-09-06 — until then it hydrated one object at a time, N
+# round trips at every start; this paragraph corrected by K7c]. That is the price of a store that cannot serve a
+# stale branch, and it is paid at start-up rather than on a call path; it no longer grows with the tenant.
 #
 # **`GitCli.clone`, not `git clone`.** It converts a local path source to a `file://` URL, because `--filter` is
 # *ignored outright* for local path clones (S-9's second trap, measured twice) — a hand-written `git clone` here

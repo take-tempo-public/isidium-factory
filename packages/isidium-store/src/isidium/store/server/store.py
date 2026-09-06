@@ -1395,10 +1395,14 @@ class Store:
             and derive.status_moved_to(bh, after.head, derive.OWNER_SIGNS_ALSO)
         ):
             reason = "owner-" + str(after.head.get("status"))
+        # C7: a diff that needs no signature is `write`'s act, not the sitting's. **One arm for a creation too**
+        # [K7c, F18]: `needs_signature`'s `before is None` branch already decides it -- born ratified is a signed
+        # act, anything else is not -- and a creation's diff is never empty, so a second arm here
+        # (`before is None and status != "ratified"`) fired on exactly the same members and appended the same
+        # verdict twice (measured: a draft in the batch answered `:created` twice, on tenant #0 and in the harness).
+        # One predicate, one site; a change to what a creation needs is `needs_signature`'s to make.
         if (d.diff or req.ref is not None) and reason is None:
-            verdict.append("ratify.not-a-signed-act:" + d.act)  # C7
-        if before is None and after.head.get("status") != "ratified":
-            verdict.append("ratify.not-a-signed-act:created")
+            verdict.append("ratify.not-a-signed-act:" + d.act)
         # refs resolve at ratification (1.14, C7) — for a creation, a ratification, or a refs change
         if after.head.get("refs") and (before is None or d.act in ("ratified", "created") or "refs" in d.diff):
             _resolved, rs = self._resolve_refs(after)

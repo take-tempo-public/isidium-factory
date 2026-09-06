@@ -49,12 +49,19 @@ def install_schemas(repo: Path, registry: Registry | None = None) -> list[Path]:
 
 
 def ignore_client(repo: Path) -> None:
+    """Append the client's ignore block to the tenant's `.gitignore` **in the file's own bytes** [K7c, F22].
+
+    The file is the tenant's, not the client's: `read_text` and `write_text(newline=...)` re-ended every line of a
+    CRLF file as LF (measured: three CRLF lines in, none out) -- a whole-file diff the tenant did not ask for, made
+    by `init`. So the bytes are read as bytes, the ending is the one the file already uses (CRLF if any line has
+    one, else LF), the block is joined with that ending, and the result is written back as bytes."""
     gi = repo / ".gitignore"
-    text = gi.read_text(encoding="utf-8") if gi.is_file() else ""
-    if ".isidium/" in text:
+    data = gi.read_bytes() if gi.is_file() else b""
+    if b".isidium/" in data:
         return
-    sep = "" if text.endswith("\n") or not text else "\n"
-    gi.write_text(text + sep + "\n".join(GITIGNORE_LINES) + "\n", encoding="utf-8", newline="\n")
+    ending = b"\r\n" if b"\r\n" in data else b"\n"
+    sep = b"" if data.endswith(b"\n") or not data else ending
+    gi.write_bytes(data + sep + ending.join(line.encode("utf-8") for line in GITIGNORE_LINES) + ending)
 
 
 def resolve_root(cfg: ClientConfig, registry: Registry | None = None) -> ClientConfig:

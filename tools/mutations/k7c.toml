@@ -1,0 +1,36 @@
+# K7c's mutations (2026-09-06) -- the small ones from the K7 review. One mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/k7c.toml M1 --workers 2
+#   python tools/mutate.py tools/mutations/k7c.toml --show        # the bytes each one would write, as a diff (F24)
+#
+# M1 puts the duplicate creation arm back (F18): a draft born in the batch answers `:created` twice again. M2 makes
+# the client re-end the tenant's `.gitignore` as LF whatever it held (F22). M3 removes the empty-mutation refusal
+# from this harness itself (F24) -- the tool mutates its own file; the running process holds the pristine bytes and
+# `--restore` is the fallback. Each names the test that must notice.
+
+[[mutation]]
+id = "M1"
+label = "the creation arm is back -- a draft born in the batch answers `:created` twice again (F18)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if (d.diff or req.ref is not None) and reason is None:
+            verdict.append("ratify.not-a-signed-act:" + d.act)
+'''
+replace = '''        if (d.diff or req.ref is not None) and reason is None:
+            verdict.append("ratify.not-a-signed-act:" + d.act)
+        if before is None and after.head.get("status") != "ratified":
+            verdict.append("ratify.not-a-signed-act:created")
+'''
+
+[[mutation]]
+id = "M2"
+label = "the client re-ends the tenant's .gitignore as LF whatever it held (F22)"
+file = "packages/isidium-store/src/isidium/store/client/install.py"
+find = '    ending = b"\r\n" if b"\r\n" in data else b"\n"'
+replace = '    ending = b"\n"'
+
+[[mutation]]
+id = "M3"
+label = "an empty mutation is applied and 'survives' again -- the refusal is gone (F24)"
+file = "tools/mutate.py"
+find = "        if m.find == m.replace:"
+replace = "        if m.find != m.find:"

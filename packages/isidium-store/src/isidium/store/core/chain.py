@@ -32,6 +32,16 @@ DocType = Literal["card", "inbox", "policy", "page", "journal"]
 # 03b §3 / 5.5: every non-card genesis carries the document type's OWN registry schema version; the registry loader
 # supplies the installed versions — these are the v1 defaults.
 DEFAULT_REGISTRY: Final[dict[str, int]] = {"card": 1, "inbox": 1, "policy": 1, "page": 1, "journal": 1}
+# **A `card@2` is not reachable from here without one more head key** [K7c, F25 -- the sentence the next card bump
+# should find]. Six sites compute a card's genesis with the version implicit, `genesis("card", id)` falling to
+# `DEFAULT_REGISTRY["card"]`: the first write (`server/store.py`, through the manifest's `schema.genesis`), `check`,
+# the sitting (`ratify`), `repair`, the projection (`core/status.py`) and the gate (`tools/verify_chain.py`). A card
+# born under `card@2` would link from a `schema:1` genesis at the first site and be verified against it everywhere
+# else, so the bump would be invisible -- the wrong kind of working. The card has what the journal lacked, a head, so
+# `config@2`'s shape (K6) transfers directly: `card@2` declares `chain_opened_under` (int, `required_when = []`,
+# `immutable = true`, `<= schema`); `write(NewCard)` sets it to the version the manifest adopts; a `card@1` head's
+# absence means 1; the six sites read `doc.head.get("chain_opened_under", 1)` and `verify_chain.py` does the same.
+# The journal's `meta.schema` pin is the head-less form of the same rule. No code now: the bump owns it.
 Verdict = Literal["ok", "tampered", "covered"]
 
 

@@ -30,6 +30,7 @@ Usage:
     python tools/mutate.py tools/mutations/k1d.toml            # every mutation in the spec
     python tools/mutate.py tools/mutations/k1d.toml M3 M4      # only these
     python tools/mutate.py --restore                           # repair a tree a killed run left mutated
+    python tools/mutate.py tools/mutations/k1d.toml --show M3  # print the bytes that would run, as a diff; run nothing
 
 A spec is TOML, one `[[mutation]]` per property, each naming the file, the exact text to find (it must appear
 **once**), and what to put in its place:
@@ -41,6 +42,12 @@ A spec is TOML, one `[[mutation]]` per property, each naming the file, the exact
     find = "        return frozenset(self._slots)"
     replace = "        return frozenset(self.addresses)"
 
+**Look before a six-minute run** [K7c, F24]: `--show` prints each selected mutation as a unified diff of the bytes
+that would actually be written, ASCII-escaped, and runs nothing. A TOML literal string (`'''...'''`) keeps a
+backslash escape as two characters where a basic string would have made a real line break, and a "faithful copy"
+mutation carrying one was silently wrong for a whole run once (K4b); in the diff the two are told apart at a glance.
+A mutation whose `replace` is its `find` is refused in both modes -- an empty mutation "survives" and proves nothing.
+
 **On this repository's suite, run one mutation per invocation.** The serial suite is ~226 s and the killers usually
 live in `tests/unit`, which collects last, so `-x` saves nothing: a mutation costs a whole pass either way. The
 parallel default below cuts that materially.
@@ -50,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import difflib
 import hashlib
 import json
 import re
@@ -117,6 +125,17 @@ def load_spec(spec: Path, only: list[str]) -> list[Mutation]:
     if missing:
         raise SystemExit(f"{spec}: no such mutation: {', '.join(missing)}")
     return [m for m in out if m.id in only]
+
+
+def show(m: Mutation, pristine: bytes) -> str:
+    """The mutated region as a unified diff of the bytes that would run [K7c, F24] -- ASCII only, every other byte
+    as its escape, so what the console shows is what the file will hold."""
+    mutated = pristine.replace(m.find, m.replace)
+    before = pristine.decode("utf-8", errors="replace").splitlines()
+    after = mutated.decode("utf-8", errors="replace").splitlines()
+    name = m.path.relative_to(REPO).as_posix() if m.path.is_relative_to(REPO) else m.path.as_posix()
+    diff = difflib.unified_diff(before, after, fromfile=f"a/{name}", tofile=f"b/{name}", lineterm="")
+    return "\n".join(line.encode("ascii", "backslashreplace").decode("ascii") for line in diff)
 
 
 def repair() -> bool:
@@ -204,6 +223,9 @@ def main() -> int:
     ap.add_argument("--restore", action="store_true", help="repair a tree a killed run left mutated, then stop")
     ap.add_argument("--serial", action="store_true", help="run the suite in one process (slower; for a suspect run)")
     ap.add_argument("--workers", type=int, default=WORKERS, help=f"pytest-xdist workers (default {WORKERS})")
+    ap.add_argument(
+        "--show", action="store_true", help="print each mutation as a diff of the bytes that would run; run nothing"
+    )
     args = ap.parse_args()
 
     found = repair()
@@ -214,12 +236,22 @@ def main() -> int:
     if args.spec is None:
         ap.error("a spec is required unless --restore is given")
 
-    dead, survived = 0, []
+    dead, survived, refused = 0, [], []
     for m in load_spec(args.spec, args.ids):
         pristine = m.path.read_bytes()
         n = pristine.count(m.find)
         if n != 1:
-            print(f"{m.id}  {m.label}\n     SKIPPED: its `find` text appears {n} times in {m.path.name}")
+            print(f"{m.id}  {m.label}\n     REFUSED: its `find` text appears {n} times in {m.path.name}")
+            refused.append(m.id)
+            continue
+        if m.find == m.replace:
+            # An empty mutation is not a mutation [K7c, F24]: the suite passes, the run says SURVIVED, and nothing was
+            # learned about any test. Refused before the tree is touched, in both modes.
+            print(f"{m.id}  {m.label}\n     REFUSED: its `replace` is its `find` -- an empty mutation proves nothing")
+            refused.append(m.id)
+            continue
+        if args.show:
+            print(f"{m.id}  {m.label}\n{show(m, pristine)}\n")
             continue
 
         hold(m, pristine)
@@ -241,12 +273,16 @@ def main() -> int:
         else:
             dead += 1
             print(f"{m.id}  {m.label}\n     DIED")
-            for k in killers or ["(the suite failed but named no test — read the run by hand)"]:
+            for k in killers or ["(the suite failed but named no test -- read the run by hand)"]:
                 print(f"       killed by {k}")
         sys.stdout.flush()
 
-    print(f"\n{dead} died, {len(survived)} survived" + (f": {', '.join(survived)}" if survived else ""))
-    return 1 if survived else 0
+    tail = f", {len(refused)} refused: {', '.join(refused)}" if refused else ""
+    if args.show:
+        print(f"shown, nothing run{tail}")
+        return 1 if refused else 0
+    print(f"\n{dead} died, {len(survived)} survived" + (f": {', '.join(survived)}" if survived else "") + tail)
+    return 1 if survived or refused else 0
 
 
 if __name__ == "__main__":

@@ -267,7 +267,8 @@ def _at(t: _dt.datetime) -> str:
 
 def _defect(cert: x509.Certificate, subject: str, now: int) -> Refusal | None:
     """Why a certificate that parsed is not a credential — or `None`. Each detail is the operator's diagnosis and
-    goes to the record, never to the peer (`auth.*` is terse, C-12)."""
+    goes on the call span, bounded — never to the peer (`auth.*` is terse, C-12) and never to a row [Q19, K7b: the
+    registration is the line and this peer is on the wrong side of it; `Response.unidentified` places it]."""
     not_before = int(cert.not_valid_before_utc.timestamp())
     not_after = int(cert.not_valid_after_utc.timestamp())
     # **Checked here even though the handshake already did** [K6's second trap]: after K1 it is the same connection,

@@ -75,6 +75,14 @@ class Journal:
         # below, `_in_txn`) was written for one thread at a time and that is still exactly what it gets.
         self.db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)  # autocommit; BEGIN below
         self.db.execute("PRAGMA journal_mode=WAL")
+        # **`NORMAL` under WAL is durable across a process crash and not across a power loss** [K7c, F20; C-10]: a
+        # committed row is in the WAL before `COMMIT` returns, so a killed or crashed store loses nothing, but the WAL
+        # is fsynced only at a checkpoint, so a power loss before the next one can drop the tail of committed rows;
+        # `FULL` would fsync every row. The right trade for one process in a container on a host with its own
+        # durability, because either loss is visible and has a remedy: a row lost *after* its push shows as
+        # `unjournaled` at the next `check` and `repair --journal <commit>` writes it back; a row lost *before* its
+        # push is an act that never happened, with `main` untouched. Written here rather than assumed: 03b §2 says the
+        # row is journaled write-ahead and does not say which side of this line it is on.
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA_SQL)
         present = {str(r[1]) for r in self.db.execute("PRAGMA table_info(journal)")}
