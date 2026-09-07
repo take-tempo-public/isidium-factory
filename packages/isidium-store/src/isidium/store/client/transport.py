@@ -15,6 +15,7 @@ a transport — including, through `client/cli.py`, the pre-commit hook. See the
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
@@ -43,8 +44,7 @@ class Transport:
 
         if not (cfg.address and cfg.ca and cfg.cert and cfg.key):
             raise Refusal("client.channel", "", "the channel needs address, ca, cert and key (the registration's half)")
-        ctx = httpx.create_ssl_context(verify=str(workdir / cfg.ca))
-        ctx.load_cert_chain(str(workdir / cfg.cert), str(workdir / cfg.key))
+        ctx = channel_context(workdir / cfg.ca, workdir / cfg.cert, workdir / cfg.key)
         self.http = httpx.Client(base_url=cfg.address, verify=ctx, timeout=timeout)  # the signer's round trip is long
 
     def call(self, name: str, args: Mapping[str, Any]) -> Any:
@@ -53,6 +53,22 @@ class Transport:
         if r.status_code != 200:
             raise refusal_from(payload)
         return payload["result"]
+
+
+def channel_context(ca: Path, cert: Path, key: Path) -> ssl.SSLContext:
+    """The client's TLS context: the store's certificate verified against the registration's CA and nothing else,
+    this client's certificate presented [K10, item 4].
+
+    Built by the standard library, not by `httpx.create_ssl_context(verify=<path>)`: httpx 0.28 deprecates that
+    door (nine `DeprecationWarning`s across the suite, all of them this one line) and the next major removes it,
+    at which point every client stops connecting — and the failure would surface at the forge on Renovate's bump,
+    nowhere sooner. `ssl.create_default_context(cafile=…)` is the same context the deprecated call built from a
+    file path: `CERT_REQUIRED`, hostname checking on, the system store *not* loaded, so the pin holds
+    (`tests/store/test_channel.py`'s pinning test is the discriminator, and `tests/store/test_k10.py` builds this
+    with warnings as errors)."""
+    ctx = ssl.create_default_context(cafile=str(ca))
+    ctx.load_cert_chain(str(cert), str(key))
+    return ctx
 
 
 def refusal_from(payload: Mapping[str, Any]) -> Refusal:

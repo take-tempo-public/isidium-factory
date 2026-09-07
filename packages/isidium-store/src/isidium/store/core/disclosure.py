@@ -118,6 +118,13 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         # because the sweep requires every namespace the code can raise to be classified, and terse is what an id
         # about our own configuration would get if one ever did.
         "client": Row(422, TERSE),
+        # Raised by a tool, not by the package [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified
+        # fails"*]: `tools/verify_chain.py` refuses a shallow checkout (`verify.shallow`, K7a). A tool speaks to the
+        # operator at the forge and at the terminal and never to a peer, so C-12's reason for *terse* does not reach
+        # it and its words flow; the sweep reads `tools/` so a second tool id is classified or fails the build. The
+        # status is nominal — a tool answers an exit code, never HTTP — and is the fall-through's, for the row to
+        # carry one.
+        "verify": Row(422, FULL),
         # The protocol edge. **The one namespace that splits** — C-12 split it, which is why a namespace-only table
         # could not express the ruling it exists to implement. Terse by default because every id in it fires before
         # the caller is identified and the rule id already carries the whole meaning; the two that are about the

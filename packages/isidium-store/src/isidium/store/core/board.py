@@ -63,6 +63,26 @@ def _changed_since_summary(doc: Document) -> bool:
     return any(e.get("build") != doc.history[idx].get("build") for e in doc.history[idx + 1 :])
 
 
+def queue_lines(q: Queue) -> list[str]:
+    """The queue section (1.5, 1.16) — the heading and its rows, the board's first section and the whole of
+    `show queue --text` [K10, item 6]: one renderer, called from both, so the two cannot say different things."""
+    out = ["## Queue", ""]
+    rows = [
+        ("open questions", q.open_questions),
+        ("holds on the owner", q.holds_on_owner),
+        ("closures pending review", q.closures_pending_review),
+        ("withdrawals pending", q.withdrawals_pending),
+        ("blocked by any of those", q.blocked_by_those),
+    ]
+    for name, qids in rows:
+        out.append(f"- {name}: " + (", ".join(f"**{i}**" for i in qids) or "none"))
+    out.append(f"- dispositions since the last batch signature: {q.dispositions_since_batch}")
+    out.append(
+        "- merged, not landed: " + ("n/a (in-project)" if q.merged_not_landed is None else str(q.merged_not_landed))
+    )
+    return out
+
+
 def render(
     cards: Mapping[int, Document],
     projections: Mapping[int, Projection],
@@ -84,21 +104,7 @@ def render(
     ]
     if archive_line:
         out.append(archive_line)
-    out += ["", "## Queue", ""]
-    rows = [
-        ("open questions", q.open_questions),
-        ("holds on the owner", q.holds_on_owner),
-        ("closures pending review", q.closures_pending_review),
-        ("withdrawals pending", q.withdrawals_pending),
-        ("blocked by any of those", q.blocked_by_those),
-    ]
-    for name, qids in rows:
-        out.append(f"- {name}: " + (", ".join(f"**{i}**" for i in qids) or "none"))
-    out.append(f"- dispositions since the last batch signature: {q.dispositions_since_batch}")
-    out.append(
-        "- merged, not landed: " + ("n/a (in-project)" if q.merged_not_landed is None else str(q.merged_not_landed))
-    )
-    out += ["", "## Inbox", ""]
+    out += ["", *queue_lines(q), "", "## Inbox", ""]
     open_ids = {r["id"] for r in inbox if r.get("type") == "intake"}
     dispositioned = {
         r.get("on") for r in inbox if r.get("type") == "disposition" and r.get("outcome") in ("accepted", "declined")

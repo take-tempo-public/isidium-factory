@@ -37,13 +37,24 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
+import pytest
+
 import isidium.store
-from isidium.store.core.disclosure import DECLARED, NAMESPACES, RULES, namespace_of
+from isidium.store.core.disclosure import DECLARED, NAMESPACES, RULES, Disclosure, namespace_of
 
 PACKAGE = Path(isidium.store.__file__).parent
+# **The tools are swept too** [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified fails"*].
+# `tools/verify_chain.py` raised `verify.shallow` (K7a, F1) — the first rule id outside the package — and this sweep
+# read `packages/` alone, so the id was classified nowhere and a second one would not have been seen. A tool's ids
+# join the table like the package's: a tool speaks to the operator at the forge and the terminal, never to a peer,
+# so its namespace is `full`; an unclassified tool id fails the build exactly as a package id does. The repository
+# root is the second source root, so a tool's site reads `tools/<file>:<line>`.
+REPO = Path(__file__).resolve().parents[2]
+TOOLS = REPO / "tools"
 
 # `<namespace>.<name>[.<name>…]`: lower-case, hyphens inside a segment, at least one dot, never a colon.
 # Deliberately strict about the alphabet — this is the shape C-12's table keys on and the port's enum encodes.
@@ -132,22 +143,24 @@ def computed_namespaces(path: Path) -> Iterator[tuple[int, str]]:
             yield found
 
 
-def _sources(paths: Sequence[Path] | None) -> tuple[list[Path], Path]:
-    """The files to read and the root their names are shown against. `paths` exists so a test can run the sweep over
-    a source it planted: two of the four arms have no discriminator inside the package — the bare-payload arm because
-    K2b emptied it, the computed-namespace arm because every f-string namespace is also a literal somewhere — and an
-    arm with no discriminator is an arm a mutation walks straight through."""
+def _sources(paths: Sequence[Path] | None) -> list[tuple[Path, Path]]:
+    """The files to read, each with the root its name is shown against: the package's modules against the package,
+    the tools against the repository (Q21). `paths` exists so a test can run the sweep over a source it planted: two
+    of the four arms have no discriminator inside the package — the bare-payload arm because K2b emptied it, the
+    computed-namespace arm because every f-string namespace is also a literal somewhere — and an arm with no
+    discriminator is an arm a mutation walks straight through."""
     if paths is None:
-        return sorted(PACKAGE.rglob("*.py")), PACKAGE
+        package = [(p, PACKAGE) for p in sorted(PACKAGE.rglob("*.py"))]
+        tools = [(p, TOOLS.parent) for p in sorted(TOOLS.glob("*.py"))]
+        return package + tools
     listed = list(paths)
-    return listed, listed[0].parent
+    return [(p, listed[0].parent) for p in listed]
 
 
 def swept(paths: Sequence[Path] | None = None) -> dict[str, list[str]]:
     """id -> the `file:line` sites that raise it."""
     out: dict[str, list[str]] = {}
-    files, root = _sources(paths)
-    for path in files:
+    for path, root in _sources(paths):
         for line, rid, _form in rule_ids(path):
             out.setdefault(rid, []).append(f"{path.relative_to(root).as_posix()}:{line}")
     return out
@@ -156,9 +169,9 @@ def swept(paths: Sequence[Path] | None = None) -> dict[str, list[str]]:
 def swept_by_form() -> dict[str, list[str]]:
     """form -> the `file:line` sites written in it."""
     out: dict[str, list[str]] = {form: [] for form in FORMS}
-    for path in sorted(PACKAGE.rglob("*.py")):
+    for path, root in _sources(None):
         for line, _rid, form in rule_ids(path):
-            out[form].append(f"{path.relative_to(PACKAGE).as_posix()}:{line}")
+            out[form].append(f"{path.relative_to(root).as_posix()}:{line}")
     return out
 
 
@@ -167,8 +180,7 @@ def namespaces(paths: Sequence[Path] | None = None) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for rid, sites in swept(paths).items():
         out.setdefault(namespace_of(rid), []).extend(sites)
-    files, root = _sources(paths)
-    for path in files:
+    for path, root in _sources(paths):
         for line, ns in computed_namespaces(path):
             out.setdefault(ns, []).append(f"{path.relative_to(root).as_posix()}:{line}")
     return out
@@ -249,6 +261,30 @@ def test_every_namespace_the_code_can_raise_is_classified() -> None:
     raised = namespaces()
     missing = {ns: sites[:3] for ns, sites in raised.items() if ns not in NAMESPACES}
     assert not missing, f"namespaces the code raises and `core/disclosure.py` does not classify: {missing}"
+
+
+def test_a_tool_only_rule_id_is_swept_and_classified_full() -> None:
+    """Q21 (c), the positive half: `verify.shallow` is found at its site under `tools/`, its namespace has a row,
+    and the row is `full` — the tool speaks to the operator, never to a peer."""
+    ids = swept()
+    assert [s.split(":")[0] for s in ids["verify.shallow"]] == ["tools/verify_chain.py"], ids.get("verify.shallow")
+    assert NAMESPACES[namespace_of("verify.shallow")].disclosure is Disclosure.FULL
+    assert "verify" in namespaces(), "the namespace pass does not read the tools"
+
+
+def test_an_unclassified_tool_id_fails_the_sweep_like_a_package_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Q21 (c), the failing half — proven against a planted tool, because the real `tools/` holds nothing
+    unclassified: with the tools directory pointed at one file raising `invented.tool`, the classification test
+    fails naming the namespace, and the site reads `tools/<file>:<line>`."""
+    planted = tmp_path / "tools"
+    planted.mkdir()
+    (planted / "probe.py").write_text('raise Refusal("invented.tool", "", "planted")\n', encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "TOOLS", planted)
+    assert namespaces()["invented"] == ["tools/probe.py:1"]
+    with pytest.raises(AssertionError, match="invented"):
+        test_every_namespace_the_code_can_raise_is_classified()
 
 
 def test_every_rule_id_in_a_declare_explicitly_namespace_is_classified() -> None:

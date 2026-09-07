@@ -5,9 +5,10 @@ and nothing else is guaranteed; every other isidium part is a group that dispatc
     isidium init | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
     isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
 
-Output is JSON by default (agents and scripts read it); `--text` renders the board's human form — the board only,
-today: a card and the queue answer JSON until their renderers exist (03 §1.5 pins their forms) [K7c, F23]. A refusal
-prints its rule id and exits non-zero.
+Output is JSON by default (agents and scripts read it); `--text` renders the human form of the board and of the
+queue — the queue's is the board's own first section, from the one renderer [K10, item 6]; a card answers JSON
+until its renderer exists (03 §1.5 pins its form as the merged timeline, which needs the factory's ledger) [K7c,
+F23]. A refusal prints its rule id and exits non-zero.
 """
 
 from __future__ import annotations
@@ -187,7 +188,7 @@ def show(
         bool,
         typer.Option(
             "--text",
-            help="render the board's human form (board only: card and queue answer JSON until their renderers exist)",
+            help="render the human form (board and queue; a card answers JSON until its renderer exists)",
         ),
     ] = False,
 ) -> None:
@@ -200,7 +201,7 @@ def show(
     try:
         transport, _cfg, _wd = _transport()
         result = transport.call("show", args)
-        if text and target == "board":
+        if text and target in ("board", "queue"):
             _out(result["markdown"], text=True)
         else:
             _out(result)

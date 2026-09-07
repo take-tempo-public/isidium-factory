@@ -1,0 +1,98 @@
+# K10's mutations (2026-09-06) -- the leftovers before the bridge. One mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/k10.toml --show        # the bytes each one would write, as a diff (F24)
+#   python tools/mutate.py tools/mutations/k10.toml M1 --workers 2
+#
+# M1 puts the roll-up back in card order (item 1). M2 un-builds a rejected sitting to the wrong parent -- its own
+# original commit (item 3). M3 makes the rule-id sweep read the package alone again (Q21). M4 drops the dry run's
+# deduplication (Q20). M5 takes `immutable = true` off `root` in config@3 (Q16's schema half). M6 puts the chain
+# verifier's genesis-hook reset back, so a `repair --history` reads `tampered` again (item 2's finding). M7 drops
+# the landing record from `bind`, the one door whose only signal is the counter (item 2). Each names the test that
+# must notice.
+
+[[mutation]]
+id = "M1"
+label = "the roll-up runs in card order again -- a container inside a container depends on the ids (item 1)"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''    out: dict[int, Projection] = {cid: _projected(cid, doc, core[cid], inp, labels) for cid, doc in inp.cards.items()}
+    _roll_up(out, _members_of(inp.cards))
+    return out
+'''
+replace = '''    out: dict[int, Projection] = {cid: _projected(cid, doc, core[cid], inp, labels) for cid, doc in inp.cards.items()}
+    for cid, kids in _members_of(inp.cards).items():
+        pr = out.get(cid)
+        if pr is None:
+            continue
+        out[cid] = _rolled_up(pr, [out[k].label for k in kids if k in out])
+    return out
+'''
+
+[[mutation]]
+id = "M2"
+label = "a rejected sitting is un-built to its own original commit, not to the pre-commit parent (item 3)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''            head = self.repo.head
+            if head is not None:
+                self.repo.undo_commit(head, parent)
+'''
+replace = '''            head = self.repo.head
+            if head is not None:
+                self.repo.undo_commit(head, sha)
+'''
+
+[[mutation]]
+id = "M3"
+label = "the rule-id sweep reads the package alone again -- a tool's id is classified nowhere (Q21)"
+file = "tests/unit/test_rule_ids.py"
+find = '''        tools = [(p, TOOLS.parent) for p in sorted(TOOLS.glob("*.py"))]
+        return package + tools
+'''
+replace = '''        tools = [(p, TOOLS.parent) for p in sorted(TOOLS.glob("*.py"))]
+        return package + tools[:0]
+'''
+
+[[mutation]]
+id = "M4"
+label = "the dry run's verdicts are no longer deduplicated (Q20)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        key = (r.rule, r.path, r.detail)
+        if key in seen:
+            continue
+'''
+replace = '''        key = (r.rule, r.path, r.detail)
+        if key in seen:
+            pass
+'''
+
+[[mutation]]
+id = "M5"
+label = "config@3 no longer flags root immutable -- the schema half of Q16 is gone"
+file = "packages/isidium-store/src/isidium/store/registry/schemas/config@3.toml"
+find = '''default = { value = "docs/work/" }
+immutable = true
+'''
+replace = '''default = { value = "docs/work/" }
+'''
+
+[[mutation]]
+id = "M6"
+label = "the verifier's genesis hook wipes the hash map again -- every repair --history reads tampered (item 2's finding)"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = '''                h0 = genesis_after_repair(e)
+                h_by_seq[0] = h0
+'''
+replace = '''                h0 = genesis_after_repair(e)
+                h_by_seq = {0: h0}
+'''
+
+[[mutation]]
+id = "M7"
+label = "bind no longer records whether its act landed -- the counter stays still under a failed push (item 2)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        _wr, _blobs, deferred = self._commit_policy(e, realm, at)
+        self._landing(deferred)  # the entry is the realm's act and is returned whole; `main` may lag (Q18)
+        return e
+'''
+replace = '''        _wr, _blobs, deferred = self._commit_policy(e, realm, at)
+        return e
+'''

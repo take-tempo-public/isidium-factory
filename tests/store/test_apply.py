@@ -105,7 +105,7 @@ def test_c4_newcard_rides_the_batch(hz: Harness) -> None:
     # a NewCard draft may not ride the batch (a creation that needs no signature is write's)
     bad = WriteRequest(NewCard("draft-in-batch"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None)
     assert any(
-        v.startswith("ratify.not-a-signed-act")
+        v["rule"] == "ratify.not-a-signed-act"
         for v in next(iter(st.ratify([bad], OWNER, dry_run=True)["verdicts"].values()))
     )
 
@@ -136,7 +136,7 @@ def test_c5_landed_closure_by_seq_compare(hz: Harness) -> None:
     # the sidecar's head BELOW the closed entry: not landed → the contributor may retract
     st.state = {"cards": {f"{g:04d}": {"history_head": {"seq": closed_seq - 1, "h": "x"}}}}
     dry = st.ratify([WriteRequest(str(st.path_of(g)), rt, head)], PLANNER, dry_run=True)
-    assert any(v.startswith("ratify.not-a-signed-act") for v in dry["verdicts"][g])  # unsigned = write's, not ratify's
+    assert any(v["rule"] == "ratify.not-a-signed-act" for v in dry["verdicts"][g])  # unsigned = write's, not ratify's
     # the sidecar's head AT the closed entry: landed → the owner's
     st.state = {"cards": {f"{g:04d}": {"history_head": {"seq": closed_seq, "h": "x"}}}}
     refuses("write.requires-owner", lambda: st.write(path_of(st, g), rt, head, None, PLANNER))
@@ -171,10 +171,10 @@ def test_c7_refs_resolve_at_ratification(hz: Harness) -> None:
     # and the one whose path is absent is still refused, by the store, at ratification
     gone = hz.draft("refs-gone", refs=["nope.md"])
     verdicts = st.ratify([gone], PLANNER, dry_run=True)["verdicts"][gone]
-    assert [v.split(" @ ")[0] for v in verdicts] == ["ref.unresolved"]
+    assert [v["rule"] for v in verdicts] == ["ref.unresolved"]
     refuses("ratify.invalid", lambda: st.ratify([gone], OWNER))
     inside = hz.draft("refs-inside", refs=["docs/work/cards/0001-x.md"])  # a repo path, under the harness's root
-    assert st.ratify([inside], PLANNER, dry_run=True)["verdicts"][inside][0].startswith("ref.inside-root")
+    assert st.ratify([inside], PLANNER, dry_run=True)["verdicts"][inside][0]["rule"] == "ref.inside-root"
     # **the store recorded the blob the tree names** — the fingerprint's input, and drift's, is unchanged by any of
     # this, which is the claim Q11 turns on
     resolved, _rs = st._resolve_refs(st.docs[str(st.path_of(good))])

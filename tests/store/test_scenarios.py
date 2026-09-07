@@ -621,7 +621,7 @@ def test_d6_batch_writes(hz: Harness) -> None:
     assert all(v == [] for v in dry["verdicts"].values()) and signer.calls == calls and len(st.journal.rows()) == jn
     assert dry["display"][1][3]["questions_removed"] == ["Q1"] and dry["display"][1][3]["answers_added"] == ["Q1"]
     stale = st.ratify([WriteRequest(str(st.path_of(a)), ra, {"seq": 0, "h": "x"})], PLANNER, dry_run=True)
-    assert any(v.startswith("write.stale") for v in stale["verdicts"][a])
+    assert any(v["rule"] == "write.stale" for v in stale["verdicts"][a])  # typed since K10 (Q20)
     refuses("write.grant", lambda: st.ratify(reqs, PLANNER))  # the grant matrix, first
     r = st.ratify(reqs, OWNER)
     assert signer.calls == calls + 1 and len(st.journal.rows()) == jn + 1 and len(st.journal.rows()[-1]["paths"]) == 4
@@ -645,7 +645,7 @@ def test_d6_batch_writes(hz: Harness) -> None:
     tend = Document(copy.deepcopy(de.head), copy.deepcopy(de.sections))
     tend.head["summary"] = "just tending"
     dry = st.ratify([WriteRequest(str(st.path_of(d)), tend, he)], OWNER, dry_run=True)
-    assert any(v.startswith("ratify.not-a-signed-act") for v in dry["verdicts"][d])
+    assert any(v["rule"] == "ratify.not-a-signed-act" for v in dry["verdicts"][d])
 
 
 def test_d6_display_pin(hz: Harness) -> None:

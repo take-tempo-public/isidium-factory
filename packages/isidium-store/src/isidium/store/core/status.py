@@ -334,22 +334,55 @@ def _depends_on(doc: Document) -> list[int]:
     return [d for d in doc.head.get("depends_on", []) if isinstance(d, int)]
 
 
-def project(inp: Inputs) -> dict[int, Projection]:
-    """Every card's projection: one hashing pass for the core labels; one hash-free pass for the guards (row 10) and
-    row 11's ready/ratified split; then the container roll-up (1.5)."""
-    core: dict[int, tuple[Label, str]] = {cid: _core_label(cid, doc, inp) for cid, doc in inp.cards.items()}
-    labels = {cid: lbl for cid, (lbl, _k) in core.items()}
-    out: dict[int, Projection] = {cid: _projected(cid, doc, core[cid], inp, labels) for cid, doc in inp.cards.items()}
+def _members_of(cards: Mapping[int, Document]) -> dict[int, list[int]]:
+    """parent id → its members, from the heads — one pass over the set."""
     members: dict[int, list[int]] = {}
-    for cid, doc in inp.cards.items():
+    for cid, doc in cards.items():
         par = doc.head.get("parent")
         if isinstance(par, int):
             members.setdefault(par, []).append(cid)
-    for cid, kids in members.items():
-        pr = out.get(cid)
-        if pr is None:
+    return members
+
+
+def _roll_up(out: dict[int, Projection], members: Mapping[int, Sequence[int]]) -> None:
+    """The container roll-up over the whole set — **members before their parents, whatever the ids** [K10, item 1;
+    K7b's finding 1].
+
+    The roll-up used to run in card order, so a container inside a container read its member's label *after* the
+    member's own roll-up when the member's id was lower and *before* it otherwise: the same nested set projected
+    differently depending on which card had been created first, and `project_one` — which reads the subtree beneath
+    the card it is asked about — could not agree with it on a nested set. A post-order walk from each parent rolls
+    the deepest containers first; a member's label is read only once it is final. Iterative rather than recursive
+    so a deep ladder costs a list, not a stack frame per level; `seen` marks a card on its first visit, which is
+    what makes a `parent` cycle — refused at every write door, but a bypass can put one on `main` — terminate
+    instead of walking forever.
+    """
+    seen: set[int] = set()
+    for start in members:
+        if start in seen:
             continue
-        out[cid] = _rolled_up(pr, [out[k].label for k in kids if k in out])
+        stack: list[tuple[int, bool]] = [(start, False)]
+        while stack:
+            cid, ready = stack.pop()
+            if ready:
+                pr = out.get(cid)
+                if pr is not None:
+                    out[cid] = _rolled_up(pr, [out[k].label for k in members[cid] if k in out])
+                continue
+            if cid in seen:
+                continue
+            seen.add(cid)
+            stack.append((cid, True))
+            stack.extend((k, False) for k in members[cid] if k in members and k not in seen)
+
+
+def project(inp: Inputs) -> dict[int, Projection]:
+    """Every card's projection: one hashing pass for the core labels; one hash-free pass for the guards (row 10) and
+    row 11's ready/ratified split; then the container roll-up (1.5), members before their parents."""
+    core: dict[int, tuple[Label, str]] = {cid: _core_label(cid, doc, inp) for cid, doc in inp.cards.items()}
+    labels = {cid: lbl for cid, (lbl, _k) in core.items()}
+    out: dict[int, Projection] = {cid: _projected(cid, doc, core[cid], inp, labels) for cid, doc in inp.cards.items()}
+    _roll_up(out, _members_of(inp.cards))
     return out
 
 
@@ -365,15 +398,15 @@ def project_one(inp: Inputs, cid: int) -> Projection:
     projected label of each member whose `parent` it is. Everything else in the set is irrelevant to this card's
     row, and is not computed.
 
-    A member's label is its guard-pass label, which is what `project` reads for the roll-up too — except that
-    `project` rolls containers up in card order and reads a member that is itself a container *after* its own
-    roll-up when the member's id is lower, and before it otherwise. That order dependence is `project`'s, older
-    than this function, and is recorded rather than copied; on a set with no container inside a container the two
-    agree on every card, which is what `tests/store/test_k7b.py` asserts.
+    A member's label is its *rolled-up* label when the member is itself a container — the subtree beneath the card
+    is read, members before their parents, which is the order `project` rolls the whole set in since K10 (item 1);
+    so the two agree on a nested set as on a flat one, and `tests/store/test_k10.py` asserts it in both id orders.
+    The subtree is the cost, not the set: a container's members, their members, and nothing beside them.
     """
     if cid not in inp.cards:
         raise KeyError(cid)
     core: dict[int, tuple[Label, str]] = {}
+    members = _members_of(inp.cards) if inp.kids is None else None  # one pass, only when the caller has no index
 
     def core_of(c: int) -> tuple[Label, str]:
         if c not in core:
@@ -385,14 +418,20 @@ def project_one(inp: Inputs, cid: int) -> Projection:
         labels = {x: core_of(x)[0] for x in _depends_on(d) if x in inp.cards}
         return _projected(c, d, core_of(c), inp, labels)
 
-    pr = projected(cid)
-    if inp.kids is not None:
-        kids = sorted(inp.kids.get(cid, ()))
-    else:
-        kids = [k for k, d in inp.cards.items() if d.head.get("parent") == cid]
-    if not kids:
-        return pr
-    return _rolled_up(pr, [projected(k).label for k in kids if k in inp.cards])
+    def kids_of(c: int) -> list[int]:
+        return sorted(inp.kids.get(c, ())) if inp.kids is not None else (members or {}).get(c, [])
+
+    seen: set[int] = set()  # a `parent` cycle terminates here (see `_roll_up`); the member reads as un-rolled
+
+    def rolled(c: int) -> Projection:
+        pr = projected(c)
+        if c in seen:
+            return pr
+        seen.add(c)
+        kids = kids_of(c)
+        return _rolled_up(pr, [rolled(k).label for k in kids if k in inp.cards]) if kids else pr
+
+    return rolled(cid)
 
 
 @dataclass(frozen=True)

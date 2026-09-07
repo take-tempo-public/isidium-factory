@@ -755,15 +755,20 @@ def test_a_policy_write_cannot_move_the_root_and_init_records_the_stores_own() -
     """The review moved `root` by one signed policy write and the store accepted it. Now: `init` writes the store's
     root into the tree (the schema's default happens to be the same one here, and the key is written regardless);
     an `init --root` naming another root is refused; a policy write moving `root` — explicitly, or by deleting the
-    key where the default would differ — is refused `config.root-mismatch`, and the tree in memory is unchanged."""
+    key where the default would differ — is refused, and the tree in memory is unchanged.
+
+    **Which id the policy write answers depends on the adopted version** [K10, Q16's schema half]: under `config@3`
+    the key is `immutable = true`, so the schema's own gate fires first (`config.immutable`, the generic row every
+    immutable key answers with) and the store's `config.root-mismatch` is what remains for `init` and for a tenant
+    still on `config@2` — `tests/store/test_k10.py` asserts the `config@2` tenant's answer."""
     hz = fresh("q16")
     st = hz.st
-    assert st.config_tree["root"] == "docs/work/" == st.root
+    assert st.config_tree["root"] == "docs/work/" == st.root and st.config_tree["schema"] == 3
     tree = dict(st.config_tree)
     tree["root"] = "other/"
     base = {"seq": st.policy[-1]["seq"], "h": st.policy[-1]["h"]}
     r = refuses("validate.failed", lambda: st.write("config.toml", tree, base, None, OWNER))
-    assert verdicts_of(r) == [("config.root-mismatch", "root")]
+    assert verdicts_of(r) == [("config.immutable", "root")]
     assert st.config_tree["root"] == "docs/work/" and st.eff["root"] == "docs/work/"
     assert st.is_governed_repo_path("docs/work/cards/0001-x.md")
     assert not st.is_governed_repo_path("other/cards/0001-x.md")
@@ -787,7 +792,7 @@ def test_a_policy_write_cannot_move_the_root_and_init_records_the_stores_own() -
     del bare["root"]
     base = {"seq": elsewhere.policy[-1]["seq"], "h": elsewhere.policy[-1]["h"]}
     r = refuses("validate.failed", lambda: elsewhere.write("config.toml", bare, base, None, OWNER))
-    assert verdicts_of(r) == [("config.root-mismatch", "root")]
+    assert verdicts_of(r) == [("config.immutable", "root")]  # deleting an immutable key is moving it (config@3)
 
 
 # ---- Q17: both doors burn ---------------------------------------------------------------------------------------------------

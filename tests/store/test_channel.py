@@ -183,8 +183,9 @@ def test_the_walk_runs_over_the_channel(open_channel: Callable[..., Channel]) ->
 
     # 3. the dry run — always, before presenting (round 48). The verdict map's keys arrived as JSON object keys, so
     # they are strings here and were `int`s in the in-process walk: the wire is a real boundary and this is where it
-    # shows. (The `verdicts` map is `list[str]` of rendered refusals on this path — a finding with no owning chunk,
-    # carried since K1b-iii and not this chunk's to close.)
+    # shows. (The `verdicts` map is `{id: [{rule, path, detail}]}` since K10 — Q20, ruled 2026-09-06 — where it had
+    # been `list[str]` of rendered refusals, a finding carried since K1b-iii; `tests/store/test_k10.py` asserts the
+    # typed shape over the service, this walk asserts the empty case over the real channel.)
     dry = transport.call("ratify", {"ids": [cid], "dry_run": True})
     assert dry["verdicts"][str(cid)] == [] and dry["display"][0][1] == "ratified"
 

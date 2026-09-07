@@ -22,12 +22,13 @@ from isidium.store.server.store import NewCard, Store, WriteRequest
 from .conftest import BASE_SCOPE, OWNER, PLANNER, Harness, base_head, tenant_checkout
 from .test_walk import client_cfg
 
-CREATED = "ratify.not-a-signed-act:created"
+# The typed record since K10 (Q20): the act is the verdict's detail, where K7c matched the string `…-act:created`.
+CREATED: dict[str, Any] = {"rule": "ratify.not-a-signed-act", "path": "", "detail": "created"}
 
 # ---- F18: a creation in the batch draws one verdict ------------------------------------------------------------------
 
 
-def _dry(st: Store, status: str, caller: Caller) -> list[str]:
+def _dry(st: Store, status: str, caller: Caller) -> list[dict[str, Any]]:
     """The dry run's verdicts for one `NewCard` born with `status`; nothing is allocated (Q17's dry run)."""
     req = WriteRequest(NewCard(f"born-{status}"), Document(base_head(0, status), {"Scope": BASE_SCOPE}), None)
     verdicts = st.ratify([req], caller, dry_run=True)["verdicts"]
@@ -37,8 +38,8 @@ def _dry(st: Store, status: str, caller: Caller) -> list[str]:
 
 @pytest.mark.parametrize("caller", [OWNER, PLANNER], ids=["owner", "contributor"])
 def test_a_draft_born_in_the_batch_is_refused_once_and_as_a_creation(hz: Harness, caller: Caller) -> None:
-    """Exactly `[":created"]` — not twice (F18: two arms fired on the same member; measured twice on tenant #0 and
-    in the harness), and with the creation suffix, which every earlier assertion (`startswith`) could not see."""
+    """Exactly one `created` verdict — not two (F18: two arms fired on the same member; measured twice on tenant #0
+    and in the harness), and with the creation act, which every earlier assertion (`startswith`) could not see."""
     assert _dry(hz.st, "draft", caller) == [CREATED]
 
 
@@ -49,7 +50,7 @@ def test_a_card_born_ratified_in_the_batch_is_a_signed_act_and_draws_no_verdict(
 def test_a_creation_that_also_fails_validation_carries_the_creation_verdict_once(hz: Harness) -> None:
     verdicts = _dry(hz.st, "closed", OWNER)
     assert verdicts.count(CREATED) == 1, verdicts
-    assert [v.split(" @ ")[0] for v in verdicts] == ["validate.failed", CREATED]
+    assert [v["rule"] for v in verdicts] == ["validate.failed", "ratify.not-a-signed-act"]
 
 
 # ---- F22: the tenant's .gitignore keeps its own line ending ---------------------------------------------------------
@@ -140,10 +141,11 @@ def test_show_text_renders_the_board_and_a_card_still_answers_json(
     assert [args for _name, args in double.calls] == [{"target": "card", "id": 7}, {"target": "board"}]
 
 
-def test_the_text_option_says_it_is_the_boards() -> None:
-    """The help string is the contract until the renderers exist (F23, recorded rather than built)."""
+def test_the_text_option_says_whose_it_is() -> None:
+    """The help string is the contract until the card's renderer exists (F23, recorded rather than built; the queue's
+    is built since K10, item 6, so the help names both)."""
     cmd = typer.main.get_command(cli_mod.app)
     assert isinstance(cmd, typer.core.TyperGroup)
     text = next(p for p in cmd.commands["show"].params if p.name == "text")
     assert isinstance(text, typer.core.TyperOption) and text.help is not None
-    assert "board only" in text.help and "JSON" in text.help, text.help
+    assert "board and queue" in text.help and "JSON" in text.help, text.help
