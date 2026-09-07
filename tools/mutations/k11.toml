@@ -1,0 +1,84 @@
+# K11's mutations (2026-09-07) -- the planner's seat, and the checkout that stays current. One mutation per
+# invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/k11.toml --show        # the bytes each one would write, as a diff (F24)
+#   python tools/mutate.py tools/mutations/k11.toml M1 --workers 2
+#
+# M1 takes the hook's classification out, so a checkout behind its file is answered by the resolver's generic id
+# instead of the hook's remedy-naming one. M2 puts the resolver's silent fallback to config@1 back (K10's finding 1).
+# M3 installs the skill into the first harness directory only (Q22 (a) says both). M4 moves the skill's copy of the
+# prompt one byte off its home. M5 drops the two skill lines from the ignore block. M6 classifies every absent
+# version as registry-behind, naming the wrong remedy when the toolkit itself lacks it. Each names the test that
+# must notice.
+
+[[mutation]]
+id = "M1"
+label = "the hook no longer classifies a behind checkout -- the resolver's id answers, and no remedy is named"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = '''    registry = Registry.for_checkout(repo)
+    registry_current(tree, registry)
+    eff = resolve_effective(tree, registry)
+'''
+replace = '''    registry = Registry.for_checkout(repo)
+    eff = resolve_effective(tree, registry)
+'''
+
+[[mutation]]
+id = "M2"
+label = "the resolver falls back to config@1 in silence again on a version the registry lacks (K10's finding 1)"
+file = "packages/isidium-store/src/isidium/store/registry/config.py"
+find = '''    ref = f"config@{v}"
+    if not registry.has(ref):
+        raise Refusal("config.schema-unknown", "schema", f"{ref} not in the installed registry")
+    return _merge(registry.defaults_of(ref), tree)
+'''
+replace = '''    ref = f"config@{v}"
+    if not registry.has(ref):
+        ref = "config@1"
+    return _merge(registry.defaults_of(ref), tree)
+'''
+
+[[mutation]]
+id = "M3"
+label = "the skill lands in the first harness directory only (Q22 (a): both)"
+file = "packages/isidium-store/src/isidium/store/client/install.py"
+find = '''    for d in SKILL_DIRS:
+        base = repo / d / SKILL
+'''
+replace = '''    for d in SKILL_DIRS[:1]:
+        base = repo / d / SKILL
+'''
+
+[[mutation]]
+id = "M4"
+label = "the skill's copy of the prompt is one byte off its ruled home"
+file = "packages/isidium-store/src/isidium/store/client/skill/isidium-planner/references/planner-v1.md"
+find = '''agent-kind=planner version=1 -->'''
+replace = '''agent-kind=planner version=2 -->'''
+
+[[mutation]]
+id = "M5"
+label = "the ignore block no longer names the skill directories"
+file = "packages/isidium-store/src/isidium/store/client/install.py"
+find = '''    ".isidium/",
+    *(f"{d}/{SKILL}/" for d in SKILL_DIRS),
+)
+'''
+replace = '''    ".isidium/",
+)
+'''
+
+[[mutation]]
+id = "M6"
+label = "every absent version is registry-behind -- the wrong remedy when the toolkit itself lacks it"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = '''    ref = f"config@{v}"
+    if Registry.shipped().has(ref):
+        raise Refusal(
+            "hook.registry-behind",
+'''
+replace = '''    ref = f"config@{v}"
+    if registry is not None:
+        raise Refusal(
+            "hook.registry-behind",
+'''

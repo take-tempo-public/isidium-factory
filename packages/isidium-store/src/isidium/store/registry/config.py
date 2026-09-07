@@ -872,14 +872,48 @@ def _merge(defaults: Mapping[str, Any], over: Mapping[str, Any]) -> dict[str, An
     return out
 
 
+def named_version(tree: Mapping[str, Any]) -> int | None:
+    """The `config@<n>` the file NAMES, read from the file alone: its own `config.toml` row when it carries a
+    `[[governed]]` table, else its head `schema` key; `None` when it names nothing — an empty tree, a checkout before
+    `init` has written the file. Registry-free on purpose [K11]: this is the question a reader asks *before* it
+    knows whether the version is installed, and K10's finding 1 was that nobody asked it — `adopted_version` answers
+    `None` for a version the registry lacks, and the resolver below then read a `config@2` file against `config@1`."""
+    rows = tree.get("governed")
+    if isinstance(rows, list):
+        for r in rows:
+            if isinstance(r, dict) and r.get("path") == "config.toml":
+                sch = str(r.get("schema", ""))
+                if SCHEMA_REF.fullmatch(sch):
+                    name, ver = parse_ref(sch)
+                    if name == "config":
+                        return ver
+                break
+    head = tree.get("schema")
+    return head if isinstance(head, int) and not isinstance(head, bool) else None
+
+
 def resolve_effective(tree: Mapping[str, Any], registry: Registry) -> dict[str, Any]:
     """The effective config: the tenant's file overlaid on the defaults of its ADOPTED schema version — never on a
-    binary's built-ins (Y1). One overlay pass; 0 store calls; idempotent."""
+    binary's built-ins (Y1). One overlay pass; 0 store calls; idempotent.
+
+    **A version the file names and this registry lacks is refused here, not papered over** [K11, 2026-09-07; K10's
+    finding 1]. This used to fall back to the head `schema` and then to `config@1` in silence, and tenant #0's
+    pre-commit hook resolved a `config@2` file against `config@1`'s defaults for two chunks with nothing saying so —
+    the registry under `.isidium/schemas/` had not been refreshed since K8. The id is the validator's own, with the
+    validator's own words (`config.schema-unknown`), so every reader of a checkout — the hook, the forge's chain
+    verifier — answers as the store would; the store itself never reaches this arm, because it validates the file
+    first and refuses the same id there. A tree that names **no** version still resolves against `config@1`: that is
+    a checkout before `init` has written the file, where there is nothing to be behind (the seam, named: `init`
+    adopts `registry.newest("config")`; this arm does not)."""
     v = adopted_version(tree, registry)
-    if v is None or not registry.has(f"config@{v}"):
-        s = tree.get("schema")
-        v = s if isinstance(s, int) and registry.has(f"config@{s}") else 1
-    return _merge(registry.defaults_of(f"config@{v}"), tree)
+    if v is None:
+        v = named_version(tree)
+    if v is None:
+        v = 1
+    ref = f"config@{v}"
+    if not registry.has(ref):
+        raise Refusal("config.schema-unknown", "schema", f"{ref} not in the installed registry")
+    return _merge(registry.defaults_of(ref), tree)
 
 
 # ----------------------------------------------------------------------------------- [[governed]] resolution (L2-3)

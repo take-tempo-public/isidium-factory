@@ -37,8 +37,8 @@ from typing import Any
 
 from ..core.grammar import parse_config
 from ..core.refusal import Refusal
-from ..registry.config import CONFIG_ORDERS, governed_resolve, resolve_effective
-from ..registry.loader import Registry
+from ..registry.config import CONFIG_ORDERS, governed_resolve, named_version, resolve_effective
+from ..registry.loader import Registry, adopted_version
 from .config import ClientConfig
 
 HOOK_SCRIPT = """#!/bin/sh
@@ -92,11 +92,57 @@ def governed_paths(repo: Path, root: str | None = None) -> tuple[str, list[dict[
         tree, _entries, _rs = parse_config(cfg_path.read_text(encoding="utf-8"), CONFIG_ORDERS)
     # The manifest is the EFFECTIVE one — the checkout's own `[[governed]]` over its adopted version's declared
     # default, never a copy in the binary (C-1, ruled 2026-08-29). `for_checkout` reads the registry `init`
-    # installed here, falling back to the shipped one in a clone that has not run `init` yet, so this opens no new
-    # refusal path. It is one registry load per commit, and since K1d that load is a directory listing plus the one
-    # document `resolve_effective` asks for (C-13).
-    eff = resolve_effective(tree, Registry.for_checkout(repo))
+    # installed here, falling back to the shipped one in a clone that has not run `init` yet. It is one registry
+    # load per commit, and since K1d that load is a directory listing plus the one document `resolve_effective`
+    # asks for (C-13). **Since K11 it opens two refusal paths, on purpose** — see `registry_current`.
+    registry = Registry.for_checkout(repo)
+    registry_current(tree, registry)
+    eff = resolve_effective(tree, registry)
     return str(tree.get("root", root)), list(eff["governed"])
+
+
+def registry_current(tree: Mapping[str, Any], registry: Registry) -> None:
+    """Refuse, naming the remedy, when the file adopts a `config@<n>` this checkout's installed registry lacks
+    [K11, 2026-09-07; ruled at K10's checkpoint: *"Fold it into the planner prompt chunk"*].
+
+    **What went wrong.** `init` installs the registry that ships that day and nothing refreshed it: tenant #0's
+    checkout held K8's eight documents through K6's `config@2` and K10's `config@3`, `Registry.for_checkout` read
+    that directory alone, and `resolve_effective` fell back to `config@1`'s defaults in silence — so this hook
+    computed the governed manifest from the wrong version for two chunks and nothing said so. The manifest is this
+    hook's **whole input**; a manifest from the wrong version is a hook protecting the wrong set of paths.
+
+    **Refuse — not warn, not refresh — and why, at the site (the judgment the ruling left here).** A *warning* is
+    the silent fallback with a footnote: the commit still passes on a manifest the hook knows is the wrong
+    version's. *Refreshing itself* makes a pre-commit check into a thing with two jobs, writing into the checkout
+    in the middle of somebody's commit — and it cannot serve the second case below at all, where the toolkit
+    itself lacks the version. *Refusing* is the posture `hook.unknown-root` already takes (S5, K1b-ii item 8): a
+    hook that cannot tell what is governed refuses and says why, and the remedy is one command, once per bump.
+
+    **Two ids because two remedies** (C-2, C-5): the package ships the version and the checkout does not have it →
+    `hook.registry-behind`, run `isidium install`; the package lacks it too → `hook.toolkit-behind`, upgrade
+    `isidium-store` first. Both carry the version as their path. `Registry.shipped()` is opened only on the refusal
+    path — a directory listing, no parse (K1d) — so a current checkout pays nothing here. A tree that names no
+    version is not behind; it is a checkout before `init` wrote the file, and `resolve_effective` says what it does
+    with that."""
+    v = adopted_version(tree, registry)
+    if v is None:
+        v = named_version(tree)
+    if v is None or registry.has(f"config@{v}"):
+        return
+    ref = f"config@{v}"
+    if Registry.shipped().has(ref):
+        raise Refusal(
+            "hook.registry-behind",
+            ref,
+            "config.toml adopts a schema version this checkout's installed registry (`.isidium/schemas/`) does not "
+            "hold, and this toolkit ships it. Run `isidium install` here, then commit again.",
+        )
+    raise Refusal(
+        "hook.toolkit-behind",
+        ref,
+        "config.toml adopts a schema version this toolkit does not ship, so no local install can supply it. "
+        "Upgrade `isidium-store`, run `isidium install` here, then commit again.",
+    )
 
 
 def staged(repo: Path) -> list[str]:

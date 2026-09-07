@@ -9,7 +9,13 @@ The factory: a card-driven, owner-gated build line for isidium projects — and 
 | the factory | `isidium-factory` (`packages/isidium-factory`) | `isidium.factory` | the line: ledger, dispatch, adapters, the lander (a store client) |
 
 `isidium` is a PEP 420 namespace shared across parts; the CLI is `isidium` with the store's verbs at the top
-level (`isidium init`, `isidium write 42 …`, `isidium ratify`) and other parts as groups.
+level (`isidium init`, `isidium install`, `isidium write 42 …`, `isidium ratify`) and other parts as groups.
+
+- **The planner's seat:** `prompts/planner/v1.md` is the planner's prompt (its ruled home); the `isidium-planner`
+  skill — which `isidium init` and `isidium install` write into every checkout, for Claude Code and pi alike —
+  carries a byte-identical copy beside the store surface's how-to. `AGENTS.md` is the context file both harnesses
+  read (Claude Code through `CLAUDE.md`'s one-line import). A checkout whose toolkit has moved runs
+  `isidium install`; until it does, the pre-commit hook refuses and says so.
 
 - **Design record:** `docs/design/` (01 the transition catalog; 03 the card schema; 03a the inbox; 03b the
   governed store; 04 the config schema; 05 the agent roster; 06 the code constraints). The canonical sync record —

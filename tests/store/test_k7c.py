@@ -57,14 +57,15 @@ def test_a_creation_that_also_fails_validation_carries_the_creation_verdict_once
 
 
 def test_a_crlf_gitignore_keeps_every_line_crlf_and_a_second_install_changes_nothing(tmp_path: Path) -> None:
-    """Three CRLF lines in, five out — the count is the discriminator (before F22: three in, none out)."""
+    """Three CRLF lines in, seven out — the count is the discriminator (before F22: three in, none out; five out
+    until K11 grew the block by the two skill directories, Q22)."""
     gi = tmp_path / ".gitignore"
     gi.write_bytes(b"# existing\r\n*.pyc\r\nbuild/\r\n")
     ignore_client(tmp_path)
     data = gi.read_bytes()
-    assert data.count(b"\r\n") == 5 and data.count(b"\n") == 5, data
+    assert data.count(b"\r\n") == 7 and data.count(b"\n") == 7, data
     assert data.startswith(b"# existing\r\n*.pyc\r\nbuild/\r\n# isidium-store: ") and data.endswith(
-        b"\r\n.isidium/\r\n"
+        b"\r\n.isidium/\r\n.claude/skills/isidium-planner/\r\n.agents/skills/isidium-planner/\r\n"
     )
     ignore_client(tmp_path)
     assert gi.read_bytes() == data
@@ -75,12 +76,12 @@ def test_an_lf_gitignore_stays_lf_and_an_absent_one_is_born_lf(tmp_path: Path) -
     gi.write_bytes(b"*.pyc\nbuild/\n")
     ignore_client(tmp_path)
     data = gi.read_bytes()
-    assert b"\r" not in data and data.count(b"\n") == 4 and data.endswith(b"\n.isidium/\n"), data
+    assert b"\r" not in data and data.count(b"\n") == 6 and data.endswith(b"\n.agents/skills/isidium-planner/\n"), data
     born_in = tmp_path / "born"
     born_in.mkdir()
     ignore_client(born_in)
     born = (born_in / ".gitignore").read_bytes()
-    assert b"\r" not in born and born.count(b"\n") == 2 and born.endswith(b"\n.isidium/\n"), born
+    assert b"\r" not in born and born.count(b"\n") == 4 and born.endswith(b"\n.agents/skills/isidium-planner/\n"), born
 
 
 def test_a_gitignore_with_no_trailing_newline_gets_one_in_its_own_ending(tmp_path: Path) -> None:
@@ -88,7 +89,7 @@ def test_a_gitignore_with_no_trailing_newline_gets_one_in_its_own_ending(tmp_pat
     gi.write_bytes(b"*.pyc\r\nbuild/")
     ignore_client(tmp_path)
     data = gi.read_bytes()
-    assert data.startswith(b"*.pyc\r\nbuild/\r\n# isidium-store: ") and data.count(b"\r\n") == 4, data
+    assert data.startswith(b"*.pyc\r\nbuild/\r\n# isidium-store: ") and data.count(b"\r\n") == 6, data
     assert b"\n" not in data.replace(b"\r\n", b""), "a bare LF crept in"
 
 
@@ -98,7 +99,8 @@ def test_install_itself_keeps_a_crlf_gitignore_crlf(tmp_path: Path) -> None:
     (work / ".gitignore").write_bytes(b"node_modules/\r\n")
     install(work, client_cfg())
     data = (work / ".gitignore").read_bytes()
-    assert data.count(b"\r\n") == 3 and data.count(b"\n") == 3 and data.endswith(b"\r\n.isidium/\r\n"), data
+    assert data.count(b"\r\n") == 5 and data.count(b"\n") == 5, data
+    assert data.endswith(b"\r\n.isidium/\r\n.claude/skills/isidium-planner/\r\n.agents/skills/isidium-planner/\r\n")
 
 
 # ---- F23: `--text` renders the board; a card and the queue answer JSON ------------------------------------------------
