@@ -64,8 +64,8 @@ def schemas(checkout: Path) -> Path:
 def test_opening_a_registry_reads_nothing_and_installed_costs_no_parse(schemas: Path) -> None:
     """C-13's first claim, and the one the brief said to assert rather than assume.
 
-    Both halves matter: the count is 0, **and** the refs that come back are the eleven the directory holds
-    (eight before K6 added `config@2`, `journal@1` and `journal@2`). A
+    Both halves matter: the count is 0, **and** the refs that come back are the twelve the directory holds
+    (eight before K6 added `config@2`, `journal@1` and `journal@2`; eleven before K10 added `config@3`). A
     registry that had quietly stopped finding documents would satisfy the count on its own."""
     with counted() as parsed:
         reg = Registry.from_directory(schemas)
@@ -73,7 +73,7 @@ def test_opening_a_registry_reads_nothing_and_installed_costs_no_parse(schemas: 
         held = {ref for ref in refs if reg.has(ref)}
     assert parsed == [], f"opening a registry parsed {parsed}"
     on_disk = {p.name.removesuffix(".toml") for p in schemas.glob("*.toml")}
-    assert refs == frozenset(on_disk) == held and len(refs) == 11, sorted(refs)
+    assert refs == frozenset(on_disk) == held and len(refs) == 12, sorted(refs)
 
 
 def test_the_shipped_registry_is_opened_the_same_way() -> None:
@@ -83,7 +83,7 @@ def test_the_shipped_registry_is_opened_the_same_way() -> None:
         reg = Registry.shipped()
         refs = reg.installed
     assert parsed == [], f"opening the shipped registry parsed {parsed}"
-    assert {"registry@1", "config@1", "card@1"} <= refs and len(refs) == 11, sorted(refs)
+    assert {"registry@1", "config@1", "card@1", "config@3"} <= refs and len(refs) == 12, sorted(refs)
 
 
 def test_one_question_parses_one_document_and_asking_twice_parses_none(schemas: Path) -> None:
@@ -187,7 +187,7 @@ def test_a_toml_the_registry_cannot_name_is_refused_when_the_directory_is_listed
 
     # `INSTALLED` is not a `*.toml`, so the file `init` writes beside the schemas is not caught by this
     (schemas / "notes.toml").unlink()
-    assert (schemas / "INSTALLED").is_file() and len(Registry.from_directory(schemas).installed) == 11
+    assert (schemas / "INSTALLED").is_file() and len(Registry.from_directory(schemas).installed) == 12
 
 
 def test_the_eager_constructor_still_refuses_a_registry_with_no_bytes() -> None:

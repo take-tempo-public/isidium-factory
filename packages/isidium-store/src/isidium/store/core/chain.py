@@ -76,7 +76,16 @@ def verify_chain(
 ) -> list[Verdict]:
     """Recompute h_1..h_N. Per-entry verdicts: `ok` | `tampered` | `covered` (between a repair's restart point and
     the repair entry — unverifiable, covered by the repair, 5.5). `genesis_after_repair(entry) -> h0'` supports the id
-    repair (a new genesis from the repaired entry on)."""
+    repair (a new genesis from the repaired entry on).
+
+    **A repair restarting from seq `k ≥ 1` chains from `h_k` — the hash the file already holds — whether or not a
+    genesis hook is supplied** [K10, found by item 2's repair-door test]. The hook used to replace the whole
+    `h_by_seq` map with the new genesis, so with it supplied — and `Store.check` and `tools/verify_chain.py` both
+    supply it, with the *same* genesis — every `repair --history` restarting from `k ≥ 1` was re-linked from the
+    genesis and read `tampered` at the store and at the forge, forever, while the same entries verified `ok`
+    without the hook (the K8-era scenario test called the verifier bare and so could not see it). The hook now
+    moves only seq 0: a restart from the genesis resumes from the (possibly new) genesis; a restart from `k`
+    resumes from `h_k`, as 03 §5.5 says the repair entry chains."""
     verdicts: list[Verdict] = []
     h_by_seq: dict[int, str] = {0: h0}
     prev = h0
@@ -92,7 +101,7 @@ def verify_chain(
             k = k if isinstance(k, int) and not isinstance(k, bool) else 0
             if genesis_after_repair is not None:
                 h0 = genesis_after_repair(e)
-                h_by_seq = {0: h0}
+                h_by_seq[0] = h0
             base = h_by_seq.get(k, h0)
             for j in range(k, seq - 1):
                 verdicts[j] = "covered"

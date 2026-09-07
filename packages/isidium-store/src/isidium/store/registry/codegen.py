@@ -221,7 +221,9 @@ def tool_schemas(registry: Registry | None = None) -> dict[str, Any]:
         "ratify": {
             "description": (
                 "The sitting (03 §1.12): a list of typed writes under ONE signature. `dry_run` runs the same function "
-                "minus the signature and the writes and returns the verdicts and the exact display the signer shows."
+                "minus the signature and the writes and returns the verdicts — `{id: [{rule, path, detail}]}`, typed "
+                "records keyed by card id, a `validate.failed` verdict carrying its own `verdicts` — and the exact "
+                "display the signer shows."
             ),
             "inputSchema": {
                 "type": "object",

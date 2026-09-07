@@ -178,7 +178,8 @@ def test_a_certificate_without_client_auth_is_not_a_credential() -> None:
 
 
 def test_the_journal_row_records_the_credential_and_the_version(svc: tuple[Service, Harness]) -> None:
-    """H-1 item 1, and the ruling's third clause. A tenant born on this toolkit is on `config@2` from `init`, so
+    """H-1 item 1, and the ruling's third clause. A tenant born on this toolkit is on the newest config version from
+    `init` (`config@3` since K10; `config@2` when this was written) and every one of them declares `journal@2`, so
     every row it writes is `journal@2`: it carries `schema = 2` and the credential — `sha256:` over the DER bytes the
     peer presented, the same digest the edge keys admission on — inside the hashed content, and the chain verifies."""
     service, hz = svc
@@ -200,7 +201,7 @@ def test_the_journal_row_records_the_credential_and_the_version(svc: tuple[Servi
     for dropped in ("credential", "schema"):
         assert chain.link(prev, {k: v for k, v in content.items() if k != dropped}) != row["h"], dropped
     # `init` adopted the newest config version, and with it the journal version, from the first row
-    assert hz.st.config_tree["schema"] == 2 and cfg.journal_schema(hz.st.eff) == 2
+    assert hz.st.config_tree["schema"] == REGISTRY.newest("config") == 3 and cfg.journal_schema(hz.st.eff) == 2
     assert hz.st.journal.rows()[0]["schema"] == 2  # the harness's `init` is a direct call: a version, no channel
     assert hz.st.journal.genesis == chain.genesis("journal", hz.st.tenant, 2)
 
@@ -319,12 +320,12 @@ def test_a_journal_that_opened_under_v1_keeps_its_genesis_across_the_bump(tmp_pa
 # ---- the migration act: a config@1 tenant adopts config@2, and its next row is journal@2 ------------------------
 
 
-def registry_without(tmp_path: Path, ref: str) -> Registry:
-    """The shipped registry minus one document — a toolkit that predates it."""
+def registry_without(tmp_path: Path, *refs: str) -> Registry:
+    """The shipped registry minus the named documents — a toolkit that predates them."""
     d = tmp_path / "registry"
     d.mkdir()
     for name, raw in REGISTRY.source().items():
-        if name != ref:
+        if name not in refs:
             (d / f"{name}.toml").write_bytes(raw)
     return Registry.from_directory(d)
 
@@ -343,7 +344,13 @@ def test_a_config1_tenant_writes_v1_rows_until_the_policy_act_moves_it(tmp_path:
     ack = "software-grade signatures are acceptable for this tenant for now"
 
     v1 = Store(
-        "k6mig", repo, Journal(path, "k6mig"), registry_without(tmp_path, "config@2"), clock, signer, root="docs/work/"
+        "k6mig",
+        repo,
+        Journal(path, "k6mig"),
+        registry_without(tmp_path, "config@2", "config@3"),  # a pre-K6 toolkit: `init` adopts the newest it has
+        clock,
+        signer,
+        root="docs/work/",
     )
     v1.init(OWNER, software_key_ack=ack)
     assert v1.config_tree["schema"] == 1 and cfg.journal_schema(v1.eff) == 1
@@ -418,7 +425,7 @@ def test_the_cli_hands_the_owners_file_over_with_its_own_head_as_the_base(tmp_pa
     args = config_write_args(f)
     assert args["path"] == "config.toml" and "history" not in args["document"]
     assert args["base"] == {"seq": hz.st.policy[-1]["seq"], "h": hz.st.policy[-1]["h"]}
-    assert args["document"]["schema"] == 2 and args["document"]["tenant"] == "k6-cli"
+    assert args["document"]["schema"] == REGISTRY.newest("config") == 3 and args["document"]["tenant"] == "k6-cli"
     (tmp_path / "bad.toml").write_text("this = [is not\n", encoding="utf-8")
     with pytest.raises(Refusal) as refused:
         config_write_args(tmp_path / "bad.toml")
@@ -449,7 +456,7 @@ def test_the_journal_key_is_config2s_and_a_version_this_store_cannot_write_is_re
     assert [r.rule for r in rs] == ["config.pattern"], rs
     rs = cfg.validate_tree({**v2, "chain_opened_under": 3}, REGISTRY)
     assert [(r.rule, r.path) for r in rs] == [("config.range", "chain_opened_under")], rs
-    assert REGISTRY.newest("config") == 2 and REGISTRY.newest("journal") == 2
+    assert REGISTRY.newest("config") == 3 and REGISTRY.newest("journal") == 2  # `config@3` since K10; still journal@2
 
 
 # ---- the registration file: re-read on change, fail closed when it will not parse --------------------------------

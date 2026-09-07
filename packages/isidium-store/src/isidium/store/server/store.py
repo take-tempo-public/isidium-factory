@@ -90,12 +90,25 @@ class _Member:
     fields: list[str]
     build: str
     ref: derive.Ref
-    verdict: list[str]
+    verdict: list[Refusal]  # typed, never rendered, until `_ratify_result` discloses them [K10, Q20]
     ready: bool
     before: Document | None
     after: Document
     diff: list[str]
     since_signed: dict[str, Any] | None = None
+
+
+def _typed_verdicts(verdicts: Sequence[Refusal]) -> list[dict[str, Any]]:
+    """One member's verdicts as disclosed records, first occurrence kept, in order (see `_ratify_result`)."""
+    seen: set[tuple[str, str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for r in verdicts:
+        key = (r.rule, r.path, r.detail)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r.disclosed())
+    return out
 
 
 class Store:
@@ -1343,8 +1356,15 @@ class Store:
 
     def _compose_member(self, req: WriteRequest, caller: Caller, prospective_id: int | None) -> _Member:
         """Steps 1–3 of `write` for one batch member (dry and real runs alike); the id of a NewCard member is
-        prospective on a dry run and allocated inside the transaction on the real one."""
-        verdict: list[str] = []
+        prospective on a dry run and allocated inside the transaction on the real one.
+
+        **Every verdict is a `Refusal`, kept typed** [K10, Q20, ruled 2026-09-06: *"Yes, typed in K10"*]. The list
+        used to hold rendered strings — `str(r)` for a refusal, `f"write.stale: head {…}"` and
+        `"ratify.not-a-signed-act:" + act` built by hand — and the dry run answered them as strings, so a planner
+        reading the sitting's verdicts parsed prose where Q7 had already given `validate.failed` typed records.
+        The two hand-built verdicts are refusals now (`ratify.not-a-signed-act` carries the act as its detail), so
+        the sweep sees their ids and `_ratify_result` discloses every verdict through the one filter."""
+        verdict: list[Refusal] = []
         if isinstance(req.path, NewCard):
             assert prospective_id is not None
             path = self.card_path(prospective_id, req.path.slug)
@@ -1371,20 +1391,20 @@ class Store:
                 relations=before is None or bool(set(diff) & derive.RELATION_KEYS),
             )
         except Refusal as r:
-            verdict.append(str(r))
+            verdict.append(r)
         if before is not None and (dict(req.base) if req.base is not None else None) != before.head_of():
-            verdict.append(f"write.stale: head {before.head_of()}")
+            verdict.append(Refusal("write.stale", path, f"head {before.head_of()}"))
         try:
             d = derive.derive(before, after, req.ref, diff)
         except Refusal as r:
-            verdict.append(str(r))
+            verdict.append(r)
             d = derive.Derived("amended", [], diff)
         if before is not None and not d.diff and req.ref is None:
-            verdict.append("write.no-change")
+            verdict.append(Refusal("write.no-change", path))
         try:
             self._check_judging_ref(req.ref, after)
         except Refusal as r:
-            verdict.append(str(r))
+            verdict.append(r)
         bh = before.head if before else None
         reason = derive.needs_signature(
             bh, after.head, d.diff, req.ref, landed_closures=self._landed_closures(before) if before else frozenset()
@@ -1402,11 +1422,11 @@ class Store:
         # verdict twice (measured: a draft in the batch answered `:created` twice, on tenant #0 and in the harness).
         # One predicate, one site; a change to what a creation needs is `needs_signature`'s to make.
         if (d.diff or req.ref is not None) and reason is None:
-            verdict.append("ratify.not-a-signed-act:" + d.act)
+            verdict.append(Refusal("ratify.not-a-signed-act", "", d.act))
         # refs resolve at ratification (1.14, C7) — for a creation, a ratification, or a refs change
         if after.head.get("refs") and (before is None or d.act in ("ratified", "created") or "refs" in d.diff):
             _resolved, rs = self._resolve_refs(after)
-            verdict += [str(r) for r in rs]
+            verdict += rs
         gated_touched = before is None or bool(set(d.diff) & canon.GATED_KEYS)
         build = self._build[path] if not gated_touched else canon.build_hash(after.head, after.scope(), self.gated_x())
         ref = req.ref
@@ -1466,7 +1486,7 @@ class Store:
                     if s.get("kind") != "manual-evidence"
                 }
             )
-            runner_rs = [str(r) for r in cfg.dry_run_check(self.eff, kinds)]
+            runner_rs = cfg.dry_run_check(self.eff, kinds)
             for m in members:
                 m.verdict += runner_rs
             return self._ratify_result(members, True)
@@ -1482,7 +1502,10 @@ class Store:
             members = [self._compose_member(req, caller, pid) for req, pid in zip(reqs, allocated, strict=True)]
             result = self._ratify_result(members, False)
             if any(m.verdict for m in members):
-                raise Refusal("ratify.invalid", "", str(result["verdicts"]))
+                # the same words the dry run renders, one line: `<id>: <rule> @ <path>: <detail>; …`
+                raise Refusal(
+                    "ratify.invalid", "", "; ".join(f"{m.id}: {r.render()}" for m in members for r in m.verdict)
+                )
             at = self.now()
             entries: list[Entry] = []
             for m in members:
@@ -1531,10 +1554,21 @@ class Store:
 
     @staticmethod
     def _ratify_result(members: Sequence[_Member], dry_run: bool) -> dict[str, Any]:
+        """The sitting's answer. `verdicts` is `{id: [{rule, path, detail}, …]}` — **typed records, the shape Q7
+        gave `validate.failed`, through the same disclosure filter** [K10, Q20, ruled 2026-09-06]: each verdict is
+        `Refusal.disclosed()`, so a `validate.failed` verdict carries its own `verdicts` array and a terse rule
+        (none is raised here today) would contribute its id alone. The terminal prints these same words — rule,
+        path, detail — as fields rather than as one rendered line.
+
+        **Deduplicated by the whole record, not by rule id alone.** The ruling's words were *"deduplicated by rule
+        id"*, written for F18's doubled `:created`, where the two verdicts were identical; two `ref.unresolved`
+        verdicts on two different refs share a rule id and are two facts a planner needs both of, so the key is
+        `(rule, path, detail)` — the duplicate F18 named collapses, distinct verdicts under one rule do not.
+        Surfaced at K10's checkpoint as the agent's reading of the ruling."""
         display = [(m.id, m.act, m.build, m.since_signed) for m in members]
         return {
             "dry_run": dry_run,
-            "verdicts": {m.id: m.verdict for m in members},
+            "verdicts": {m.id: _typed_verdicts(m.verdict) for m in members},
             "display": display,
             "ready": {m.id: m.ready for m in members},
         }

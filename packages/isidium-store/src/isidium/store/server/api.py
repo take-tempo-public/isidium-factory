@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 from pydantic import ValidationError
 
+from ..core import board
 from ..core.grammar import Document, UpdateBlock
 from ..core.refusal import Refusal
 from ..registry.generated.models import CardHead
@@ -237,6 +238,10 @@ class Api:
                 "dispositions_since_batch": q.dispositions_since_batch,
                 "inbox_counts": dict(q.inbox_counts),
                 "merged_not_landed": q.merged_not_landed,
+                # The queue's human form beside its fields [K10, item 6]: the board's own queue section, from the
+                # one renderer (`board.queue_lines`) — a few lines on the wire, and no second renderer at the
+                # terminal for the two to disagree through.
+                "markdown": "\n".join(board.queue_lines(q)) + "\n",
             }
         if target == "board":
             return {"markdown": self.store.show("Board")}
