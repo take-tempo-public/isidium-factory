@@ -583,6 +583,38 @@ container has had. `restart=unless-stopped` treats that as what it is: a stop, n
 in flight waits for it; one with a peer holding a connection open gives up on that peer at the grace and lets the
 journal's write-ahead replay whatever it was in the middle of at the next start.
 
+### K10: `config@3`, the second migration act — 2026-09-06
+
+The K10 image (`4dc50755d997`, built from `main` at `99db6ea`) went up the usual way — the container recreated from
+its recorded `CreateCommand` through `podman machine ssh`, the VM's MTU cap still at 1400 — healthy in **31 s**; the
+running code was checked for the members-first roll-up, the queue renderer and the typed verdicts, and the image's
+registry for `config@3.toml`. Then, from the workstation checkout:
+
+- `isidium show queue --text` printed the board's queue section (eight lines, `## Queue` first), and `show queue`
+  carries the same text as `markdown` beside its fields.
+- `isidium ratify --writes <a new draft> --dry-run` answered in 3.4 s with prospective id 4 and **one typed
+  verdict** — `{"rule": "ratify.not-a-signed-act", "path": "", "detail": "created"}` — where K7c had seen the
+  rendered string; `origin/main` unmoved, no card `0004`, the counter still 3.
+- **The act.** The owner's `config.toml`, edited to adopt `config@3` — head `schema = 3`, the `config.toml` manifest
+  row → `config@3`, `chain_opened_under = 1` untouched — handed over with `isidium write --config`, answered in 6.7 s:
+  policy entry **3** (`act = "config-policy"`, `fields = ["governed", "schema"]`), journal row **5** (`schema = 2`,
+  the owner's credential), commit **`dd13fbe`** pushed to `main` through the deploy key, `landed = true`. Inside the
+  container: five rows, the genesis still `schema:1`, the counter untouched. The forge's `chain-verify`,
+  `identity-sweep` and `ci` on `dd13fbe` all passed.
+- **The gate.** The migrated file with `root = "docs/elsewhere/"`, handed over the same way, was refused at the
+  terminal — `validate.failed @ config.toml: config.immutable @ root: 'docs/work/' -> 'docs/elsewhere/': this key is
+  immutable once written` — exit 2, `main` unmoved. Under `config@2` the same edit had answered the store's own
+  `config.root-mismatch`; the schema's gate now answers first.
+- **The checkout's installed registry was stale, and this is a finding.** `.isidium/schemas/` in the workstation
+  checkout held the eight documents `init` installed at K8 — no `config@2`, no `journal@*` — and nothing had
+  refreshed it since; `Registry.for_checkout` reads that directory alone (no overlay on the shipped registry) and
+  `resolve_effective` falls back to `config@1`'s defaults, silently, when the adopted version is not installed. The
+  pre-commit hook has been resolving tenant #0's `config.toml` that way since K6. Refreshed here with
+  `install_schemas(Path("."))` from a Python prompt — twelve documents — after which `python tools/verify_chain.py
+  --repo .` printed `ok config.toml [config@3] 3 entries`. There is no `isidium` verb for it yet; the chunk plan
+  carries the finding.
+- `isidium check 2` → chain `["ok"]`, integrity `[]`; `show card 2` → `draft`.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
