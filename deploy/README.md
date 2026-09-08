@@ -656,6 +656,32 @@ registry for `config@3.toml`. Then, from the workstation checkout:
   carries the finding.
 - `isidium check 2` → chain `["ok"]`, integrity `[]`; `show card 2` → `draft`.
 
+### K12: the door reads `main` before it resolves — finding 2 closed on a live store — 2026-09-08
+
+The bridge's first turn (2026-09-07) found that the store resolved `refs` against the clone it held at start, and
+synced to `main` only at commit time — which the dry run never reaches. A dry run answered `ref.unresolved` for a
+file that had been on `main` for a day. K12 moved the fetch to the door: the sitting and a card born `ratified`
+read `main` before they resolve. Demonstrated on tenant #0, on the K12 image `d0f659368880`, in the one order that
+proves it:
+
+- The container was **recreated on the K12 image before PR #32 merged**, so its clone was the pre-merge `main`,
+  `2acf4619` — which does not hold `deploy/tenant-chain-verify.yml` (that file arrives with the merge). `git -C
+  /var/lib/isidium/repo rev-parse HEAD` inside the container: `2acf4619`.
+- **PR #32 merged**; `main` became `c1815654`, now holding the file.
+- From the workstation checkout, `isidium ratify --writes <a draft with `refs = ["deploy/tenant-chain-verify.yml"]`>`
+  — the default dry run — answered **one verdict, `ratify.not-a-signed-act: created`** (the draft is a `write`, not
+  the sitting's to sign), and **no `ref.unresolved`**: prospective id 4, `ready` true, exit 0. Before K12 the same
+  dry run against a clone at `2acf4619` answered `ref.unresolved … no such path`, which is what the mutation
+  `k12.toml` M1 reproduces against the suite.
+- The clone `rev-parse HEAD` **after** the dry run was `c1815654`: the door fetched and fast-forwarded onto the
+  merged tip, which is why the ref resolved. Nothing was written — `show queue --text` still empty, no card `0004`,
+  the counter unmoved.
+
+`isidium verify` also ran as the forge's `verify` check **on PR #32 itself** and passed: the verb and the workflow
+that calls it landed together, so the pull request shipping the verb was gated by it. The tenant recipe
+(*Gating a tenant's `main`*) was exercised on this checkout from a pinned `git+file://` install, 28.7 s, exit 0;
+sartor's own gate is the bridge's to stand up.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
