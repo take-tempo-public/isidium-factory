@@ -1,4 +1,8 @@
 """The governed-path gate: verify every governed document in a checkout, offline, with the store's own functions.
+**Shipped as `isidium verify`** [K12, 2026-09-08] so a tenant's forge — which holds the tenant's checkout and
+whatever it installs, never this repository's tools — can gate its `main` the way tenant #0's is gated. It was
+`tools/verify_chain.py` from K8 to K11; the module is the tool whole, minus the `DocSchema` mirror that
+`registry/docschema.py` now serves to the store and to this alike.
 
 **Where it runs, and what that makes it** (K8, ruled Q13 2026-09-03): as a *required status check* on every pull
 request, where it is prevention — `main` requires a pull request, so this is where a governed change by anyone but
@@ -7,53 +11,53 @@ included, since the store's deploy key is the one writer the pull-request gate d
 
 **What forge CI can and cannot see** (7bg.6, [proposed]): a hosted runner cannot reach the store's journal, so the
 per-commit reconciliation — *does a journal row explain every governed change?* — stays on the factory side. What a
-runner *can* do with a plain checkout is two things, and this script is both of them:
+runner *can* do with a plain checkout is two things, and this module is both of them:
 
 1. **Always:** every governed document parses, and every chained one recomputes — `core/chain.verify_chain()`
    over the policy chain in `config.toml`, over every card's history, over every page's. A hand edit that does not
    rebuild the chain is `tampered`; a governed file that does not parse is `tampered`, which is the store's own rule
    at load (`Store.load` puts it in `unreadable`; `check` reports it as `integrity:tampered`).
-2. **With `--diff-base <ref>` (a pull request):** no governed path changed between the base and `HEAD`. Governed
-   paths are written by the store, on `main`, or not at all — the same predicate the tenant's pre-commit hook applies
-   to a staged set, called through the same function (`client/hook.offending`).
+2. **With `diff_base` (a pull request):** no governed path changed between the base and `HEAD`. Governed paths are
+   written by the store, on `main`, or not at all — the same predicate the tenant's pre-commit hook applies to a
+   staged set, called through the same function (`client/hook.offending`).
 
 **What it does not do, said plainly.** It verifies chain *integrity*, not signatures: a well-formed entry appended by
 someone holding the store's code but not its key would pass here and be caught by the store's own compare-and-swap
 at its next write (`write.stale` / `git.push-rejected`). Signature verification of signed entries against the policy
-chain's bindings is `Store.verify_entry`'s, and porting it here is a recorded follow-on, not this script's claim.
+chain's bindings is `Store.verify_entry`'s, and porting it here is a recorded follow-on, not this module's claim.
 Inbox and sidecar-event records are parsed but their links are not recomputed: the store chains them at write time
-and does not itself re-verify them at load, and this script asserts nothing the store does not.
+and does not itself re-verify them at load, and this asserts nothing the store does not.
 
-**This is not a test that can pass on silence** (the standing rule). Every governed document is printed with its
-verdict; a root with no intact chained document exits 1 — after `init` there is always `config.toml`, so "nothing
+**Which registry.** `Registry.for_checkout`: the checkout's installed one when `.isidium/schemas` is there, else the
+package's. At a forge a fresh clone has no `.isidium/` (every tenant ignores it), so the verifier reads the registry
+of the package the workflow installed — which must therefore be at or after the commit that shipped the version the
+tenant adopted, or a `config@N` the package lacks is refused `hook.toolkit-behind` (K11) rather than verified against
+`config@1`. The tenant recipe in `deploy/README.md` says so where the pin is chosen.
+
+**This is not a test that can pass on silence** (the standing rule). Every governed document is reported with its
+verdict; a root with no intact chained document fails — after `init` there is always `config.toml`, so "nothing
 found" is a wrong root, not a clean one — and a checkout with no root at all is refused the way the hook refuses.
 
-Exit 0: every chained document `ok`, nothing `tampered`, no governed change off main. Exit 1 otherwise.
+The verb prints one line per document and a summary, and exits 0 when every chained document is `ok`, nothing is
+`tampered` and no governed change is off `main`; exit 1 otherwise — a verdict. A `Refusal` (`verify.shallow`, a
+checkout with no root) is the CLI's, exit 2: two exits, two meanings, `check`'s shape.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from isidium.store.client import hook
-from isidium.store.core import chain
-from isidium.store.core.grammar import (
-    CARD_TABLE_ORDER,
-    DocSchema,
-    SectionSpec,
-    parse_config,
-    parse_jsonl,
-    parse_markdown,
-)
-from isidium.store.core.refusal import Refusal
-from isidium.store.registry.config import CONFIG_ORDERS, governed_resolve
-from isidium.store.registry.loader import Registry
+from ..core import chain
+from ..core.grammar import parse_config, parse_jsonl, parse_markdown
+from ..core.refusal import Refusal
+from ..registry.config import CONFIG_ORDERS, governed_resolve
+from ..registry.docschema import doc_schema
+from ..registry.loader import Registry
+from . import hook
 
 OK = "ok"
 TAMPERED = "tampered"
@@ -64,7 +68,7 @@ SKIPPED = "skipped"
 @dataclass(frozen=True)
 class Line:
     """One governed document and what was found: `ok` (parsed, chain recomputes), `tampered` (does not parse, or a
-    link does not recompute), `parsed` (parsed, and this kind carries no chain this script recomputes), `skipped`
+    link does not recompute), `parsed` (parsed, and this kind carries no chain this module recomputes), `skipped`
     (a kind the store does not parse at load either)."""
 
     path: str
@@ -90,28 +94,23 @@ class Report:
             self.count(TAMPERED) == 0 and not self.governed_changed and not self.governed_removed and self.count(OK) > 0
         )
 
-
-def doc_schema(registry: Registry, ref: str) -> DocSchema:
-    """A `DocSchema` built from the registry's `name@version` document.
-
-    **This mirrors `server/store.Store.doc_schema`, line for line, and `tests/store/test_verify_chain.py` holds the
-    two equal for every Markdown schema the registry ships.** The builder belongs in `registry/` where both could
-    call it; moving it there touches `packages/`, which K8 does not, so the drift is made a test instead of a hope
-    (the WP3 idiom: drift is a test). A later chunk that moves it deletes this function and the test's other half.
-    """
-    doc = registry.get(ref)
-    name = ref.split("@", 1)[0]
-    sections = tuple(
-        SectionSpec(str(s["name"]), "updates" if s["name"] == "Updates" else "prose", bool(s.get("required", False)))
-        for s in doc.get("sections", [])
-    )
-    bound = max(
-        [int(s.get("max_bytes", 1 << 20)) for s in doc.get("sections", []) if s.get("kind") == "prose"] or [1 << 20]
-    )
-    genesis = "card" if name == "card" else "page"
-    return DocSchema(
-        name, genesis, sections, CARD_TABLE_ORDER if name == "card" else (), doc.get("footer") == "history", bound
-    )
+    def rendered(self) -> list[str]:
+        """The verb's output, one string per line: every document with its verdict, every governed change or
+        disappearance, the summary — and the sentence that says a report with nothing verified is not a pass."""
+        out = [f"{ln.verdict:9}{ln.path}  [{ln.schema}]  {ln.detail}" for ln in self.lines]
+        for p in self.governed_changed:
+            out.append(f"changed  {p}  — a governed path changed off main; the store is its only writer")
+        for p in self.governed_removed:
+            out.append(f"removed  {p}  — a governed path left main; the store never deletes one")
+        ok, tampered = self.count(OK), self.count(TAMPERED)
+        other = self.count(PARSED) + self.count(SKIPPED)
+        out.append(
+            f"isidium: {ok} ok, {tampered} tampered, {other} parsed/skipped, {self.ungoverned} ungoverned files "
+            f"under {self.root or './'}"
+        )
+        if ok == 0 and tampered == 0 and not self.governed_changed and not self.governed_removed:
+            out.append("isidium: nothing verified — a root with no intact chained document is not a pass")
+        return out
 
 
 def _verdict(verdicts: Sequence[str]) -> str:
@@ -235,37 +234,3 @@ def _removed_since_parent(repo: Path) -> list[str]:
         text=True,
     )
     return hook.offending(repo, [p for p in out.stdout.split("\0") if p])
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="verify every governed document in a checkout, offline")
-    ap.add_argument("--repo", type=Path, default=Path.cwd(), help="the checkout (default: the working directory)")
-    ap.add_argument(
-        "--diff-base",
-        default=None,
-        help="a ref; any governed path changed between it and HEAD fails (forge CI off main: the store is the only "
-        "writer of governed paths, and it writes on main)",
-    )
-    a = ap.parse_args(argv)
-    try:
-        rep = verify(a.repo, a.diff_base)
-    except Refusal as r:
-        print(f"isidium: refused — {r.rule}: {r.detail}")
-        return 1
-    for ln in rep.lines:
-        print(f"{ln.verdict:9}{ln.path}  [{ln.schema}]  {ln.detail}")
-    for p in rep.governed_changed:
-        print(f"changed  {p}  — a governed path changed off main; the store is its only writer")
-    for p in rep.governed_removed:
-        print(f"removed  {p}  — a governed path left main; the store never deletes one")
-    print(
-        f"isidium: {rep.count(OK)} ok, {rep.count(TAMPERED)} tampered, {rep.count(PARSED) + rep.count(SKIPPED)} "
-        f"parsed/skipped, {rep.ungoverned} ungoverned files under {rep.root or './'}"
-    )
-    if rep.count(OK) == 0 and rep.count(TAMPERED) == 0 and not rep.governed_changed and not rep.governed_removed:
-        print("isidium: nothing verified — a root with no intact chained document is not a pass")
-    return 0 if rep.passed else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -21,11 +21,9 @@ from .. import __version__
 from ..core import board as board_mod
 from ..core import canon, chain, derive, status, telemetry
 from ..core.grammar import (
-    CARD_TABLE_ORDER,
     DocSchema,
     Document,
     Entry,
-    SectionSpec,
     append_history_line,
     emit_config,
     emit_jsonl_line,
@@ -36,6 +34,7 @@ from ..core.grammar import (
 from ..core.refusal import Refusal, ValidationRefusal
 from ..registry import card as card_mod
 from ..registry import config as cfg
+from ..registry import docschema
 from ..registry.loader import Registry
 from . import reconcile
 from . import refs as refs_mod
@@ -184,21 +183,9 @@ class Store:
     def doc_schema(self, ref: str) -> DocSchema:
         if ref in self._doc_schemas:
             return self._doc_schemas[ref]
-        doc = self.registry.get(ref)
-        name = ref.split("@", 1)[0]
-        sections = tuple(
-            SectionSpec(
-                str(s["name"]), "updates" if s["name"] == "Updates" else "prose", bool(s.get("required", False))
-            )
-            for s in doc.get("sections", [])
-        )
-        bound = max(
-            [int(s.get("max_bytes", 1 << 20)) for s in doc.get("sections", []) if s.get("kind") == "prose"] or [1 << 20]
-        )
-        genesis = "card" if name == "card" else "page"
-        ds = DocSchema(
-            name, genesis, sections, CARD_TABLE_ORDER if name == "card" else (), doc.get("footer") == "history", bound
-        )
+        # One builder, `registry/docschema.py`, shared with the forge's verifier [K12] — the mirror it kept in
+        # `tools/verify_chain.py` and the test that held the two equal are gone with it.
+        ds = docschema.doc_schema(self.registry, ref)
         self._doc_schemas[ref] = ds
         return ds
 
@@ -426,7 +413,8 @@ class Store:
         return None
 
     def _sync_to_main(self) -> None:
-        """**(a) of Q14's ruling: before every write, re-read `main` and fast-forward onto it.**
+        """**(a) of Q14's ruling: before every write, re-read `main` and fast-forward onto it** — and, since K12, at
+        the two doors that resolve refs before they write: the sitting (dry or signed) and a card born `ratified`.
 
         Until this existed a running store never re-read `main` (K4's finding, and the entrypoint said so out loud),
         so under the gate every merged pull request left the store's clone stale and its next governed write refused
@@ -558,7 +546,8 @@ class Store:
         # (a): re-read `main` first, so the commit below is built on the tip the remote holds rather than on
         # whatever this container cloned when it started. Placed ahead of the journal row on purpose — an
         # origin this store cannot reach refuses here, before a row is written and before a commit is made,
-        # rather than after both.
+        # rather than after both. Since K12 the sitting and a born-`ratified` write have synced once already at
+        # their door, so their refs resolved against `main`; this is the fetch across the signer's round trip.
         self._sync_to_main()
         prows: list[dict[str, Any]] = []
         blobs: dict[str, str] = {}
@@ -732,6 +721,10 @@ class Store:
         if is_card:
             self._check_judging_ref(ref, after)
             if before is None and after.head.get("status") == "ratified":
+                # A card born `ratified` resolves its refs here, before `_apply`'s own sync [K12]: the same stale-tree
+                # answer the sitting gave, at this door. It fetches twice — once here, once at the commit across the
+                # signer's round trip — on the rarest write there is; stated, not threaded away through eight doors.
+                self._sync_to_main()
                 self._resolve_refs_or_refuse(after)
         # 4. the signature predicate (+ the caller-aware clause: the diff MOVES status to closed/withdrawn — C15)
         reason = derive.needs_signature(
@@ -1457,6 +1450,20 @@ class Store:
         batch hash, one signer call, one manifest, one journal row, one commit. The dry run is the same function
         minus the signature and the writes."""
         self._require(caller, "ratify:dry-run" if dry_run else "ratify")
+        # **`main` first, at this door** [K12, 2026-09-08 — the bridge's finding 2]. The members below resolve their
+        # refs against the tree this clone holds, and until K12 the only sync was `_apply`'s — which the dry run
+        # never reaches, and the signed run reaches only after its members are composed. Measured on tenant #0: a
+        # container whose clone predated one merged pull request answered `ref.unresolved … no such path` at the
+        # dry run for a file that had been on `main` for a day, while the terminal's pre-flight had passed it — and
+        # the planner is told to present nothing the dry run has not passed. So the dry run pays K9's one fetch
+        # (1568 ms median against GitHub) and reads the tree the sitting would sign against; the signed run keeps
+        # `_apply`'s fetch as well, because the signer's round trip sits between here and the commit and it is
+        # human-paced.
+        #
+        # **What this door now refuses that it did not, and why that is right:** `git.fetch-failed` — a dry run
+        # against a tree it cannot see is not a dry run; and `git.push-rejected` when a governed path moved on the
+        # remote — the bypass `check` exists for, surfaced one sitting earlier than the write would have.
+        self._sync_to_main()
         reqs: list[WriteRequest] = []
         for w in writes:
             if isinstance(w, int):

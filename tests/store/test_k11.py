@@ -16,19 +16,17 @@ Every assertion is a positive discriminator; nothing here passes on "nothing cam
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import shutil
-import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 import typer
 
 from isidium.store.client import cli as cli_mod
 from isidium.store.client import hook as hook_mod
+from isidium.store.client import verify as verify_mod
 from isidium.store.client.install import GITIGNORE_LINES, SKILL, SKILL_DIRS, ignore_client, install, skill_source
 from isidium.store.core.refusal import Refusal
 from isidium.store.registry import config as cfg
@@ -245,23 +243,15 @@ def test_resolve_effective_refuses_a_named_version_the_registry_lacks() -> None:
     assert cfg.named_version({"governed": [{"path": "config.toml", "schema": "card@1"}], "schema": 2}) == 2
 
 
-def _verify_chain() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("verify_chain_k11", REPO / "tools" / "verify_chain.py")
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod  # a dataclass under `from __future__ import annotations` resolves through here
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def test_the_forges_verifier_inherits_the_loud_answer(checkout: Path) -> None:
-    """`tools/verify_chain.py` reads the checkout through the same two functions; at the forge a fresh clone has no
+    """The forge's verifier (`client/verify.py` since K12) reads the checkout through the same two functions; at the
+    forge a fresh clone has no
     `.isidium/`, so the shipped registry is the checkout's and a version the toolkit lacks is refused, never
     verified against `config@1`."""
     write_config(checkout, 9)
     shutil.rmtree(checkout / ".isidium")
     with pytest.raises(Refusal) as refused:
-        _verify_chain().verify(checkout)
+        verify_mod.verify(checkout)
     assert (refused.value.rule, refused.value.path) == ("hook.toolkit-behind", "config@9")
 
 

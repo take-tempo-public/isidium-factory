@@ -1,9 +1,10 @@
 """The advisory gate: every version in `uv.lock` is asked of OSV, in one call, and a hit fails the build.
 
 **Why this is a script and not an action** (K5, ruling 7bg.5: *"monitoring with CI for upstream updates"*). The same
-reason `verify_chain.py` is one: checkout -> one script is the shape that runs unchanged on another forge's runner,
-and this project's forge is not a settled thing. It imports nothing outside the standard library — not even the
-store — so it needs no install step and cannot be broken by the very resolution it is checking.
+reason the governed-path gate was one until K12 shipped it as `isidium verify`: checkout -> one command is the shape
+that runs unchanged on another forge's runner, and this project's forge is not a settled thing. It imports nothing
+outside the standard library — not even the store — so it needs no install step and cannot be broken by the very
+resolution it is checking.
 
 **What it reads.** `uv.lock`, and only the packages whose `source` is a registry. A workspace member has no upstream
 to have an advisory against; a path or git source is not a PyPI name and OSV would answer about a stranger.

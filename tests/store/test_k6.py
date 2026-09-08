@@ -407,11 +407,11 @@ def test_a_config1_tenant_writes_v1_rows_until_the_policy_act_moves_it(tmp_path:
     assert status == 422 and [(v["rule"], v["path"]) for v in body["verdicts"]] == [
         ("config.immutable", "chain_opened_under")
     ]
-    from .test_verify_chain import load_tool
+    from isidium.store.client.verify import _policy  # the forge's verifier, a verb of the package since K12
 
     migrated = tmp_path / "config.toml"
     migrated.write_bytes(st.raw["config.toml"])
-    line = load_tool()._policy(migrated)
+    line = _policy(migrated)
     assert (line.schema, line.verdict) == ("config@2", "ok") and line.detail == f"{len(st.policy)} entries", line
 
 

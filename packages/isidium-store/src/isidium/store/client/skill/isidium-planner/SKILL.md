@@ -94,7 +94,10 @@ tending gesture alone is `set`: `key=value`; `key=` clears; `updates+=title|body
 ## The sitting
 
 `ratify`'s `writes` is a list of `{new_slug | card, document, base?, ref?}` — the same document shape as `write`,
-validated identically. `ids` are cards already in the checkout, ratified as they stand. The answer:
+validated identically. **A `new_slug` in a sitting is a card born `ratified`**: its head says `status = "ratified"`
+and carries what a ratified story needs. A draft creation is `write`'s door; in a sitting it answers
+`ratify.not-a-signed-act` with the act (`created`) as its detail, because an unsigned write is not the sitting's to
+make. `ids` are cards already in the checkout, ratified as they stand. The answer:
 
 ```json
 {
@@ -105,14 +108,17 @@ validated identically. `ids` are cards already in the checkout, ratified as they
            "verdicts": [{"rule": "ref.unresolved", "path": "refs", "detail": "src/x.py::gone"}]}]
   },
   "display": [[7, "ratified", "sha256:…", ["…"]], [8, "created", "sha256:…", []]],
-  "ready": {"7": true, "8": false}
+  "ready": {"7": true, "8": true}
 }
 ```
 
 Read `verdicts` by `rule`. An empty list is a card the store would sign. A `validate.failed` carries its own
 `verdicts`, one record per failed field: fix each and run the dry run again. Verdicts are deduplicated by the whole
-record, so two bad refs are two records. `display` is what the signer sees — card · act · build hash · what changed
-since the last signed entry. Present it; the owner signs with `--sign` (`dry_run` false) under their own credential.
+record, so two bad refs are two records. **`ready` is not the verdicts' summary**: it is the readiness projection —
+`true` when the card has no open `questions` and no `hold`, whatever the verdicts say (card 8 above is "ready" and
+would still be refused). Read `verdicts` for whether the store would sign; `ready` for whether the factory would
+dispatch. `display` is what the signer sees — card · act · build hash · what changed since the last signed entry.
+Present it; the owner signs with `--sign` (`dry_run` false) under their own credential.
 
 ## Reading what the store answers
 

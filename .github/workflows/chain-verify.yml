@@ -34,9 +34,11 @@ jobs:
         # PyPI held that morning — for a gate whose whole job is deciding whether a governed document parses.
         # A parser that floats is a verdict that floats. `--locked` refuses a stale lock rather than resolving one.
         run: uv sync --locked --all-packages --all-extras
+      # The verb, since K12 — the tool it was (`tools/verify_chain.py`) ships in the package as `isidium verify`, so a
+      # tenant's forge runs the same gate from an install alone: `deploy/tenant-chain-verify.yml` is that workflow.
       - name: verify every governed document
         if: github.event_name == 'push'
-        run: uv run --no-sync python tools/verify_chain.py --repo .
+        run: uv run --no-sync isidium verify --repo .
       - name: verify, and refuse any governed change off main
         if: github.event_name == 'pull_request'
-        run: uv run --no-sync python tools/verify_chain.py --repo . --diff-base "origin/${{ github.base_ref }}"
+        run: uv run --no-sync isidium verify --repo . --diff-base "origin/${{ github.base_ref }}"
