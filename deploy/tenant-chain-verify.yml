@@ -1,0 +1,39 @@
+# The governed-path gate for a tenant of isidium-store (K12, 2026-09-08). Copy this file into your repository's
+# .github/workflows/, set STORE_COMMIT, and make `verify` a required check of the ruleset on `main` — the rules
+# tenant #0 runs under: a pull request required, no force-push, no deletion, the store's deploy key the one bypass
+# (deploy/README.md, "Gating a tenant's main").
+#
+# What it checks is written at the top of isidium.store.client.verify: every governed document parses and every
+# chain recomputes; on a pull request, no governed path changed off main. It does not verify signatures and it
+# cannot reach the store's journal — those are the store's own `check`.
+#
+# STORE_COMMIT is the one thing you set. A fresh clone has no .isidium/, so the verifier reads the registry of the
+# package this installs — and that package must ship the config version your tenant adopted, or your own
+# config.toml is refused `hook.toolkit-behind` on every push. The placeholder is not a value on purpose: left in
+# place, the install refuses it before anything is verified against the wrong registry.
+name: chain-verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+env:
+  STORE_COMMIT: "<the isidium-factory commit isidium-store is installed from>"
+  STORE_SPEC: "isidium-store @ git+https://github.com/take-tempo-public/isidium-factory@${{ env.STORE_COMMIT }}#subdirectory=packages/isidium-store"
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # a pull request's diff base, and HEAD^ on main, are not in a shallow clone; the verb refuses one
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          python-version: "3.12" # the floor the package declares
+      - name: verify every governed document
+        if: github.event_name == 'push'
+        run: uvx --from "$STORE_SPEC" isidium verify --repo .
+      - name: verify, and refuse any governed change off main
+        if: github.event_name == 'pull_request'
+        run: uvx --from "$STORE_SPEC" isidium verify --repo . --diff-base "origin/${{ github.base_ref }}"

@@ -6,3 +6,4 @@ deploy/Containerfile.store text eol=lf
 deploy/healthcheck.py text eol=lf
 deploy/compose.yaml text eol=lf
 deploy/known_hosts text eol=lf
+deploy/tenant-chain-verify.yml text eol=lf

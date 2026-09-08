@@ -347,6 +347,37 @@ channel** — the store commits `docs/work/config.toml` and pushes it. Verified 
 came back signed by the mounted `signer.key.pem`, and the commit was on the origin's `main`. The client file it
 writes names no principal and no grant, because the caller is the certificate on the connection (7bg.2).
 
+## Gating a tenant's `main` — the recipe (K12, 2026-09-08)
+
+Tenant #0's gate is three things, walked through below: a ruleset on `main`, a required check that runs the
+governed-path verifier, and the store's deploy key as that ruleset's one bypass. Until K12 the verifier was
+`tools/verify_chain.py`, a tool of this repository run from a `uv sync` of the workspace — which a tenant's runner
+does not have. It now ships in the package as **`isidium verify`**, so a tenant's forge gates its `main` from an
+install alone.
+
+**The workflow** is `tenant-chain-verify.yml` in this directory: copy it into the tenant's `.github/workflows/` and
+set the one value it leaves open, `STORE_COMMIT` — the commit of this repository the store is installed from. Its
+steps are the ones `chain-verify.yml` runs here, minus the workspace: check out at full depth (a pull request's diff
+base and `HEAD^` on `main` are not in a shallow clone, and the verifier refuses a shallow checkout rather than
+passing it — K7a), then run the verb from a pinned install — `isidium verify --repo .` on a push to `main`,
+`--diff-base origin/<base>` on a pull request.
+
+**The pin is the tenant's decision, and it is not free to be wrong.** At the forge a fresh clone has no `.isidium/`
+(every tenant ignores it), so the verifier reads the registry of the package the workflow installed. That package
+must ship the config version the tenant adopted — `config@3` for a tenant born today — or the verifier refuses the
+tenant's own `config.toml` as `hook.toolkit-behind` (K11) and the check is red on every push, which is the loud
+answer K11 chose over verifying against `config@1` in silence. Move the pin when the toolkit bumps the version the
+tenant adopts, alongside `isidium install` in the checkout. The placeholder in the file is deliberately not a value:
+left in place, the install refuses it before anything is verified against the wrong registry.
+
+**The ruleset** is tenant #0's, with the tenant's own required checks beside `verify`: `pull_request`,
+`required_status_checks` (**not strict** — the store's own pushes would otherwise stale every open pull request),
+`non_fast_forward`, `deletion`; `bypass_actors: [{actor_type: DeployKey, bypass_mode: always}]`. A repository that
+already carries classic branch protection with required status checks on `main` is expected to reject the store's
+direct push of `docs/work/config.toml` — a deploy key is not in a classic protection's bypass — so there the ruleset
+replaces the protection rather than sitting beside it. *Expected, not yet measured*: sartor's `main` is that case,
+and the bridge measures it.
+
 ## Tenant #0 — this repository, run 2026-09-03
 
 The store's first tenant on a real forge is the repository this file lives in: `ISIDIUM_ORIGIN` is

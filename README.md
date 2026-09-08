@@ -9,7 +9,13 @@ The factory: a card-driven, owner-gated build line for isidium projects — and 
 | the factory | `isidium-factory` (`packages/isidium-factory`) | `isidium.factory` | the line: ledger, dispatch, adapters, the lander (a store client) |
 
 `isidium` is a PEP 420 namespace shared across parts; the CLI is `isidium` with the store's verbs at the top
-level (`isidium init`, `isidium install`, `isidium write 42 …`, `isidium ratify`) and other parts as groups.
+level (`isidium init`, `isidium install`, `isidium write 42 …`, `isidium ratify`, `isidium verify`) and other parts
+as groups.
+
+- **The forge gate travels with the package:** `isidium verify --repo . [--diff-base origin/main]` is the
+  governed-path check every pull request and every push to `main` runs here (`.github/workflows/chain-verify.yml`),
+  and — since it is a verb of the store rather than a tool of this repository — the one a tenant's forge runs from
+  an install alone. `deploy/tenant-chain-verify.yml` is that workflow; `deploy/README.md` says how to pin it.
 
 - **The planner's seat:** `prompts/planner/v1.md` is the planner's prompt (its ruled home); the `isidium-planner`
   skill — which `isidium init` and `isidium install` write into every checkout, for Claude Code and pi alike —

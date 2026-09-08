@@ -2,7 +2,8 @@
 and nothing else is guaranteed; every other isidium part is a group that dispatches to `isidium-<part>` on PATH (the
 `git-*` / `cargo-*` convention), so the umbrella never knows which language a part is written in.
 
-    isidium init | install | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
+    isidium init | install | write | show | check | ratify | suggest | disposition | repair | hook | verify
+            | serve | mcp
     isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
 
 Output is JSON by default (agents and scripts read it); `--text` renders the human form of the board and of the
@@ -100,7 +101,7 @@ def config_write_args(path: Path) -> dict[str, Any]:
     return args
 
 
-# ---- the ten verbs ----------------------------------------------------------------------------------------------
+# ---- the verbs ------------------------------------------------------------------------------------------------------
 
 
 @app.command()
@@ -332,6 +333,36 @@ def hook() -> None:
 
 
 @app.command()
+def verify(
+    repo: Annotated[Path, typer.Option(help="the checkout (default: the working directory)")] = Path("."),
+    diff_base: Annotated[
+        str | None,
+        typer.Option(
+            help="a ref; any governed path changed between it and HEAD fails (forge CI off main: the store is the "
+            "only writer of governed paths, and it writes on main)"
+        ),
+    ] = None,
+) -> None:
+    """The governed-path gate, offline: every governed document parses and every chain recomputes; with
+    `--diff-base`, no governed path changed off main (K8, Q13). Shipped as a verb so a tenant's forge can gate
+    its own `main` [K12]; it was `tools/verify_chain.py`.
+
+    **Two exits, two meanings — `check`'s shape.** Exit 1 is a verdict: `tampered`, a governed change off `main`,
+    or nothing verified. A refusal — `verify.shallow`, a checkout with no root — is exit 2 through `_refuse`, the
+    way every verb refuses. The import is deferred for the reason `hook`'s is: `--help` does not pay for it.
+    """
+    from .verify import verify as verify_checkout
+
+    try:
+        rep = verify_checkout(repo.resolve(), diff_base)
+    except Refusal as r:
+        _refuse(r)
+    for line in rep.rendered():
+        typer.echo(line)
+    raise typer.Exit(code=0 if rep.passed else 1)
+
+
+@app.command()
 def serve(
     tenant: Annotated[str, typer.Option(help="the tenant namespace this store serves (one store per tenant)")],
     repo: Annotated[Path, typer.Option(help="the store's own partial bare clone of the tenant repository")],
@@ -426,7 +457,14 @@ def mcp() -> None:
     """Serve this tenant's store as MCP tools over stdio — the surface agents are meant to use (03 §1.2)."""
     from .mcp import main as mcp_main
 
-    raise typer.Exit(code=mcp_main())
+    # The one verb that let a `Refusal` escape [K12, the bridge's finding 1]: `ClientConfig.find()` raises inside
+    # `mcp_main` before the server exists, and this printed a typer traceback, exit 1, where every other verb
+    # prints `rule @ path: detail` and exits 2. A harness reading the server's stderr saw "Connection closed".
+    try:
+        code = mcp_main()
+    except Refusal as r:
+        _refuse(r)
+    raise typer.Exit(code=code)
 
 
 # ---- `isidium <part>` — PATH dispatch (7bf.3) ----------------------------------------------------------------------

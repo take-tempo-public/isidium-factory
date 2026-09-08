@@ -1,4 +1,5 @@
-"""The tripwire (K8): `tools/verify_chain.py` over a real tenant checkout the store wrote.
+"""The tripwire (K8): the governed-path verifier over a real tenant checkout the store wrote — since K12
+`isidium.store.client.verify`, driven through the verb `isidium verify` the way a forge runs it.
 
 Every failing case here asserts the **line that names the path and its verdict**, never just a non-zero exit — a
 script that exits 1 for the wrong reason (a missing root, a crash) would otherwise pass every one of these. The
@@ -7,17 +8,16 @@ intact case asserts the count of `ok` documents, so a run that verified nothing 
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from isidium.store.client import verify as verify_mod
 from isidium.store.core.grammar import Document
 from isidium.store.server.store import NewCard, Store
 
@@ -25,24 +25,11 @@ from .conftest import BASE_SCOPE, OWNER, PLANNER, base_head, git, store_on_disk,
 
 ROOT = "docs/work/"
 REPO = Path(__file__).resolve().parents[2]
-TOOL = REPO / "tools" / "verify_chain.py"
 SRC = REPO / "packages" / "isidium-store" / "src"
 
 
-def load_tool() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("verify_chain", TOOL)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    # `dataclasses` resolves a module's string annotations through `sys.modules[cls.__module__]`, so a module executed
-    # from a spec without being registered there fails at its first `@dataclass` under `from __future__ import
-    # annotations`. Registering it is what `importlib.import_module` would have done.
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def run(repo: Path, *args: str) -> tuple[int, str]:
-    """The script through its own door — the way CI runs it — so the exit code is what is asserted."""
+    """The verb through its own door — the way a forge runs it — so the exit code is what is asserted."""
     # The child finds the package the way pytest does (pyproject's `pythonpath`), so this does not depend on an
     # install; CI installs the package and needs no such thing.
     # **Both ends of this pipe say UTF-8** [K5, 2026-09-04]. The assertions below match on an em dash, and
@@ -53,7 +40,7 @@ def run(repo: Path, *args: str) -> tuple[int, str]:
     # asserts what the script printed rather than what this machine's locale made of it. Deliberately no
     # `errors=`: a byte this cannot decode should fail loudly here, which is the opposite of the harness.
     r = subprocess.run(
-        [sys.executable, str(TOOL), "--repo", str(repo), *args],
+        [sys.executable, "-m", "isidium.store.client.cli", "verify", "--repo", str(repo), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -192,27 +179,31 @@ def test_a_governed_change_off_main_fails_with_a_diff_base(tenant: tuple[Path, S
 
 
 def test_a_checkout_with_no_root_is_refused_not_passed(tmp_path: Path) -> None:
+    """A refusal is exit 2 through the CLI's one refusal site, a verdict exit 1 — `check`'s shape [K12]."""
     repo = tmp_path / "bare-of-tenant"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     rc, out = run(repo)
-    assert rc == 1, out
-    assert "refused — hook.unknown-root" in out, out
+    assert rc == 2, out
+    assert "hook.unknown-root" in out, out
+    assert "Traceback" not in out, out
 
 
 def test_a_report_with_nothing_verified_is_not_a_pass() -> None:
-    mod = load_tool()
-    assert mod.Report("docs/work/").passed is False
-    only_parsed = mod.Report("docs/work/", lines=[mod.Line("state.json", "sidecar@1", mod.PARSED)])
+    assert verify_mod.Report("docs/work/").passed is False
+    only_parsed = verify_mod.Report("docs/work/", lines=[verify_mod.Line("state.json", "sidecar@1", verify_mod.PARSED)])
     assert only_parsed.passed is False
+    assert only_parsed.rendered()[-1].startswith("isidium: nothing verified"), only_parsed.rendered()
 
 
-def test_the_doc_schema_mirror_matches_the_store(tenant: tuple[Path, Store]) -> None:
-    """`tools/verify_chain.doc_schema` copies `Store.doc_schema`; this is what turns that copy from a drift risk into
-    a failing test. When the builder moves into `registry/`, delete the copy and this test with it."""
+def test_the_store_and_the_verifier_build_one_doc_schema(tenant: tuple[Path, Store]) -> None:
+    """K8 kept a line-for-line mirror of `Store.doc_schema` in the tool and held the two equal by test; K12
+    moved the builder to `registry/docschema.py` and both call it. What is left to assert is that the store's
+    cached answer *is* the shared builder's, for every Markdown schema the registry ships."""
+    from isidium.store.registry.docschema import doc_schema
+
     _, st = tenant
-    mod = load_tool()
     refs = [r for r in st.registry.installed if st.registry.get(r).get("form") == "markdown" and r != "board@1"]
     assert refs, st.registry.installed
     for ref in refs:
-        assert mod.doc_schema(st.registry, ref) == st.doc_schema(ref), ref
+        assert st.doc_schema(ref) == doc_schema(st.registry, ref), ref

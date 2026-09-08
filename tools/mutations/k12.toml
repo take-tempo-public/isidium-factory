@@ -1,0 +1,71 @@
+# K12's mutations (2026-09-08) -- the doors read `main` before they resolve, and the verifier ships as a verb. One
+# mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/k12.toml --show        # the bytes each one would write, as a diff (F24)
+#   python tools/mutate.py tools/mutations/k12.toml M1 --workers 2
+#
+# M1 takes the sync out of the sitting's door, so the dry run reads the clone at start again (the bridge's finding 2).
+# M2 takes it out of the born-`ratified` write's door. M3 lets the verifier pass a checkout with a tampered document
+# (the gate's whole verdict). M4 lets the `mcp` verb's refusal escape as a traceback again (the bridge's finding 1).
+# M5 makes the verb's refusal exit 1 like a verdict, collapsing the two exits into one. Each names the test that must
+# notice.
+
+[[mutation]]
+id = "M1"
+label = "the sitting no longer reads main before it composes -- the dry run resolves refs against the clone at start"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        # remote — the bypass `check` exists for, surfaced one sitting earlier than the write would have.
+        self._sync_to_main()
+        reqs: list[WriteRequest] = []
+'''
+replace = '''        # remote — the bypass `check` exists for, surfaced one sitting earlier than the write would have.
+        reqs: list[WriteRequest] = []
+'''
+
+[[mutation]]
+id = "M2"
+label = "a card born ratified resolves its refs against the clone at start again"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''                self._sync_to_main()
+                self._resolve_refs_or_refuse(after)
+'''
+replace = '''                self._resolve_refs_or_refuse(after)
+'''
+
+[[mutation]]
+id = "M3"
+label = "the verifier passes a checkout holding a tampered document"
+file = "packages/isidium-store/src/isidium/store/client/verify.py"
+find = '''            self.count(TAMPERED) == 0 and not self.governed_changed and not self.governed_removed and self.count(OK) > 0
+'''
+replace = '''            not self.governed_changed and not self.governed_removed and self.count(OK) > 0
+'''
+
+[[mutation]]
+id = "M4"
+label = "the mcp verb lets a refusal escape as a traceback again"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = '''    try:
+        code = mcp_main()
+    except Refusal as r:
+        _refuse(r)
+    raise typer.Exit(code=code)
+'''
+replace = '''    raise typer.Exit(code=mcp_main())
+'''
+
+[[mutation]]
+id = "M5"
+label = "the verify verb's refusal exits 1 like a verdict -- one exit, two meanings"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = '''    try:
+        rep = verify_checkout(repo.resolve(), diff_base)
+    except Refusal as r:
+        _refuse(r)
+'''
+replace = '''    try:
+        rep = verify_checkout(repo.resolve(), diff_base)
+    except Refusal as r:
+        typer.echo(str(r), err=True)
+        raise typer.Exit(code=1) from None
+'''
