@@ -378,6 +378,16 @@ direct push of `docs/work/config.toml` — a deploy key is not in a classic prot
 replaces the protection rather than sitting beside it. *Expected, not yet measured*: sartor's `main` is that case,
 and the bridge measures it.
 
+**Verified 2026-09-08, on this workstation, from this checkout** — the workflow's install-and-verify step with the
+pin pointed at this repository on disk (`git+file:///C:/Dev/isidium-factory@k12-doors-read-main-verify-verb`,
+commit `f035307`), through `uv tool run --python 3.12 --from "isidium-store @ <that spec>" isidium verify
+--repo .`: uv cloned and built the package, installed 24 packages in 1.8 s, and the verb printed the three lines
+tenant #0's own gate prints (`ok config.toml [config@3] 3 entries`, the two cards) and `isidium: 3 ok, 0
+tampered`, exit 0 — 28.7 s end to end, nothing of this checkout's environment involved. The placeholder, left in
+place, was refused by git before anything was built: `fatal: invalid refspec '+refs/tags/<the isidium-factory
+commit …>'`, exit 1. Any commit of `main` from K12's merge on ships the verb; every commit since K10 ships
+`config@3`.
+
 ## Tenant #0 — this repository, run 2026-09-03
 
 The store's first tenant on a real forge is the repository this file lives in: `ISIDIUM_ORIGIN` is
