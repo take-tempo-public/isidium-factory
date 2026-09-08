@@ -2,7 +2,7 @@
 and nothing else is guaranteed; every other isidium part is a group that dispatches to `isidium-<part>` on PATH (the
 `git-*` / `cargo-*` convention), so the umbrella never knows which language a part is written in.
 
-    isidium init | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
+    isidium init | install | write | show | check | ratify | suggest | disposition | repair | hook | serve | mcp
     isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
 
 Output is JSON by default (agents and scripts read it); `--text` renders the human form of the board and of the
@@ -135,6 +135,27 @@ def init(
     repo = Path.cwd()
     try:
         _out(do_init(repo, cfg, {"software_key_ack": ack} if ack else {}))
+    except Refusal as r:
+        _refuse(r)
+
+
+@app.command()
+def install() -> None:
+    """`init`'s install half, re-runnable: the registry schemas, the hook and the planner's skill, from this
+    toolkit's own bytes, into this checkout — for a checkout whose toolkit has moved since `init`.
+
+    **Why a verb** [K11, ruled 2026-09-07 at K10's checkpoint]. `init` installs the registry that ships that day and
+    nothing refreshed it: tenant #0's checkout ran two schema bumps behind, its hook resolving `config@2` against
+    `config@1`'s defaults with nothing saying so (K10's finding 1). The hook now refuses that (`hook.registry-behind`)
+    and names this verb as the remedy. It reads the checkout's own client file — the store's address and the
+    channel's credentials are not re-asked — and opens no channel: nothing here reaches the store. Where there is no
+    client file it refuses `client.not-configured`; `init` is the door that makes one.
+    """
+    from .install import install as do_install
+
+    try:
+        cfg, workdir = ClientConfig.find()
+        _out(do_install(workdir, cfg))
     except Refusal as r:
         _refuse(r)
 
