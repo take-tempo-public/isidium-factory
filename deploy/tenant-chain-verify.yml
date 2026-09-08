@@ -11,6 +11,10 @@
 # package this installs — and that package must ship the config version your tenant adopted, or your own
 # config.toml is refused `hook.toolkit-behind` on every push. The placeholder is not a value on purpose: left in
 # place, the install refuses it before anything is verified against the wrong registry.
+#
+# `STORE_COMMIT` is a workflow-level env referenced from the run steps as `${{ env.STORE_COMMIT }}`. A step may read
+# a workflow env; a workflow env may NOT reference another workflow env in the same block, so the install spec is
+# built in the step rather than in a second env var.
 name: chain-verify
 on:
   push:
@@ -19,7 +23,6 @@ on:
 permissions: {}
 env:
   STORE_COMMIT: "<the isidium-factory commit isidium-store is installed from>"
-  STORE_SPEC: "isidium-store @ git+https://github.com/take-tempo-public/isidium-factory@${{ env.STORE_COMMIT }}#subdirectory=packages/isidium-store"
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -33,7 +36,7 @@ jobs:
           python-version: "3.12" # the floor the package declares
       - name: verify every governed document
         if: github.event_name == 'push'
-        run: uvx --from "$STORE_SPEC" isidium verify --repo .
+        run: uvx --from "isidium-store @ git+https://github.com/take-tempo-public/isidium-factory@${{ env.STORE_COMMIT }}#subdirectory=packages/isidium-store" isidium verify --repo .
       - name: verify, and refuse any governed change off main
         if: github.event_name == 'pull_request'
-        run: uvx --from "$STORE_SPEC" isidium verify --repo . --diff-base "origin/${{ github.base_ref }}"
+        run: uvx --from "isidium-store @ git+https://github.com/take-tempo-public/isidium-factory@${{ env.STORE_COMMIT }}#subdirectory=packages/isidium-store" isidium verify --repo . --diff-base "origin/${{ github.base_ref }}"
