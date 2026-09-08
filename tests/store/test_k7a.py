@@ -141,11 +141,12 @@ def test_a_governed_card_cannot_leave_the_root_by_rename_at_either_door(
     rc, out = run(work)
     assert rc == 0, out
     git(work, "checkout", "-q", "main")
-    # a shallow checkout cannot compare and is refused rather than passed — the runner fetches full depth
+    # a shallow checkout cannot compare and is refused rather than passed — the runner fetches full depth. A refusal
+    # is exit 2 since the verifier became a verb [K12]: exit 1 is a verdict, and this is not one.
     shallow = work.parent / "shallow"
     git(work.parent, "clone", "-q", "--depth", "1", work.as_uri(), str(shallow))
     rc, out = run(shallow)
-    assert rc == 1 and "verify.shallow" in out, out
+    assert rc == 2 and "verify.shallow" in out, out
 
 
 # ---- F28 / F17: the write door, a failed push, the next push and a restart ----------------------------------------

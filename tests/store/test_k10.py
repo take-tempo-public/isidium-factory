@@ -245,7 +245,7 @@ def test_repair_under_a_failed_push_is_journaled_indexed_and_carried(
 
 
 def test_a_repair_restarting_from_a_seq_verifies_the_same_with_and_without_the_genesis_hook() -> None:
-    """`Store.check` and `tools/verify_chain.py` pass `genesis_after_repair`; the K8 scenario test did not — and
+    """`Store.check` and the verifier (`client/verify.py` since K12) pass `genesis_after_repair`; the K8 scenario test did not — and
     the two disagreed on every `repair --history`: the hook replaced the hash map, so a restart from `k ≥ 1` was
     re-linked from the genesis and read `tampered`. Three entries, the third a repair restarting from 1: `ok`,
     `covered`, `ok` — both ways — and a restart from 0 under a *new* genesis still resumes from that genesis."""

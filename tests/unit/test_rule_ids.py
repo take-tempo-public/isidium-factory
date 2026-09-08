@@ -263,13 +263,16 @@ def test_every_namespace_the_code_can_raise_is_classified() -> None:
     assert not missing, f"namespaces the code raises and `core/disclosure.py` does not classify: {missing}"
 
 
-def test_a_tool_only_rule_id_is_swept_and_classified_full() -> None:
-    """Q21 (c), the positive half: `verify.shallow` is found at its site under `tools/`, its namespace has a row,
-    and the row is `full` — the tool speaks to the operator, never to a peer."""
+def test_the_verifiers_rule_id_moved_into_the_package_and_stays_full() -> None:
+    """Q21 (c)'s positive half was `verify.shallow` at its site under `tools/`. K12 (2026-09-08) moved the verifier
+    into the package as `isidium verify`, so the id's one site is `client/verify.py` now, its row is still `full`
+    (the verb speaks to the operator at the forge and the terminal, never to a peer), and the real `tools/` raises
+    no rule id at all today — the sweep still reads it, which the planted-tool test below is the proof of."""
     ids = swept()
-    assert [s.split(":")[0] for s in ids["verify.shallow"]] == ["tools/verify_chain.py"], ids.get("verify.shallow")
+    assert [s.split(":")[0] for s in ids["verify.shallow"]] == ["client/verify.py"], ids.get("verify.shallow")
     assert NAMESPACES[namespace_of("verify.shallow")].disclosure is Disclosure.FULL
-    assert "verify" in namespaces(), "the namespace pass does not read the tools"
+    from_tools = sorted(s for sites in ids.values() for s in sites if s.startswith("tools/"))
+    assert from_tools == [], f"a rule id under tools/ again — classify it, and say so here: {from_tools}"
 
 
 def test_an_unclassified_tool_id_fails_the_sweep_like_a_package_id(

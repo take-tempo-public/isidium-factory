@@ -20,14 +20,14 @@ replace = "[\"git\", \"diff\", \"--cached\", \"--name-only\", \"-z\"]"
 [[mutation]]
 id = "M2"
 label = "the pull-request check reads renames as their destination again"
-file = "tools/verify_chain.py"
+file = "packages/isidium-store/src/isidium/store/client/verify.py"
 find = "[\"git\", \"diff\", \"--name-only\", \"--no-renames\", \"-z\", f\"{diff_base}...HEAD\"]"
 replace = "[\"git\", \"diff\", \"--name-only\", \"-z\", f\"{diff_base}...HEAD\"]"
 
 [[mutation]]
 id = "M3"
 label = "the push-to-main check no longer compares against the parent -- a card that left main is a silence"
-file = "tools/verify_chain.py"
+file = "packages/isidium-store/src/isidium/store/client/verify.py"
 find = "        rep.governed_removed = _removed_since_parent(repo)"
 replace = "        rep.governed_removed = []"
 
@@ -104,6 +104,6 @@ replace = "            self.repo.fast_forward(tip)\n            sp.set_attribute
 [[mutation]]
 id = "M14"
 label = "a shallow checkout passes the push-to-main check instead of being refused"
-file = "tools/verify_chain.py"
+file = "packages/isidium-store/src/isidium/store/client/verify.py"
 find = "        if shallow.stdout.strip() == \"true\":\n            raise Refusal(\"verify.shallow\", \"HEAD^\", \"a shallow checkout cannot compare against the parent\")\n        return []"
 replace = "        return []"
