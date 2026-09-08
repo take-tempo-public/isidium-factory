@@ -30,3 +30,5 @@ __pycache__/
 /deploy/ssh/
 # isidium-store: the client's half of the registration and its local install — never committed
 .isidium/
+.claude/skills/isidium-planner/
+.agents/skills/isidium-planner/
