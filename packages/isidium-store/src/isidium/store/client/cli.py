@@ -281,6 +281,21 @@ def suggest(
 
 
 @app.command()
+def land(
+    report: Annotated[Path, typer.Option("--report", help="the run report: JSON {run_id, events[], suggestions[]}")],
+) -> None:
+    """Land a run report on `main` as the lander (T-A10, X2): the sidecar, its events, the intake, the board — one
+    commit. The synthetic report is what v1b's first test lands; the factory's own client lands the real ones."""
+    try:
+        rep = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        _refuse(Refusal("land.report", str(report), str(e)))
+    if not isinstance(rep, dict):
+        _refuse(Refusal("land.report", str(report), "a JSON object with run_id, events and suggestions"))
+    _run("land", rep)
+
+
+@app.command()
 def disposition(
     suggestion: Annotated[str, typer.Argument(help="s<n>")],
     outcome: Annotated[str, typer.Option(help="accepted | declined | deferred")],

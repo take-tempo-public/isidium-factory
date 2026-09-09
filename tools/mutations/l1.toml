@@ -1,0 +1,76 @@
+# L1's mutations (2026-09-09) -- `land`. One mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/l1.toml --show
+#   python tools/mutate.py tools/mutations/l1.toml M1 --workers 2
+#
+# M1 drops the grant check at the door: an owner lands. M2 lets any kind through the union. M3 lands on the head,
+# never on the pending merge -- X2's cursor. M4 folds `failed` without its class. M5 keeps the board out of every
+# land. M6 drops the empty-diff check: a second land at the same cursor commits again. Each names the test that must
+# notice, in tests/store/test_l1.py.
+
+[[mutation]]
+id = "M1"
+label = "the door is anyone's -- an owner lands"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        self._require(caller, "land")
+        self._replay_pending()
+'''
+replace = '''        self._replay_pending()
+'''
+
+[[mutation]]
+id = "M2"
+label = "the union is open -- an unknown kind lands"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''    if kind not in KINDS:
+        raise Refusal("event.kind", str(kind), "not a kind of the union: " + ", ".join(KINDS))
+    try:
+        event: Event = _ADAPTER.validate_python(dict(raw))
+        return event
+    except ValidationError as e:
+'''
+replace = '''    try:
+        event: Event = _ADAPTER.validate_python({**dict(raw), "kind": "question", "text": str(kind)})
+        return event
+    except ValidationError as e:
+'''
+
+[[mutation]]
+id = "M3"
+label = "the cursor is the head, never the pending merge"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        cursor = pending[-1] if pending else self.repo.head
+'''
+replace = '''        cursor = self.repo.head
+'''
+
+[[mutation]]
+id = "M4"
+label = "a failure folds without its class"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''        elif k == "failed":
+            c["execution"] = f"failed({e['class']})"
+'''
+replace = '''        elif k == "failed":
+            c["execution"] = "failed(scope)"
+'''
+
+[[mutation]]
+id = "M5"
+label = "the board never joins the land"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if bool(self.eff["board"]["commit"]):
+            self._grant_on(self.BOARD_PATH, caller)
+'''
+replace = '''        if False:
+            self._grant_on(self.BOARD_PATH, caller)
+'''
+
+[[mutation]]
+id = "M6"
+label = "a second land at the same cursor commits again"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if not rep.events and not rep.suggestions and cursor == self.state.get("ledger_cursor"):
+'''
+replace = '''        if False:
+'''
