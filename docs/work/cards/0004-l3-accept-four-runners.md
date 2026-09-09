@@ -2,7 +2,7 @@
 schema = 1
 id = 4
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "planner"
 title = "L3: accept compiles the acceptance block and runs it through four runners at the owner's terminal"
 shape = "bdd"
@@ -63,5 +63,6 @@ The verb `accept <id> [--close] [--unsafe-draft] [--deviated <why>]` on the stor
 ```toml
 history = [
   { seq = 1, at = "2026-09-09T20:03:26Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:f44629d9435c4000f728f39c5d9a6d66adb869b7e0ff70a60bfbbbf4c5c1bcb6", h = "sha256:fcc2fb5e707b4d66cf5e2fc2b39f245c517793d0416a729fc2c2a2bb5adc1889" },
+  { seq = 2, at = "2026-09-09T21:27:52Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:f44629d9435c4000f728f39c5d9a6d66adb869b7e0ff70a60bfbbbf4c5c1bcb6", h = "sha256:e1f678e328dda5781909a69e5b7b4a0e7283196879668103b1fa3114d7aa7942", batch = 4 },
 ]
 ```
