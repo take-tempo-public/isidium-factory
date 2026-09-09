@@ -1,0 +1,29 @@
+# L2's mutations (2026-09-09) -- the lander client. One mutation per invocation:
+#
+#   python tools/mutate.py tools/mutations/l2.toml --show
+#   python tools/mutate.py tools/mutations/l2.toml M1 --workers 2
+#
+# M1 drops the terminal's pre-flight: a report the union refuses reaches the store (the recording service sees it).
+# M2 makes the tenant lookup answer with whatever tenant it finds first: one tenant's material answers for another.
+# Each names the test that must notice, in tests/factory/test_l2.py.
+
+[[mutation]]
+id = "M1"
+label = "a malformed report reaches the wire -- the pre-flight is gone"
+file = "packages/isidium-factory/src/isidium/factory/lander.py"
+find = '''    events_mod.parse_report(raw)
+    return raw
+'''
+replace = '''    return raw
+'''
+
+[[mutation]]
+id = "M2"
+label = "the tenant lookup ignores the name -- the first tenant's material answers for any"
+file = "packages/isidium-factory/src/isidium/factory/registration.py"
+find = '''    path = deploy_home() / tenant / CLIENT
+    if not path.is_file():
+'''
+replace = '''    path = next(iter(sorted(deploy_home().glob("*/" + CLIENT))), deploy_home() / tenant / CLIENT)
+    if not path.is_file():
+'''

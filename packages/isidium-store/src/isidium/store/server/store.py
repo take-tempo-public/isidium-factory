@@ -375,6 +375,11 @@ class Store:
         return _dt.datetime.fromtimestamp(self.clock(), _dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @staticmethod
+    def _utc(at: str) -> str:
+        """An ISO-8601 time in any offset as the store writes times: UTC, seconds, `Z`."""
+        return _dt.datetime.fromisoformat(at).astimezone(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @staticmethod
     def _epoch(at: str) -> int:
         return int(_dt.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=_dt.UTC).timestamp())
 
@@ -1235,7 +1240,10 @@ class Store:
         if cursor is None:
             raise Refusal("land.no-head", "", "the store holds no commit to land on")
         at = self.now()
-        landed_at = self.repo.commit_time(cursor)
+        # In the store's own form — UTC, `Z` [L2 live finding, 2026-09-09]: git answers a commit's time with its
+        # author's offset (`10:32:09-07:00`) and the first live land wrote that beside `at`s written as `Z`. One
+        # form per file; the projection compares `landed_at` against entries' `at` as strings.
+        landed_at = self._utc(self.repo.commit_time(cursor))
         if not rep.events and not rep.suggestions and cursor == self.state.get("ledger_cursor"):
             # Nothing new at the same cursor: the empty diff of 03 §1.4, decided here rather than on bytes, because
             # the previous land's own row moved `journal_head` and the fold would differ by that one value alone.

@@ -43,10 +43,13 @@ from pathlib import Path
 
 import pytest
 
+import isidium.factory
 import isidium.store
 from isidium.store.core.disclosure import DECLARED, NAMESPACES, RULES, Disclosure, namespace_of
 
 PACKAGE = Path(isidium.store.__file__).parent
+# The factory package is swept too [L2]: its client raises `factory.*`, classified in the store's table like `client.*`.
+FACTORY = Path(isidium.factory.__file__).parent
 # **The tools are swept too** [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified fails"*].
 # `tools/verify_chain.py` raised `verify.shallow` (K7a, F1) — the first rule id outside the package — and this sweep
 # read `packages/` alone, so the id was classified nowhere and a second one would not have been seen. A tool's ids
@@ -151,6 +154,7 @@ def _sources(paths: Sequence[Path] | None) -> list[tuple[Path, Path]]:
     discriminator is an arm a mutation walks straight through."""
     if paths is None:
         package = [(p, PACKAGE) for p in sorted(PACKAGE.rglob("*.py"))]
+        package += [(p, FACTORY) for p in sorted(FACTORY.rglob("*.py"))]
         tools = [(p, TOOLS.parent) for p in sorted(TOOLS.glob("*.py"))]
         return package + tools
     listed = list(paths)

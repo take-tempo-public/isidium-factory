@@ -14,6 +14,7 @@ file, so keeping it would leave a key in every checkout that nothing consults an
 
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from dataclasses import dataclass
@@ -72,5 +73,8 @@ class ClientConfig:
         for f in self.__dataclass_fields__:
             v = getattr(self, f)
             if v != "" and v is not None:
-                lines.append(f'{f} = "{v}"' if isinstance(v, str) else f"{f} = {v}")
+                # A TOML basic string, quoted as one [L2 finding]: a Windows absolute path carries backslashes, and
+                # `f'"{v}"'` wrote them raw — `tomllib` refused the file `init` had just written. `json.dumps` is a
+                # valid TOML basic string for every str value (backslash, quote and control escapes coincide).
+                lines.append(f"{f} = {json.dumps(v, ensure_ascii=False)}" if isinstance(v, str) else f"{f} = {v}")
         return "\n".join(lines) + "\n"

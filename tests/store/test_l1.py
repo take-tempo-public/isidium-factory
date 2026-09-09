@@ -393,6 +393,17 @@ def test_a_half_land_is_journaled_and_replayed_by_the_next_land(
 # ---- the fold on its own ----------------------------------------------------------------------------------------------------
 
 
+def test_landed_at_is_written_in_the_stores_own_form() -> None:
+    """Found live (2026-09-09): git answers a commit's time with the author's offset, and the first land wrote
+    `10:32:09-07:00` beside `at`s written `Z`. The cursor commit's time lands as UTC `Z`, whatever git said."""
+    hz = fresh()
+    st = hz.st
+    a = ratified(hz, "a")
+    st.repo.commit({"src/x.py": b"x"}, "someone", "2026-09-09T10:32:09-07:00", "a commit with an offset")
+    r = st.land({"run_id": "r-1", "events": [{"kind": "dispatched", "card": a, "run_id": "r-1"}]}, LANDER)
+    assert r["landed_at"] == "2026-09-09T17:32:09Z" and st.state["landed_at"] == "2026-09-09T17:32:09Z"
+
+
 def test_the_fold_is_pure_and_idempotent() -> None:
     evs = [
         {"id": "e1", "at": "2026-09-09T00:00:00Z", "card": 7, "kind": "dispatched", "run_id": "r"},

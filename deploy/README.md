@@ -708,6 +708,83 @@ One workstation note for the recorded command: run from Git Bash, MSYS path conv
 (`/etc/isidium/tls:ro` became a path under `Program Files\Git`); `MSYS_NO_PATHCONV=1` on the invocation, or
 PowerShell, passes them through.
 
+### The two identity tiers, and the factory's client material — 2026-09-09 (L2)
+
+A store knows a caller by exactly two files it is handed: **the CA it pins** (the handshake refuses every certificate
+that CA did not issue) and **the registration** (`subject → [principal, grant]`, re-read on change). A client knows a
+store by one file, the `client.toml` shape: address, CA, its own certificate and key. The owner ruled (2026-09-09) that
+the factory is designed for **two tiers**, which differ only in *who writes those files*:
+
+| | the local tier — the default | the realm tier — agent-station |
+|---|---|---|
+| the CA | a key on disk under the deploy home; the recipe above | the realm's CA; its key never leaves the realm |
+| a client certificate | issued by the recipe, one per caller identity | issued by the realm on binding |
+| the registration row | edited by hand | written by the realm from its bindings |
+| the client file | written by hand, or by `init` | written by the realm's enrolment |
+
+Nothing in the store, the client or the factory reads differently between the two. A project without
+identity-management infrastructure runs the local tier as its durable default, not as an interim; moving a tenant to
+the realm tier is reissuing under the realm's CA and swapping the pin. The seam is the pair of files.
+
+**The factory's client material lives in the tenant's own deploy directory.** The deploy home is one parent with one
+directory per tenant (the owner's layout, 2026-09-08); the factory's material for a tenant is inside that tenant's
+directory, under `factory/`:
+
+```
+<deploy home>/<tenant>/factory/client.toml      # the client.toml shape; paths relative to this file
+<deploy home>/<tenant>/factory/lander.cert.pem  # issued by the tenant's CA, subject = the lander's principal
+<deploy home>/<tenant>/factory/lander.key.pem
+```
+
+The factory finds a tenant by name under `$ISIDIUM_DEPLOY` — required, never defaulted: unset is
+`factory.not-configured`, a tenant with no `factory/client.toml` is `factory.unknown-tenant`, a name outside the
+tenant grammar is `factory.tenant-name` (a tenant is a directory, and `..` is not a tenant).
+
+**Issuing the lander** (the local tier; the same recipe as S-3, with `MSYS_NO_PATHCONV=1` on Git Bash):
+
+```sh
+cd <deploy home>/<tenant> && mkdir -p factory
+printf '%s\n' 'subjectKeyIdentifier=hash' 'authorityKeyIdentifier=keyid,issuer' 'extendedKeyUsage=clientAuth' > client.ext
+openssl req -newkey ed25519 -nodes -keyout factory/lander.key.pem -out lander.csr -subj "/CN=lander@<tenant>"
+openssl x509 -req -in lander.csr -CA tls/ca.pem -CAkey tls/ca.key.pem -CAcreateserial -days 825 \
+  -out factory/lander.cert.pem -extfile client.ext
+rm -f lander.csr client.ext
+# registration.json gains the row; the store re-reads the file on change — no restart:
+#   "CN=lander@<tenant>": ["lander@<tenant>", "lander"]
+printf '%s\n' 'tenant = "<tenant>"' 'address = "https://<store>:8443"' 'ca = "../tls/ca.pem"' \
+  'cert = "lander.cert.pem"' 'key = "lander.key.pem"' > factory/client.toml
+```
+
+**Landing a run report:** `ISIDIUM_DEPLOY=<deploy home> isidium factory land --tenant <tenant> --report <run.json>`
+(the umbrella dispatches to `isidium-factory` on PATH). The report is `{run_id, events[], suggestions[]}`; it is parsed
+against the event union at the terminal before any channel opens, and the store parses it again at its door. The
+result is the store's `land` result: the cursor, the event and intake ids, `landed`, `empty`.
+
+### L2: the first land on tenant #0, through the lander client — 2026-09-09
+
+The lander's identity was issued on the local tier exactly as the recipe above says — `CN=lander@isidium-factory`
+under tenant #0's CA, into the tenant's `factory/` directory with its `client.toml` — and its row added to
+`registration.json`; the store, on the L1 image `657a4f89b079` (`isidium-store:0.1.0` and `:l1`, recreated from the
+recorded command, healthy in 35 s), picked the row up on the next connection without a restart, as K6 promised.
+
+The report was **synthetic and said so**: one `question` event on card 0002 naming the run as synthetic and claiming
+no execution state, and one `docs` suggestion asking that the sidecar's first line be read that way. Landed with
+`isidium factory land --tenant isidium-factory --report …` — the umbrella dispatching to `isidium-factory` on PATH —
+in one call:
+
+- The result: cursor `68ffb68` (the head before; nothing merged since — the first land takes the head), event `e1`,
+  intake `s1`, `landed: true`, `empty: false`, journal seq 6, commit `c0fe8e2`.
+- On `main` after, one commit `land` by the store, under the ruleset's deploy-key bypass: `docs/work/state.json`,
+  `docs/work/state/history.jsonl`, `docs/work/suggestions.jsonl` and `docs/work/BOARD.md` — and **no card file**.
+  The forge's `chain-verify` and `identity-sweep` both passed on it.
+- `show queue --text` before: *"merged, not landed: n/a (in-project)"* — no sidecar. After: *"merged, not landed: 0"*,
+  and the board's header *"inbox run 1"*: the counts moved, which was the criterion.
+
+**Found live, fixed in the same pull request:** `landed_at` landed as `2026-09-09T10:32:09-07:00` — git's answer for
+the cursor commit's time carries the author's offset, and every other time in the file is UTC `Z`. The store now
+writes the cursor's time in its own form; the first sidecar on `main` carries the offset form until the next land
+rewrites it (the fold overwrites; nothing merges).
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
