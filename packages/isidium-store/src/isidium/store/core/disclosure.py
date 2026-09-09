@@ -120,6 +120,9 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         # because the sweep requires every namespace the code can raise to be classified, and terse is what an id
         # about our own configuration would get if one ever did.
         "client": Row(422, TERSE),
+        # the factory's client (`isidium.factory`, L2): the deploy home, a tenant's client file, a report file at the
+        # operator's own terminal — the same posture as `client`, and swept from the second package.
+        "factory": Row(422, TERSE),
         # Raised by a tool, not by the package [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified
         # fails"*]: `tools/verify_chain.py` refuses a shallow checkout (`verify.shallow`, K7a). A tool speaks to the
         # operator at the forge and at the terminal and never to a peer, so C-12's reason for *terse* does not reach
