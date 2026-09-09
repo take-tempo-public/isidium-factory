@@ -261,8 +261,8 @@ def test_api_refuses_an_unknown_call(svc: tuple[Service, Harness]) -> None:
 
     _service, hz = svc
     with pytest.raises(Refusal, match=r"api\.not-yet"):
-        Api(hz.st).call("land", OWNER, {})  # v1b: the verb names itself rather than reading as unknown
-    with pytest.raises(Refusal, match=r"api\.not-yet"):
-        Api(hz.st).call("accept", OWNER, {})
+        Api(hz.st).call("accept", OWNER, {})  # v1b: the verb names itself rather than reading as unknown
+    with pytest.raises(Refusal, match=r"write\.grant"):
+        Api(hz.st).call("land", OWNER, {"run_id": "r", "events": []})  # L1: `land` is on the surface, the lander's
     with pytest.raises(Refusal, match=r"api\.unknown-call"):
         Api(hz.st).call("nope", OWNER, {})

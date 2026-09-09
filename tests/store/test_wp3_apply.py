@@ -322,7 +322,7 @@ def test_c5_a_checkout_validates_against_the_registry_it_installed(tenant: Path)
 def test_c1_the_v1b_verbs_name_themselves(hz: Harness) -> None:
     api = Api(hz.st)
     with pytest.raises(Refusal, match=r"api\.not-yet") as e:
-        api.call("land", OWNER, {})
+        api.call("accept", OWNER, {})  # `land` left this table in L1
     assert "v1b" in str(e.value)
     with pytest.raises(Refusal, match=r"api\.unknown-call") as e2:
         api.call("teleport", OWNER, {})

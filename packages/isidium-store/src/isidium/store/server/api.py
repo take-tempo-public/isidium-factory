@@ -268,6 +268,17 @@ class Api:
         )
         return {"record": r.entry, "commit": r.commit, "landed": r.landed}
 
+    # ---- the land (T-A10) -------------------------------------------------------------------------------------------
+
+    def land(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
+        """The run report as three typed arguments; the store parses the events against the union (`event.*`)."""
+        report = {
+            "run_id": _need_str(args, "run_id"),
+            "events": _list_of_table(args, "events"),
+            "suggestions": _list_of_table(args, "suggestions"),
+        }
+        return self.store.land(report, caller)
+
     def disposition(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
         out = self.store.disposition(
             _need_str(args, "suggestion"),
@@ -309,10 +320,11 @@ class Api:
 
     # ---- dispatch by name (the transports' one entry point) --------------------------------------------------------
 
-    CALLS = ("init", "write", "write_set", "ratify", "show", "check", "suggest", "disposition", "repair")
+    CALLS = ("init", "write", "write_set", "ratify", "show", "check", "suggest", "disposition", "repair", "land")
 
-    # The two verbs of the ten this surface does not carry yet; they arrive with the sidecar and the runners (WP5).
-    LATER: ClassVar[dict[str, str]] = {"land": "the sidecar's landing", "accept": "the acceptance runners"}
+    # The one verb of the ten this surface does not carry yet; it arrives with the runners (WP5, L3). `land` joined
+    # the surface in L1.
+    LATER: ClassVar[dict[str, str]] = {"accept": "the acceptance runners"}
 
     def call(self, name: str, caller: Caller, args: Mapping[str, Any]) -> Any:
         if name in self.LATER:

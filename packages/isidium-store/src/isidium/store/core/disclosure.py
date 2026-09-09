@@ -78,6 +78,8 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         "claims": _VALIDATION,  # a claim rewritten between entries
         "config": _VALIDATION,  # `config.toml` against `config@1`
         "dispatch": _VALIDATION,  # a dispatch refused for the card's own state
+        "event": _VALIDATION,  # a run report's event against the union: its kind, its members (L1)
+        "land": _VALIDATION,  # the land's own preconditions: the report's shape, the landed copy's readability (L1)
         "emit": _VALIDATION,
         "ext-schema": _VALIDATION,  # a tenant Ext schema colliding with a core key
         "head": _VALIDATION,  # the TOML head: fences, ordering, typing
@@ -171,7 +173,6 @@ RULES: Final[Mapping[str, Row]] = MappingProxyType(
         "write.locked": Row(409, FULL),
         "write.no-change": Row(422, FULL),
         "write.deletion": Row(422, FULL),
-        "write.lander-only": Row(422, FULL),  # 403 would read better; today's status kept, see the module docstring
         "write.repair-via-repair": Row(422, FULL),
         "show.unknown": Row(404, FULL),
         "show.unsupported-target": Row(422, FULL),

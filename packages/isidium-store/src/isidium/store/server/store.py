@@ -9,6 +9,7 @@ real closure, the X1 display is durable, rules key to the diff, indexes replace 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime as _dt
 import json
 import re
@@ -20,6 +21,7 @@ from typing import Any
 from .. import __version__
 from ..core import board as board_mod
 from ..core import canon, chain, derive, status, telemetry
+from ..core import events as events_mod
 from ..core.grammar import (
     DocSchema,
     Document,
@@ -679,7 +681,10 @@ class Store:
             return self._write_markdown(path, row, document, base, ref, caller)
         if ref_name.startswith("inbox@"):
             return self._write_record(path, document, caller, ref_name)
-        raise Refusal("write.lander-only", path, "the sidecar and the board are written by `land`")
+        # Unreachable by construction, kept as the typed statement of why [L1, 2026-09-09, finding 1]: the sidecar's
+        # and the board's rows carry the `lander` grant alone, and `lander`'s matrix set has no `write` — so every
+        # caller that reaches this line has already been refused `write.grant` above. `land` is their one writer.
+        raise AssertionError(f"{path}: no write door for {ref_name}; the sidecar and the board are written by `land`")
 
     def _write_markdown(
         self,
@@ -1003,6 +1008,27 @@ class Store:
     # ---- record-slot documents (the inbox) -----------------------------------------------------------------------
 
     def _write_record(self, path: str, record: Mapping[str, Any], caller: Caller, schema_ref: str) -> WriteResult:
+        at = self.now()
+        rec = self._build_record(path, record, caller, schema_ref, self.inbox, at)
+        data = self.raw.get(path, b"") + emit_jsonl_line(rec).encode("utf-8")
+        jrow, sha, _blobs, deferred = self._apply(caller, at, {path: data}, rec["type"])
+        self.inbox.append(rec)
+        return WriteResult(
+            path, rec, {"seq": rec["seq"], "h": rec["h"]}, int(jrow["seq"]), sha, landed=self._landing(deferred)
+        )
+
+    def _build_record(
+        self,
+        path: str,
+        record: Mapping[str, Any],
+        caller: Caller,
+        schema_ref: str,
+        inbox: Sequence[Mapping[str, Any]],
+        at: str,
+    ) -> dict[str, Any]:
+        """One inbox record, validated, numbered and chained onto `inbox` — the records the file holds plus any this
+        call has already built [L1: `land` chains a run's suggestions in one pass, one row, one commit, where the
+        prototype called `suggest` per suggestion]. Pure over its inputs: nothing is written here."""
         rec = dict(record)
         if rec.get("type") not in ("intake", "disposition"):
             raise Refusal("inbox.type", path, str(rec.get("type")))
@@ -1014,7 +1040,7 @@ class Store:
                 raise Refusal("inbox.bound", path)
             canon.check_string(str(rec.get("title", "")), "title")
             canon.check_string(str(rec.get("body", "")), "body")
-        elif not any(r.get("id") == rec.get("on") for r in self.inbox):
+        elif not any(r.get("id") == rec.get("on") for r in inbox):
             raise Refusal("inbox.unknown-suggestion", path, str(rec.get("on")))
         # **The record against its own schema's rows** [K7b, F13; deployment record H-5]. `inbox@1` declared `kind`
         # as an enum of seven names and `refs` as an array from the day it was written, and this method checked the
@@ -1025,21 +1051,15 @@ class Store:
         if rs:
             raise ValidationRefusal(rs, path)
         if rec["type"] == "intake":
-            rec["id"] = f"s{1 + sum(1 for r in self.inbox if r['type'] == 'intake')}"
+            rec["id"] = f"s{1 + sum(1 for r in inbox if r['type'] == 'intake')}"
         else:
-            rec["id"] = f"d{1 + sum(1 for r in self.inbox if r['type'] == 'disposition')}"
-        at = self.now()
-        rec.update({"seq": len(self.inbox) + 1, "at": at, "by": caller.principal})
+            rec["id"] = f"d{1 + sum(1 for r in inbox if r['type'] == 'disposition')}"
+        rec.update({"seq": len(inbox) + 1, "at": at, "by": caller.principal})
         if caller.on_behalf_of:
             rec["for"] = caller.on_behalf_of
         rec.pop("h", None)
-        rec["h"] = chain.link(self.inbox[-1]["h"] if self.inbox else chain.genesis("inbox", self.tenant), rec)
-        data = self.raw.get(path, b"") + emit_jsonl_line(rec).encode("utf-8")
-        jrow, sha, _blobs, deferred = self._apply(caller, at, {path: data}, rec["type"])
-        self.inbox.append(rec)
-        return WriteResult(
-            path, rec, {"seq": rec["seq"], "h": rec["h"]}, int(jrow["seq"]), sha, landed=self._landing(deferred)
-        )
+        rec["h"] = chain.link(inbox[-1]["h"] if inbox else chain.genesis("inbox", self.tenant), rec)
+        return rec
 
     # ---- init (04 §3) --------------------------------------------------------------------------------------------
 
@@ -1159,6 +1179,150 @@ class Store:
         if n:
             raise Refusal("dispatch.pending-land", "", f"merged, not landed: {n}")
         return {"dispatched": card_id}
+
+    SIDECAR_PATHS = ("state.json", "state/history.jsonl")
+    INBOX_PATH = "suggestions.jsonl"
+    BOARD_PATH = "BOARD.md"
+
+    def land(self, report: Mapping[str, Any], caller: Caller) -> dict[str, Any]:
+        """`land` — the store's own commit on `main` after the batch PR merges (03 §1.4, §6; T-A10; X2, sync 7ba.4:
+        *"A with the three pins"*) [L1, 2026-09-09]: `state.json`, `state/history.jsonl`, the inbox intake and
+        `BOARD.md` in **one** journal row and **one** commit, under the `lander` grant alone.
+
+        **The door, in order.** The grant matrix (`lander` holds exactly `land` and `show`); a half-land replayed
+        (*"a half-land … replays from the journal on the next `land` call"* — T-A10's failure protocol; the load does
+        it too); `main` re-read (K12: the door reads `main`, so the merge this land is for is visible); the landed
+        copy readable (*"ledger unreadable ⇒ no land"*, read as the sidecar here — the ledger proper is v1c's); and
+        each path's manifest row carrying the caller's grant, as `write` checks per path — *"the store refuses the
+        grant, not a hasher after the fact"* (T-A10 condition 2). A card file can never be in this diff: no card
+        path is assembled below, and the rows refuse the lander on them anyway.
+
+        **The cursor** is the newest pending merge commit — the batch PR's merge, observed the way `merges_pending`
+        observes it (pin 3, *"no human step between merge and land"*) — else the cursor the last land put down, else
+        the head for a tenant's first land: the standalone case and the synthetic report's. `landed_at` is that
+        commit's time (G11). A second
+        land of the same cursor with nothing new **is an empty diff**: nothing folded, nothing journaled, nothing
+        committed, the result saying so — decided on the inputs, since the previous land's own row moves
+        `journal_head` and the bytes alone would never agree.
+
+        **The fold** (`core/events.fold`) reads the event file plus this report's events, never the file it replaces —
+        a hand-edited `state.json` is `integrity:unjournaled` to `check` and is overwritten here (03 §6). `journal_head`
+        is the head *before* this land's row: a row cannot carry its own hash. `history_head` per card is the store's
+        own last entry. **The intake** — the report's `suggestions[]`, capped at `inbox.max_per_run`, the rest counted
+        as `overflow` (the ingest fact of that name is L4's) — is built by the inbox door's own record builder, chained
+        in one pass, and joins the same files: one row, one commit, one push, where the prototype paid one commit per
+        suggestion (C-8). **The board** joins when the effective `board.commit` is true, rendered from the projections
+        over the *landed* state, so what lands is what the board would show.
+
+        **The write** is the door's shape, not the sitting's: the row is durable before the commit, a rejected push is
+        handed back as `landed = false` (Q18) and the next call or the next load replays it. The transaction is one
+        row because it is one act: T-A10's *"one transaction"* is this row's `paths[]`, the four together.
+        """
+        self._require(caller, "land")
+        self._replay_pending()
+        self._sync_to_main()
+        for p in self.SIDECAR_PATHS:
+            if p in self.unreadable:
+                raise Refusal("land.sidecar-unreadable", p, str(self.unreadable[p]))
+            self._grant_on(p, caller)
+        rep = events_mod.parse_report(report)
+        pending = self.merges_pending()
+        # The newest pending merge is the cursor (pin 3). With nothing merged since, the cursor STAYS where the last
+        # land put it — the store's own commits on `main` between lands are not merges and do not move it — and
+        # only the first land of a tenant takes the head. That is what keeps *"the same cursor twice"* the same.
+        last = self.state.get("ledger_cursor")  # absent on a first land, and on a planted or garbled sidecar
+        cursor = pending[-1] if pending else (str(last) if last else self.repo.head)
+        if cursor is None:
+            raise Refusal("land.no-head", "", "the store holds no commit to land on")
+        at = self.now()
+        landed_at = self.repo.commit_time(cursor)
+        if not rep.events and not rep.suggestions and cursor == self.state.get("ledger_cursor"):
+            # Nothing new at the same cursor: the empty diff of 03 §1.4, decided here rather than on bytes, because
+            # the previous land's own row moved `journal_head` and the fold would differ by that one value alone.
+            telemetry.record_land(0, 0, 0, cursor)
+            return {
+                "cursor": cursor,
+                "landed_at": landed_at,
+                "events": [],
+                "intake": [],
+                "overflow": 0,
+                "commit": self.repo.head,
+                "journal_seq": None,
+                "landed": True,
+                "empty": True,
+            }
+        new_events = [
+            events_mod.record_of(ev, f"e{len(self.events) + n}", at) for n, ev in enumerate(rep.events, start=1)
+        ]
+        events = [*self.events, *new_events]
+        heads = {
+            f"{cid:04d}": {"seq": d.history[-1]["seq"], "h": d.history[-1]["h"]}
+            for cid, d in self.cards().items()
+            if d.history
+        }
+        jseq, jh = self.journal.head
+        state = events_mod.fold(events, cursor, landed_at, {"seq": jseq, "h": jh}, heads)
+        files: dict[str, bytes] = {
+            "state.json": (json.dumps(state, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+            "state/history.jsonl": "".join(emit_jsonl_line(e) for e in events).encode("utf-8"),
+        }
+        cap = int(self.eff["inbox"]["max_per_run"])
+        intake: list[dict[str, Any]] = []
+        if rep.suggestions:
+            self._grant_on(self.INBOX_PATH, caller)
+            inbox = list(self.inbox)
+            data = self.raw.get(self.INBOX_PATH, b"")
+            for s in rep.suggestions[:cap]:
+                rec: dict[str, Any] = {
+                    "type": "intake",
+                    "source": "run",
+                    "kind": s.kind,
+                    "title": s.title,
+                    "body": s.body,
+                    "refs": list(s.refs),
+                    "surfaces_touched": [],
+                    "from": {"run": rep.run_id},
+                }
+                if s.proposed_for is not None:
+                    rec["proposed_for"] = s.proposed_for
+                rec = self._build_record(
+                    self.INBOX_PATH, rec, caller, self.row_for(self.INBOX_PATH)["schema"], inbox, at
+                )
+                inbox.append(rec)
+                intake.append(rec)
+                data += emit_jsonl_line(rec).encode("utf-8")
+            files[self.INBOX_PATH] = data
+        overflow = max(0, len(rep.suggestions) - cap)
+        if bool(self.eff["board"]["commit"]):
+            self._grant_on(self.BOARD_PATH, caller)
+            files[self.BOARD_PATH] = self._render_board(state, [*self.inbox, *intake]).encode("utf-8")
+        telemetry.record_land(len(new_events), len(intake), overflow, cursor)
+        result: dict[str, Any] = {
+            "cursor": cursor,
+            "landed_at": landed_at,
+            "events": [e["id"] for e in new_events],
+            "intake": [r["id"] for r in intake],
+            "overflow": overflow,
+        }
+        jrow, sha, _blobs, deferred = self._apply(caller, at, files, "land")
+        self.events, self.state = events, state
+        self.inbox.extend(intake)
+        landed = self._landing(deferred)
+        return {**result, "commit": sha, "journal_seq": int(jrow["seq"]), "landed": landed, "empty": False}
+
+    def _grant_on(self, path: str, caller: Caller) -> None:
+        """The per-path half of the grant check, as `write` does it: the manifest row must carry the caller's grant."""
+        row = self.row_for(path)
+        if caller.grant not in row["write"]:
+            raise Refusal("write.grant", path, f"{caller.grant} may not write {path} (grants: {list(row['write'])})")
+
+    def _render_board(self, state: Mapping[str, Any], inbox: Sequence[Mapping[str, Any]]) -> str:
+        """The board over a state the store does not hold yet — the landed one — through the same renderer `show`
+        uses; `merged, not landed` is 0 by construction, the cursor being the newest merge."""
+        inp = dataclasses.replace(self._inputs(), state=state)
+        projections = status.project(inp)
+        q = status.queue(inp, projections, inbox, self.policy, 0)
+        return board_mod.render(self.cards(), projections, q, inbox, int(self.eff["wip"]))
 
     # ---- --set sugar (9.3) ---------------------------------------------------------------------------------------
 
