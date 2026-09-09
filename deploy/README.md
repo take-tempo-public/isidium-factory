@@ -760,6 +760,31 @@ printf '%s\n' 'tenant = "<tenant>"' 'address = "https://<store>:8443"' 'ca = "..
 against the event union at the terminal before any channel opens, and the store parses it again at its door. The
 result is the store's `land` result: the cursor, the event and intake ids, `landed`, `empty`.
 
+### L2: the first land on tenant #0, through the lander client — 2026-09-09
+
+The lander's identity was issued on the local tier exactly as the recipe above says — `CN=lander@isidium-factory`
+under tenant #0's CA, into the tenant's `factory/` directory with its `client.toml` — and its row added to
+`registration.json`; the store, on the L1 image `657a4f89b079` (`isidium-store:0.1.0` and `:l1`, recreated from the
+recorded command, healthy in 35 s), picked the row up on the next connection without a restart, as K6 promised.
+
+The report was **synthetic and said so**: one `question` event on card 0002 naming the run as synthetic and claiming
+no execution state, and one `docs` suggestion asking that the sidecar's first line be read that way. Landed with
+`isidium factory land --tenant isidium-factory --report …` — the umbrella dispatching to `isidium-factory` on PATH —
+in one call:
+
+- The result: cursor `68ffb68` (the head before; nothing merged since — the first land takes the head), event `e1`,
+  intake `s1`, `landed: true`, `empty: false`, journal seq 6, commit `c0fe8e2`.
+- On `main` after, one commit `land` by the store, under the ruleset's deploy-key bypass: `docs/work/state.json`,
+  `docs/work/state/history.jsonl`, `docs/work/suggestions.jsonl` and `docs/work/BOARD.md` — and **no card file**.
+  The forge's `chain-verify` and `identity-sweep` both passed on it.
+- `show queue --text` before: *"merged, not landed: n/a (in-project)"* — no sidecar. After: *"merged, not landed: 0"*,
+  and the board's header *"inbox run 1"*: the counts moved, which was the criterion.
+
+**Found live, fixed in the same pull request:** `landed_at` landed as `2026-09-09T10:32:09-07:00` — git's answer for
+the cursor commit's time carries the author's offset, and every other time in the file is UTC `Z`. The store now
+writes the cursor's time in its own form; the first sidecar on `main` carries the offset form until the next land
+rewrites it (the fold overwrites; nothing merges).
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
