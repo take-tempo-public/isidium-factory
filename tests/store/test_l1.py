@@ -313,8 +313,8 @@ def test_the_api_carries_land_and_not_yet_names_accept_alone() -> None:
     hz = fresh()
     api = Api(hz.st)
     a = ratified(hz, "a")
-    assert "land" in Api.CALLS and Api.LATER == {"accept": "the acceptance runners"}
-    refuses("api.not-yet", lambda: api.call("accept", LANDER, {}))
+    assert "land" in Api.CALLS and "accept" not in Api.CALLS, "accept is a client verb (L3), never a call"
+    refuses("api.unknown-call", lambda: api.call("accept", LANDER, {}))
     r = api.call("land", LANDER, {"run_id": "r-1", "events": [{"kind": "dispatched", "card": a, "run_id": "r-1"}]})
     assert r["events"] == ["e1"] and r["landed"] is True
     refuses("service.arguments", lambda: api.call("land", LANDER, {"run_id": "r", "events": "not a list"}))

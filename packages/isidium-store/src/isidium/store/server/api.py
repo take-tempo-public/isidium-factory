@@ -9,7 +9,7 @@ store hashes (W10, T6): absent stays absent."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, ClassVar
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -322,13 +322,11 @@ class Api:
 
     CALLS = ("init", "write", "write_set", "ratify", "show", "check", "suggest", "disposition", "repair", "land")
 
-    # The one verb of the ten this surface does not carry yet; it arrives with the runners (WP5, L3). `land` joined
-    # the surface in L1.
-    LATER: ClassVar[dict[str, str]] = {"accept": "the acceptance runners"}
+    # Nine of the ten verbs cross this surface. `accept` never does [L3, Q-W2 ruled 2026-09-09]: it runs the card's
+    # scenarios at the caller's terminal (03 §1.13) and reaches the store through `show` and, for `--close`, `write`.
+    # The `api.not-yet` table that once held `land` and `accept` is gone with them; an unknown name is unknown.
 
     def call(self, name: str, caller: Caller, args: Mapping[str, Any]) -> Any:
-        if name in self.LATER:
-            raise Refusal("api.not-yet", name, self.LATER[name] + " arrives with v1b; this build does not carry it")
         if name not in self.CALLS:
             raise Refusal("api.unknown-call", name, "the surface carries: " + ", ".join(self.CALLS))
         if name == "write_set":

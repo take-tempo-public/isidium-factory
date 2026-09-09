@@ -785,6 +785,35 @@ the cursor commit's time carries the author's offset, and every other time in th
 writes the cursor's time in its own form; the first sidecar on `main` carries the offset form until the next land
 rewrites it (the fold overwrites; nothing merges).
 
+### `accept` — the acceptance block, compiled and run at the owner's terminal — 2026-09-09 (L3)
+
+`isidium accept <id>` is a **client verb** (ruled 2026-09-09): it reads the card from the store (`show card` — the
+ratified content, its label, its compare-and-swap head), compiles the acceptance block to the manifest with the
+checkout's `config.toml [runners]` bindings, and runs every scenario **in the checkout**, through four runners keyed
+by the binding ids the schema ships: `pytest` (`test-marker`: a `path::name` or a marker, plus the scenario's
+`tests[]`), `shell` (`command`: the argv, `exit_code` / `stdout_matches` / `stderr_matches` / `files`), `http`
+(`method` and `path` against `context.base_url`; `status` / `body_matches` / `headers`), `file` (`file-assert`: an
+optional `action.run`, then the one check). A `manual-evidence` scenario runs nothing and answers `manual`. The
+store runs none of it: its image holds python, git and the store.
+
+Exit 0 when every verdict is `pass`, 1 otherwise (a verdict), 2 on a refusal. Before anything runs the store's label
+decides: a `draft` is `accept.draft` unless `--unsafe-draft`, which prints each command and asks per scenario;
+`unratified`, `integrity(…)` and `withdrawn` are `accept.unratified`. A kind whose binding names a runner the toolkit
+does not ship is `accept.unbindable` naming the scenario. A runner that cannot run — no program, a socket refused,
+pytest collecting nothing — is `accept.runner-error`, never a `fail`.
+
+`--close` is one `write`: the same document with a `[[closures]]` entry appended (`kind = "human"`, the verdicts, the
+manifest hash as evidence) and `status = "closed"`, which the store derives as `closed`. `met` needs every verdict
+`pass`; a `fail` or a `manual` refuses (`accept.failed`) unless `--deviated "<why>"` closes it as `deviated`, pending
+the owner's review. Under `ratification.verdicts_required = true` (the default) a card with no scenario cannot
+close (`accept.no-verdicts`). A fresh human closure projects `closed (pending-ingest)` until a land ingests it.
+
+```sh
+isidium accept 4 --text            # the verdicts, one line each; exit by verdict
+isidium accept 4 --close           # met: one write, the card closed
+isidium accept 4 --close --deviated "S3 needs the listener the checkout does not run"
+```
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
