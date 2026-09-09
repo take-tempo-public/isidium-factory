@@ -682,6 +682,32 @@ that calls it landed together, so the pull request shipping the verb was gated b
 (*Gating a tenant's `main`*) was exercised on this checkout from a pinned `git+file://` install, 28.7 s, exit 0;
 sartor's own gate is the bridge's to stand up.
 
+### K12b: the first cold start against the forge's bitmap — tenant #0 back up — 2026-09-08
+
+The 2026-09-08 recreate that moved tenant #0's secrets to `isidium-deploy/isidium-factory/` crash-looped before the
+store listened: `git.fetch-failed @ origin 3 objects: fatal: bad revision '163e9eac…'`, *did not send all necessary
+objects*. Not the move, not MTU, not the key. `Repo.prefetch`'s one `fetch --stdin` by object id ran git's ordinary
+negotiation, the fresh clone offered its own `main` as a `have`, and the forge — holding a reachability bitmap over
+that tip by then — answered the wants minus the haves' closure, which is where every governed blob sits. The K7b,
+K7c and K12 recreates came up on the same code because the bitmap did not yet cover the tip. K12b (PR #36) passes
+`-c fetch.negotiationAlgorithm=noop` on that one fetch, as git's own lazy fetch does; the mechanism is reproduced
+in the suite on a `file://` origin after `repack -adb`.
+
+Demonstrated here on the K12b image `a63c543d5aba` (`isidium-store:0.1.0` and `:k12b`, built from the PR #36 tree,
+which is byte-identical to the squash the merge makes), the container recreated from its recorded command:
+
+- **`running/healthy` in 44 s, zero restarts** — the cold start that had crash-looped an hour earlier on the K12
+  image against the same forge, the same key and the same mounts.
+- Inside the clone (`main` at `dd4aaac`), the three governed blobs the failed fetch had named, under
+  `GIT_NO_LAZY_FETCH=1 git cat-file --batch-check`: `163e9eac… blob 1315`, `a3de2b60… blob 1417`,
+  `df4951f3… blob 2404` — present, brought by the one batch fetch, not hydrated afterwards. The container log holds
+  no `fetch-failed` and no traceback.
+- From the workstation checkout, `isidium show queue --text` answered the queue with every count at none, exit 0.
+
+One workstation note for the recorded command: run from Git Bash, MSYS path conversion rewrites the `-v` targets
+(`/etc/isidium/tls:ro` became a path under `Program Files\Git`); `MSYS_NO_PATHCONV=1` on the invocation, or
+PowerShell, passes them through.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
