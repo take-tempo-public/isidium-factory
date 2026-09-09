@@ -578,6 +578,21 @@ class GitCli:
         argument-length ceiling to chunk for; the K7 record's note that `--stdin` refuses on Windows was Python's
         text-mode `\\n` → `\\r\\n` on the pipe, and git reporting the `\\r` as `?` — not git.
 
+        **It negotiates nothing** [found live, 2026-09-08: tenant #0's cold start crash-looped on it]. A `fetch` by
+        object id still runs the ordinary negotiation: the client offers every ref it holds as a `have`, and a server
+        holding a reachability bitmap over that ref answers *the wants minus the haves' closure* -- so a governed
+        blob, reachable from the very `main` the clone was just cut from, is subtracted from the pack, and `fetch`
+        fails its own connectivity check: `fatal: bad revision '<oid>'` / *"did not send all necessary objects"*.
+        Measured in the store image (git 2.47.3): tenant #0's three governed blobs against the forge, three fresh
+        clones, three failures, with `--filter` and without; a `file://` origin sends them until `repack -adb` builds
+        its bitmap, then fails identically. The recreates at K7b, K7c and K12 came up in 36 s on this same code
+        because the forge's bitmap did not yet cover the tip -- a server-side state the client cannot see, which is
+        what made it latent. `fetch.negotiationAlgorithm=noop` is what git's own lazy fetch passes for this exact
+        reason (`promisor-remote.c`, read off `GIT_TRACE`: `git -c fetch.negotiationAlgorithm=noop fetch origin
+        --no-tags --no-write-fetch-head --recurse-submodules=no --filter=blob:none --stdin`): no `have`, so the
+        server sends what was named. It rides this command rather than the environment because it is this fetch's
+        property alone -- the sync's fetch of `main` wants its negotiation.
+
         **The same gate as `blob()`**: every oid must have been resolved from a path inside the root. A batch door
         that fetched whatever it was handed would be the way a code blob is named and pulled in (Q3), so an oid
         this instance did not vouch is refused before any git runs, and nothing else in the batch is fetched.
@@ -593,15 +608,21 @@ class GitCli:
         if not missing:
             return 0
         try:
-            self._git(
-                "fetch",
-                "--quiet",
-                "--no-tags",
-                "--no-write-fetch-head",
-                "--filter=blob:none",
-                "--stdin",
-                self.remote,
+            self._run(
+                [
+                    "-c",
+                    "fetch.negotiationAlgorithm=noop",
+                    "fetch",
+                    "--quiet",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    "--filter=blob:none",
+                    "--stdin",
+                    self.remote,
+                ],
                 data="\n".join(missing).encode("ascii") + b"\n",
+                env=self._env,
+                rule_path="fetch --stdin",
             )
         except Refusal as r:
             raise Refusal("git.fetch-failed", f"{self.remote} {len(missing)} objects", r.detail) from r

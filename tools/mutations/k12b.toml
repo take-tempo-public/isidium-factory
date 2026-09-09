@@ -1,0 +1,22 @@
+# K12b's mutation (2026-09-08) -- the batch fetch negotiates nothing. One mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/k12b.toml --show
+#   python tools/mutate.py tools/mutations/k12b.toml M1 --workers 2
+#
+# M1 puts the negotiation back: the fetch offers `main` as a `have` again, and an origin holding a reachability
+# bitmap over it subtracts every governed blob from the pack -- tenant #0's cold-start crash-loop. The test that must
+# notice is K7b's `test_the_batch_fetch_negotiates_nothing_so_a_bitmapped_origin_still_sends_the_blobs`, whose origin
+# is repacked with `-b` before the store's first load.
+
+[[mutation]]
+id = "M1"
+label = "the batch fetch negotiates again -- a bitmapped origin subtracts the governed blobs from the pack"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '''                [
+                    "-c",
+                    "fetch.negotiationAlgorithm=noop",
+                    "fetch",
+'''
+replace = '''                [
+                    "fetch",
+'''

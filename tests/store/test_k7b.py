@@ -104,8 +104,17 @@ class Spawns:
 
         monkeypatch.setattr("isidium.store.server.gitrepo.subprocess.run", counted)
 
+    @staticmethod
+    def verb_of(argv: list[str]) -> str | None:
+        """The subcommand, past however many `-c key=value` pairs precede it -- `_run` puts two there always and the
+        batch fetch a third, so a fixed window would count that fetch as nothing."""
+        rest = argv[1:]
+        while len(rest) >= 2 and rest[0] == "-c":
+            rest = rest[2:]
+        return rest[0] if rest else None
+
     def of(self, verb: str) -> int:
-        return sum(1 for argv in self.calls if verb in argv[1:6])
+        return sum(1 for argv in self.calls if self.verb_of(argv) == verb)
 
     def reset(self) -> None:
         self.calls.clear()
@@ -331,6 +340,30 @@ def test_a_fresh_store_hydrates_its_governed_set_in_one_fetch(tmp_path: Path, mo
         root=ROOT,
     )
     assert len(again.cards()) == 6 and spawns.of("fetch") == 0
+
+
+def test_the_batch_fetch_negotiates_nothing_so_a_bitmapped_origin_still_sends_the_blobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tenant #0's cold start of 2026-09-08: the origin holds a reachability bitmap over `main`, the fresh clone
+    offers `main` as a `have`, and the server subtracts every wanted blob reachable from it -- `fetch` fails its own
+    connectivity check and the store never listens. The origin here is repacked with `-b` before the store's first
+    load, which is the state a forge reaches on its own schedule and the one the earlier recreates had not met.
+    With no `have` sent the same origin sends the governed set, in one fetch, and the code blob stays absent."""
+    work = _governed_tenant(tmp_path, 3)
+    origin = tmp_path / "origin.git"
+    git(origin, "repack", "-adb")
+    assert any(p.suffix == ".bitmap" for p in (origin / "objects" / "pack").iterdir()), "the origin has no bitmap"
+    spawns = Spawns(monkeypatch)
+    st = store_on_disk(work, tmp_path / "j.sqlite", root=ROOT)
+    assert len(st.cards()) == 3 and st.config_tree, "the governed set did not load"
+    fetches = [a for a in spawns.calls if Spawns.verb_of(a) == "fetch"]
+    assert len(fetches) == 1 and "fetch.negotiationAlgorithm=noop" in fetches[0], fetches
+    repo = st.repo
+    assert isinstance(repo, GitCli)
+    code = repo.oid_of("client/cards/validator.py")
+    assert code is not None
+    refuses("git.outside-footprint", lambda: repo.blob(code))
 
 
 def test_prefetch_refuses_an_object_it_did_not_vouch(tmp_path: Path) -> None:
