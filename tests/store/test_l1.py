@@ -104,7 +104,22 @@ def test_the_door_is_the_landers_alone() -> None:
     refuses("write.grant", lambda: hz.st.land(rep, OWNER))
     refuses("write.grant", lambda: hz.st.land(rep, PLANNER))
     assert hz.st.events == [] and hz.st.state == {}, "a refused land moved the store"
-    r = hz.st.land(rep, LANDER)
+    # The control that tells the matrix from the rows: a tenant may widen the sidecar's rows (`config@3` allows any
+    # subset of the three grants), and then the rows admit a contributor -- the matrix alone refuses, `land` not
+    # being in the contributor's set. The owner's set is `*` (identity.py), so a widened row DOES admit the owner;
+    # that is the tenant's own policy and is left unpinned here (L1, finding 5). The lander still lands.
+    st = hz.st
+    tree = json.loads(json.dumps(st.config_tree))
+    widened = ("state.json", "state/history.jsonl", "BOARD.md")
+    tree["governed"] = [
+        {**row, "write": ["contributor", "lander"]} if row["path"] in widened else dict(row)
+        for row in st.eff["governed"]
+    ]
+    st.write("config.toml", tree, {"seq": st.policy[-1]["seq"], "h": st.policy[-1]["h"]}, None, OWNER)
+    assert "contributor" in st.row_for("state.json")["write"], "the control did not widen the row"
+    r0 = refuses("write.grant", lambda: st.land(rep, PLANNER))
+    assert r0.path == "" and "may not land" in r0.detail, "the matrix, not a row, must have refused"
+    r = st.land(rep, LANDER)
     assert r["events"] == ["e1", "e2", "e3", "e4", "e5"] and r["landed"] is True and r["empty"] is False
 
 
