@@ -320,10 +320,12 @@ def test_c5_a_checkout_validates_against_the_registry_it_installed(tenant: Path)
 
 
 def test_c1_the_v1b_verbs_name_themselves(hz: Harness) -> None:
+    """C1 as it stands after WP5's L1 and L3: `land` is a call, `accept` is a client verb, the not-yet table is
+    gone — an unknown name reads as unknown, and the surface names what it carries."""
     api = Api(hz.st)
-    with pytest.raises(Refusal, match=r"api\.not-yet") as e:
-        api.call("accept", OWNER, {})  # `land` left this table in L1
-    assert "v1b" in str(e.value)
+    assert "land" in Api.CALLS and "accept" not in Api.CALLS
+    with pytest.raises(Refusal, match=r"api\.unknown-call"):
+        api.call("accept", OWNER, {})
     with pytest.raises(Refusal, match=r"api\.unknown-call") as e2:
         api.call("teleport", OWNER, {})
     assert "the surface carries" in str(e2.value)

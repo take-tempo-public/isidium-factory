@@ -1,0 +1,80 @@
+# L3's mutations (2026-09-09) -- `accept`. One mutation per invocation:
+#
+#   python tools/mutate.py tools/mutations/l3.toml --show
+#   python tools/mutate.py tools/mutations/l3.toml M1 --workers 2
+#
+# M1 drops the label check: a draft's command runs in the owner's shell. M2 makes --unsafe-draft run without asking.
+# M3 closes `met` on a failing verdict. M4 compiles an unbindable kind as manual, silently. M5 inverts
+# `stdout_matches`. M6 makes the http runner ignore `status`. M7 makes the manifest hash blind to `params`. Each names
+# the test that must notice, in tests/store/test_l3.py.
+
+[[mutation]]
+id = "M1"
+label = "a draft's scenarios run -- the label check is gone"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''    if row == "draft" and not unsafe_draft:
+'''
+replace = '''    if False:
+'''
+
+[[mutation]]
+id = "M2"
+label = "--unsafe-draft runs every command without asking"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''            if confirm is None or not confirm(asked):
+'''
+replace = '''            if False:
+'''
+
+[[mutation]]
+id = "M3"
+label = "a failing verdict closes met"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''    if passed:
+        outcome: Any = "met"
+    elif deviated:
+'''
+replace = '''    if True:
+        outcome: Any = "met"
+    elif deviated:
+'''
+
+[[mutation]]
+id = "M4"
+label = "an unbindable kind compiles as manual, silently"
+file = "packages/isidium-store/src/isidium/store/core/manifest.py"
+find = '''        if not isinstance(runner, str) or runner not in shipped:
+            raise Refusal(
+'''
+replace = '''        if not isinstance(runner, str) or runner not in shipped:
+            entries.append(Manual(sc.id, "unbindable", sc.rule))
+            continue
+            raise Refusal(
+'''
+
+[[mutation]]
+id = "M5"
+label = "stdout_matches inverted"
+file = "packages/isidium-store/src/isidium/store/client/runners.py"
+find = '''    if "stdout_matches" in obs and not _matches(str(obs["stdout_matches"]), r.stdout):
+'''
+replace = '''    if "stdout_matches" in obs and _matches(str(obs["stdout_matches"]), r.stdout):
+'''
+
+[[mutation]]
+id = "M6"
+label = "the http runner ignores status"
+file = "packages/isidium-store/src/isidium/store/client/runners.py"
+find = '''    if "status" in obs and r.status_code != int(obs["status"]):
+'''
+replace = '''    if False:
+'''
+
+[[mutation]]
+id = "M7"
+label = "the manifest hash is blind to params"
+file = "packages/isidium-store/src/isidium/store/core/manifest.py"
+find = '''                        "params": dict(e.params),
+'''
+replace = '''                        "params": {},
+'''

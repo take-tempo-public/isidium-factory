@@ -249,6 +249,48 @@ def check(id: Annotated[int, typer.Argument(help="the card id")]) -> None:
 
 
 @app.command()
+def accept(
+    id: Annotated[int, typer.Argument(help="the card id")],
+    close: Annotated[bool, typer.Option("--close", help="append a human closure and derive `closed`")] = False,
+    unsafe_draft: Annotated[
+        bool, typer.Option("--unsafe-draft", help="a draft's command and file scenarios: print each and ask")
+    ] = False,
+    deviated: Annotated[
+        str, typer.Option(help="--close as `deviated` with this description when a verdict fails")
+    ] = "",
+    text: Annotated[bool, typer.Option("--text", help="one line per verdict")] = False,
+) -> None:
+    """Compile the card's acceptance block and run it in this checkout (03 §1.13); `--close` is the one write.
+
+    Exit 0 when every verdict is `pass`, 1 otherwise (a verdict, the verifier's convention), 2 on a refusal. The
+    module is imported here (C-13): its runners and the registry's overlay are paid for by this verb alone."""
+    from .accept import accept as run_accept
+
+    try:
+        transport, cfg, workdir = _transport()
+        result = run_accept(
+            transport.call,
+            workdir,
+            cfg.root,
+            id,
+            close=close,
+            unsafe_draft=unsafe_draft,
+            deviated=deviated or None,
+            confirm=lambda q: bool(typer.confirm(q, default=False)),
+        )
+    except Refusal as r:
+        _refuse(r)
+    if text:
+        for v in result["verdicts"]:
+            typer.echo(f"{v['scenario_id']:<6} {v['verdict']:<7} {v['detail']}")
+        typer.echo(("met" if result["passed"] else "not met") + (" · closed" if "closed" in result else ""))
+    else:
+        _out(result)
+    if not result["passed"]:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def ratify(
     ids: Annotated[list[int] | None, typer.Argument(help="the cards to ratify")] = None,
     writes: Annotated[Path | None, typer.Option(help="a JSON file: [{card|new_slug, document, base?, ref?}]")] = None,

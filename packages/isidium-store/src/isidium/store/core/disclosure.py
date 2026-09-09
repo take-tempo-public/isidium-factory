@@ -101,6 +101,7 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         "surfaces": _VALIDATION,  # a surface intersecting the tracking root or the deny set
         "validate": _VALIDATION,  # the aggregate: `validate.failed` carries the verdicts as data (Q7)
         "hook": _VALIDATION,  # client-side only: the pre-commit hook, refusing to a human at their own terminal
+        "accept": _VALIDATION,  # client-side only: `accept` at the owner's terminal — its label, block and runs (L3)
         # ---- about us: terse (C-12 rule 2) ------------------------------------------------------------------------
         # Before the caller is identified, a refusal carries its rule id and nothing else. `auth` is that surface
         # exactly: no certificate, a certificate that will not parse, a certificate the registration does not name.
@@ -181,7 +182,6 @@ RULES: Final[Mapping[str, Row]] = MappingProxyType(
         "show.unsupported-target": Row(422, FULL),
         "governed.unknown-path": Row(404, FULL),
         "api.unknown-call": Row(404, FULL),
-        "api.not-yet": Row(422, FULL),  # a verb that exists but is not built in v1a
     }
 )
 
