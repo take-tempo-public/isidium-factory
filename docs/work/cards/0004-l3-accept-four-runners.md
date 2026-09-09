@@ -2,7 +2,7 @@
 schema = 1
 id = 4
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "planner"
 title = "L3: accept compiles the acceptance block and runs it through four runners at the owner's terminal"
 shape = "bdd"
@@ -52,6 +52,14 @@ title = "each runner answers pass and fail on a real checkout"
 rule = "R2"
 observable = { test = "tests/store/test_l3.py::test_a_runner_that_cannot_run_is_an_error_not_a_verdict" }
 tests = ["tests/store/test_l3.py::test_each_runner_answers_pass_and_fail_on_a_real_checkout"]
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass" }
+evidence = ["sha256:b56429ea0911e4ca1479c5806ea66d9fe5bd63545f2b2e13f958c89734645585"]
+retracted = false
 ```
 
 ## Scope
@@ -64,5 +72,6 @@ The verb `accept <id> [--close] [--unsafe-draft] [--deviated <why>]` on the stor
 history = [
   { seq = 1, at = "2026-09-09T20:03:26Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:f44629d9435c4000f728f39c5d9a6d66adb869b7e0ff70a60bfbbbf4c5c1bcb6", h = "sha256:fcc2fb5e707b4d66cf5e2fc2b39f245c517793d0416a729fc2c2a2bb5adc1889" },
   { seq = 2, at = "2026-09-09T21:27:52Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:f44629d9435c4000f728f39c5d9a6d66adb869b7e0ff70a60bfbbbf4c5c1bcb6", h = "sha256:e1f678e328dda5781909a69e5b7b4a0e7283196879668103b1fa3114d7aa7942", batch = 4 },
+  { seq = 3, at = "2026-09-09T21:29:18Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:f44629d9435c4000f728f39c5d9a6d66adb869b7e0ff70a60bfbbbf4c5c1bcb6", ref = "c1:sha256:50568914f8f88859506039b1dec100416c8b8a12829dfee1ee2d37b65cc30a6f", h = "sha256:8eb91e2720f9a3703a47f9e9e19dfedfd08e6f369bc1787a707b636d4e4f7279", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:+2BcCzmcxKGiAZq7WqmsO6kC1fMsbR4BP2GDfcG8z8LdfZW6lkZOzMLQ9HxRt+/isaVZudOLOdLrhyD40+GNDA==" },
 ]
 ```
