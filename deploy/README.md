@@ -814,6 +814,30 @@ isidium accept 4 --close           # met: one write, the card closed
 isidium accept 4 --close --deviated "S3 needs the listener the checkout does not run"
 ```
 
+### L3: the first card closed by `accept` on tenant #0 — 2026-09-09
+
+Card 0004 — L3 itself, the first time the factory's own work is a card (ruled 2026-09-09) — was written as a draft
+through the store (`ae458bc`), ratified by the owner's signed sitting (`bf43993`, `batch-manifest`; the first two
+attempts were the dry run, which is the CLI's default — `--sign` is the signature), and then, from the checkout on
+`main` `6eacf01`:
+
+```
+isidium accept 4 --close --text
+S1     pass    3 passed in 0.67s
+S2     pass    exit 0
+S3     pass    packages/isidium-store/src/isidium/store/client/runners.py: contains 'accept.runner-error'
+S4     pass    2 passed in 36.83s
+met · closed
+```
+
+Two `test-marker` scenarios ran through pytest (one named test plus `tests[]`, one process each), the `command`
+ran the client's own `--help`, the `file-assert` read the runner's source; every verdict `pass`, exit 0. The one
+write appended closure `c1` (`kind = "human"`, `outcome = "met"`, the four verdicts, the manifest hash as evidence)
+and set `status = "closed"`: commit **`4d8986a`** on `main`, `closed cards/0004-l3-accept-four-runners.md`. The
+store projects the card **`closed (unverified)`** — a human closure under the standalone dial, which a factory
+verification (T-A12, v1c) would make `closed`. Before the sitting it projected `ratified (pending-ingest)`: the
+signed entry post-dated the sidecar's `landed_at`, which is what the next land ingests (L4).
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
