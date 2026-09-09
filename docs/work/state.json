@@ -1,0 +1,32 @@
+{
+  "batches": {},
+  "cards": {
+    "0002": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:d516d1ceb1fbe2a61bb60214823327e7ea1a6f4002dcddb84fecfc3bf34a5cc5",
+        "seq": 1
+      },
+      "runs": []
+    },
+    "0003": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:d734494b2d62181a3e58472cdf108c0535c2b34995da58b700538a10478f5211",
+        "seq": 1
+      },
+      "runs": []
+    }
+  },
+  "journal_head": {
+    "h": "sha256:d2196d14ce6e053fd106fc2cb88569127d830a910ace244c63f05619c7fa7983",
+    "seq": 5
+  },
+  "landed_at": "2026-09-09T10:32:09-07:00",
+  "ledger_cursor": "68ffb68b670c3789f3caade682e1bac2e07fb1e5",
+  "schema": 1
+}
