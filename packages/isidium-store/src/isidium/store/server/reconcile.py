@@ -97,12 +97,18 @@ def reasons(
     the commit's author, trailers and time when the caller walked commits (`check`'s per-card walk and `land`'s range
     walk both do; a caller without them gets the four document-and-journal reasons).
 
-    A deletion earns the chain's verdict only: an absent after-blob with no row is already `unjournaled` (9.5), and
-    there is nothing to recompute. A `repaired` entry is the owner's signed act and is not re-derived (1.15)."""
+    A deletion is a diff `write` refuses (`write.deletion`), so it is `tampered` through the same derive (round 6:
+    *"a deleted card is not a fact of its own"*) beside the chain's `unjournaled`. A `repaired` entry is the owner's
+    signed act and is not re-derived (1.15)."""
     out: set[Reason] = set()
     if reconcile_path(parent_blob, commit_blob, rows) != "explained":
         out.add("unjournaled")
     if after is None:
+        if before is not None:
+            try:
+                derive.derive(before, None, None)
+            except Refusal:
+                out.add("tampered")
         return out
     if landed_head is not None:
         seq = int(landed_head["seq"])
