@@ -838,6 +838,42 @@ store projects the card **`closed (unverified)`** — a human closure under the 
 verification (T-A12, v1c) would make `closed`. Before the sitting it projected `ratified (pending-ingest)`: the
 signed entry post-dated the sidecar's `landed_at`, which is what the next land ingests (L4).
 
+### L4: the walk runs at land — `config@4` adopted, the first landed integrity map, two findings — 2026-09-10
+
+The L4 image (`9b2950bf7223`, `isidium-store:0.1.0` and `:l4`, built from `main` at `a1e8bff`) went up from the
+recorded command (`MSYS_NO_PATHCONV=1` on Git Bash, as K12b notes) — **healthy in 34 s, zero restarts**. The
+checkout's registry was refreshed with `isidium install` (K11's verb, the first time it has been needed since it
+shipped): `config@4`, `sidecar@2`, `sidecar-events@2` beside the twelve. Then, from the workstation checkout:
+
+- **The act.** The owner's `config.toml` edited to adopt `config@4` — head `schema = 4`, the `state.json` row →
+  `sidecar@2`, the `state/history.jsonl` row → `sidecar-events@2`, the `config.toml` row → `config@4`, everything
+  else untouched — handed over with `isidium write --config`, answered in 6.7 s: policy entry **5**
+  (`act = "config-policy"`, `fields = ["governed", "schema"]`), journal row **10**, commit **`f018269`** on `main`
+  through the deploy key, `landed = true`. The file handed over is kept beside the tenant's client material
+  (`isidium-deploy/isidium-factory/factory/config-4.toml`).
+- **The land.** The same synthetic report as L2, through `isidium factory land`, in 11 s: cursor `68ffb68`
+  (unchanged since the first land — see the third finding), event `e2`, intake `s2`, journal row 11, commit
+  **`9aa5f64`** on `main`. `state.json` now carries `schema = 2`, **`integrity = {}`** — the walk over every commit
+  since the cursor found every governed transition explained and recomputed clean: the store's own commits are
+  authored by the caller, so `attribution` has nothing to say — and `ingest = {run_id, overflow = 0}`. The board's
+  header reads *"inbox run 2"*; `show queue --text` unchanged.
+- **Finding 1, live: `isidium check 4` answered `rewritten`** while the land's walk had found nothing. The walk
+  compared the landed `history_head` (seq 3, the close) against every commit in the range — and the range holds
+  card 0004's draft commit with its one entry, because the cursor sits behind the head while nothing merges. The
+  land was clean only because the head it compared against predated the card. An older commit has fewer entries
+  and is not a rewrite; only an entry at the landed seq with another `h` is. Fixed in **PR #43** (`l4b`), with a
+  test that fails without it.
+- **Finding 2, from that test: the empty diff ignored the documents.** A ratification with no run report never
+  landed its head — the card would read `ratified (pending-ingest)` until an event happened to arrive. Every
+  card's `history_head` is now an input of the empty diff (the same PR).
+- **Finding 3, the owner's: the forge squash-merges.** X2's cursor is *"the batch PR's merge commit"*, observed as
+  a merge on the first-parent line; a squash is a plain commit, so nothing has moved tenant #0's cursor since the
+  first land, and every land walks the whole range since it — bounded today (a dozen commits), unbounded in
+  principle. Recorded in the chunk plan as Q-W10.
+- **The L4b image** (`813eb8fe339c`, `:l4b`, built from PR #43's tree as K12b's was) went up the same way — healthy
+  in 32 s — and the report landed a third time: `e3`, `s3`, commit **`9fb8f37`**, the map still empty; `isidium
+  check 4` now answers `integrity: []`, agreeing with the land.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
