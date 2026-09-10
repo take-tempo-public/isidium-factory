@@ -111,8 +111,13 @@ def reasons(
                 out.add("tampered")
         return out
     if landed_head is not None:
+        # An entry the sidecar landed must still be the entry at its seq. A commit OLDER than the landed head has
+        # fewer entries and is not a rewrite — the range walks every commit since the cursor, and the cursor stays
+        # behind the head for as long as nothing merges [L4 live finding, tenant #0, 2026-09-10: card 0004's draft
+        # commit read `rewritten` against the head its close had landed]. A history cut short at the head is the
+        # entry-count rule's (`tampered`, below) and `check`'s own comparison on the working bytes.
         seq = int(landed_head["seq"])
-        if seq > len(after.history) or after.history[seq - 1]["h"] != landed_head["h"]:
+        if seq <= len(after.history) and after.history[seq - 1]["h"] != landed_head["h"]:
             out.add("rewritten")
     if len(after.history) != (len(before.history) if before else 0) + 1 or (
         before is not None and after.history[:-1] != before.history
