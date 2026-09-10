@@ -204,8 +204,11 @@ def test_a_commit_older_than_the_landed_head_is_not_rewritten_when_the_range_wal
     assert st.state["cards"][f"{a:04d}"]["history_head"]["seq"] == 2 and st.state["integrity"] == {}
     assert st.land({"run_id": "r-1b", "events": []}, LANDER)["empty"] is True, "and the same heads again are empty"
     r = st.land({"run_id": "r-2", "events": [{"kind": "question", "card": a, "text": "again"}]}, LANDER)
-    assert r["cursor"] == cursor, "nothing merged: the same range is walked again"
-    assert st.state["integrity"] == {}, "the draft commit is older than the landed head, not a rewrite"
+    assert r["cursor"] != cursor, "the clean range advanced the cursor [Q-W10 (a)]"
+    # the same range walked again from the first cursor, as every land did before Q-W10: not a rewrite
+    integrity, _acts, clean = st._reconcile_range(cursor)
+    assert integrity == {} and clean, "the draft commit is older than the landed head, not a rewrite"
+    assert st.state["integrity"] == {}
     assert st.check(a)["integrity"] == []
 
 
@@ -246,8 +249,10 @@ def test_a_flagged_commit_behind_a_moved_cursor_keeps_its_reason_until_repaired(
     assert r["cursor"] == merge and sha not in st.repo.first_parent_walk(merge), "the bypass is behind the cursor"
     assert st.state["integrity"] == {"BOARD.md": {"unjournaled": [sha]}}, "still in this land's range"
     # the next land's range is `(merge, head]` — the bypass is outside it and only the flagged re-walk keeps it
+    before = st.repo.head
     r = st.land({"run_id": "r-3", "events": [{"kind": "question", "card": 1, "text": "keep going"}]}, LANDER)
-    assert r["empty"] is False and st.state["ledger_cursor"] == merge
+    # the range `(merge, head]` is clean — the flagged commit behind it does not hold the cursor [Q-W10 (a)]
+    assert r["empty"] is False and st.state["ledger_cursor"] == before != merge
     assert st.state["integrity"] == {"BOARD.md": {"unjournaled": [sha]}}, "the reason survived leaving the range"
     st.repair(OWNER, journal=sha)
     st.land({"run_id": "r-4", "events": []}, LANDER)
@@ -292,7 +297,8 @@ def test_the_range_walk_is_one_git_however_many_commits_and_paths(
     git(other, "push", "-q", "origin", "HEAD:main")
     st._sync_to_main()  # K9's fast-forward, outside the count: it spends one diff-tree per commit behind (C-8, recorded)
     spawns = Spawns(monkeypatch)
-    integrity, acts = st._reconcile_range(st.state["ledger_cursor"])
+    integrity, acts, clean = st._reconcile_range(st.state["ledger_cursor"])
+    assert clean
     assert integrity == {} and acts == []
     assert spawns.of("log") == 1, [a[1:5] for a in spawns.calls if Spawns.verb_of(a) == "log"]
     assert spawns.of("diff-tree") == 0, "the walk spawns a diff-tree per commit"

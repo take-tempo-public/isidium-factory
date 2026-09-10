@@ -1,0 +1,82 @@
+# L4c's mutations (2026-09-10) -- Q-W9 (`land` alone past K4's door) and Q-W10 (a) (the cursor at a clean land).
+# One mutation per invocation, two workers:
+#
+#   python tools/mutate.py tools/mutations/l4c.toml --show
+#   python tools/mutate.py tools/mutations/l4c.toml M1 --workers 2
+#
+# M1 closes the door again: `land` syncs like every other verb, and a moved governed path is the refusal. M2 lets
+# a moved `config.toml` through. M3 never advances the cursor: the squash-merged tenant's range grows forever. M4
+# advances it over an unclean range: the flagged commit leaves the range. M5 makes the cursor's bookkeeping move
+# a diff: a land of nothing commits, forever. M6 fast-forwards past the bypass but never re-reads the path: the row
+# journals the remembered blob. M7 keeps a deleted card. Each names the test that must notice, in
+# tests/store/test_l4c.py.
+
+[[mutation]]
+id = "M1"
+label = "land syncs like every other door -- the bypass is the refusal"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        self._sync_to_main(reread=True)  # Q-W9: past K4's door, the moved governed paths re-read
+'''
+replace = '''        self._sync_to_main()  # Q-W9: past K4's door, the moved governed paths re-read
+'''
+
+[[mutation]]
+id = "M2"
+label = "a moved config.toml is re-read past the door"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''                if "config.toml" in changed:
+                    telemetry.record_refusal_on(sp, "git.push-rejected")
+'''
+replace = '''                if "config.toml" in changed and False:
+                    telemetry.record_refusal_on(sp, "git.push-rejected")
+'''
+
+[[mutation]]
+id = "M3"
+label = "the cursor never advances at a clean land"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        cursor = pending[-1] if pending else (self.repo.head if clean or not last else str(last))
+'''
+replace = '''        cursor = pending[-1] if pending else (str(last) if last else self.repo.head)
+'''
+
+[[mutation]]
+id = "M4"
+label = "the cursor advances over an unclean range"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        cursor = pending[-1] if pending else (self.repo.head if clean or not last else str(last))
+'''
+replace = '''        cursor = pending[-1] if pending else self.repo.head
+'''
+
+[[mutation]]
+id = "M5"
+label = "the bookkeeping move of the cursor is a diff -- a land of nothing commits"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''            and last is not None
+            and not pending  # the cursor's advance over a clean range alone is bookkeeping, not a diff [Q-W10]
+'''
+replace = '''            and cursor == last
+'''
+
+[[mutation]]
+id = "M6"
+label = "the door fast-forwards past the bypass but re-reads nothing"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''                self._reread(changed)
+                sp.set_attribute(telemetry.REREAD, len(changed))
+'''
+replace = '''                sp.set_attribute(telemetry.REREAD, len(changed))
+'''
+
+[[mutation]]
+id = "M7"
+label = "a card deleted on main is kept"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''            if after is None:
+                self._forget(path)
+                continue
+'''
+replace = '''            if after is None:
+                continue
+'''
