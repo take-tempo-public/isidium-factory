@@ -151,7 +151,7 @@ def test_the_land_folds_the_events_and_lands_everything_in_one_row_and_one_commi
     assert lines[3]["class"] == "budget" and all(e["at"] for e in lines)
     # the fold
     s = json.loads(st.raw["state.json"].decode("utf-8"))
-    assert s == st.state and s["schema"] == 1 and s["ledger_cursor"] == head_before and s["batches"] == {}
+    assert s == st.state and s["schema"] == 2 and s["ledger_cursor"] == head_before and s["batches"] == {}
     assert s["landed_at"] == st.repo.commit_time(head_before)
     assert s["cards"][f"{a:04d}"]["execution"] == "closed" and s["cards"][f"{b:04d}"]["execution"] == "failed(budget)"
     assert s["cards"][f"{c:04d}"]["execution"] is None, "a question is not an execution state"

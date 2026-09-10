@@ -9,12 +9,11 @@ real closure, the X1 display is durable, rules key to the diff, indexes replace 
 from __future__ import annotations
 
 import copy
-import dataclasses
 import datetime as _dt
 import json
 import re
 import tomllib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,7 +39,7 @@ from ..registry import docschema
 from ..registry.loader import Registry
 from . import reconcile
 from . import refs as refs_mod
-from .gitrepo import Repo, blob_id
+from .gitrepo import CommitChange, Repo, blob_id
 from .identity import Caller, allowed
 from .journal import Journal
 from .signer import Display, Signer
@@ -1146,14 +1145,20 @@ class Store:
     def cards(self) -> dict[int, Document]:
         return {cid: self.docs[p] for cid, p in sorted(self._by_id.items())}
 
-    def _inputs(self) -> status.Inputs:
+    def _inputs(self, state: Mapping[str, Any] | None = None) -> status.Inputs:
+        """The projection's inputs (T7: the in-project renderer reads cards, `state.json`, `config.toml`). Row 1's
+        reasons are the **landed** ones [L4]: what the last land's walk found, keyed by path in the sidecar and by
+        card id here. `check` computes live reasons on demand, one card at a time; `show` never walks."""
         builds = {cid: self._build[p] for cid, p in self._by_id.items() if p in self._build}
+        st = self.state if state is None else state
+        landed: Mapping[str, Mapping[str, Any]] = st.get("integrity", {}) if isinstance(st, Mapping) else {}
+        integrity = {cid: tuple(landed[p]) for cid, p in self._by_id.items() if p in landed}  # the reasons are the keys
         return status.Inputs(
             self.cards(),
-            self.state,
+            st,
             self.gated_x(),
             self.verify_entry,
-            {},
+            integrity,  # type: ignore[arg-type]
             frozenset(self.software_fprs),
             builds,
             str(self.card_defaults().get("kind", "")),
@@ -1222,6 +1227,19 @@ class Store:
         **The write** is the door's shape, not the sitting's: the row is durable before the commit, a rejected push is
         handed back as `landed = false` (Q18) and the next call or the next load replays it. The transaction is one
         row because it is one act: T-A10's *"one transaction"* is this row's `paths[]`, the four together.
+
+        **Ingest's land-time half** [L4, 2026-09-09; 03 §9.5]: before the fold, the walk over `(last cursor, head]`
+        — first-parent, every governed path, one git for the range and one prefetch for its blobs — computes the
+        six integrity reasons per path through the same function `check` runs (`reconcile.reasons`), and lands
+        them in `state.json` where row 1 reads them; a tenant's first land walks from `init`'s commit
+        (`_chain_start`), nothing before it being journaled. The card acts the walk sees since the last land whose
+        signature verifies become the ledger's own transitions (`answered`, `reopened`, `withdrawn`, `demoted`,
+        `accepted` carrying the entry's `seq` — 03 §6; Q-W8) when the landed state holds something for them to
+        transition (`_act_events`), and go into the event file ahead of the report's. The report's
+        `suggestion-overflow` lands beside the cursor. **Nothing is emitted for a human closure**: a closure record
+        with `verified = false` projects `disputed` (row 5), and `verified = true` is the factory's verification
+        (T-A12, v1c) — the label stays `closed (unverified)`. The empty diff is decided on every input: no events,
+        no suggestions, no act events, the same cursor, and the walk's reasons equal to the landed ones.
         """
         self._require(caller, "land")
         self._replay_pending()
@@ -1244,10 +1262,19 @@ class Store:
         # author's offset (`10:32:09-07:00`) and the first live land wrote that beside `at`s written as `Z`. One
         # form per file; the projection compares `landed_at` against entries' `at` as strings.
         landed_at = self._utc(self.repo.commit_time(cursor))
-        if not rep.events and not rep.suggestions and cursor == self.state.get("ledger_cursor"):
+        landed_reasons: Mapping[str, Mapping[str, Sequence[str]]] = self.state.get("integrity", {})
+        flagged = {sha for by_reason in landed_reasons.values() for shas in by_reason.values() for sha in shas}
+        integrity, acts = self._reconcile_range(str(last) if last else self._chain_start(), flagged)
+        if (
+            not rep.events
+            and not rep.suggestions
+            and not acts
+            and cursor == last
+            and integrity == self.state.get("integrity", {})
+        ):
             # Nothing new at the same cursor: the empty diff of 03 §1.4, decided here rather than on bytes, because
             # the previous land's own row moved `journal_head` and the fold would differ by that one value alone.
-            telemetry.record_land(0, 0, 0, cursor)
+            telemetry.record_land(0, 0, 0, cursor, len(integrity))
             return {
                 "cursor": cursor,
                 "landed_at": landed_at,
@@ -1260,21 +1287,31 @@ class Store:
                 "empty": True,
             }
         new_events = [
-            events_mod.record_of(ev, f"e{len(self.events) + n}", at) for n, ev in enumerate(rep.events, start=1)
+            events_mod.record_of(ev, f"e{len(self.events) + n}", at)
+            for n, ev in enumerate([*acts, *rep.events], start=1)
         ]
         events = [*self.events, *new_events]
+        cap = int(self.eff["inbox"]["max_per_run"])
+        overflow = max(0, len(rep.suggestions) - cap)
         heads = {
             f"{cid:04d}": {"seq": d.history[-1]["seq"], "h": d.history[-1]["h"]}
             for cid, d in self.cards().items()
             if d.history
         }
         jseq, jh = self.journal.head
-        state = events_mod.fold(events, cursor, landed_at, {"seq": jseq, "h": jh}, heads)
+        state = events_mod.fold(
+            events,
+            cursor,
+            landed_at,
+            {"seq": jseq, "h": jh},
+            heads,
+            integrity=integrity,
+            ingest={"run_id": rep.run_id, "overflow": overflow},
+        )
         files: dict[str, bytes] = {
             "state.json": (json.dumps(state, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
             "state/history.jsonl": "".join(emit_jsonl_line(e) for e in events).encode("utf-8"),
         }
-        cap = int(self.eff["inbox"]["max_per_run"])
         intake: list[dict[str, Any]] = []
         if rep.suggestions:
             self._grant_on(self.INBOX_PATH, caller)
@@ -1300,11 +1337,10 @@ class Store:
                 intake.append(rec)
                 data += emit_jsonl_line(rec).encode("utf-8")
             files[self.INBOX_PATH] = data
-        overflow = max(0, len(rep.suggestions) - cap)
         if bool(self.eff["board"]["commit"]):
             self._grant_on(self.BOARD_PATH, caller)
             files[self.BOARD_PATH] = self._render_board(state, [*self.inbox, *intake]).encode("utf-8")
-        telemetry.record_land(len(new_events), len(intake), overflow, cursor)
+        telemetry.record_land(len(new_events), len(intake), overflow, cursor, len(integrity))
         result: dict[str, Any] = {
             "cursor": cursor,
             "landed_at": landed_at,
@@ -1318,6 +1354,127 @@ class Store:
         landed = self._landing(deferred)
         return {**result, "commit": sha, "journal_seq": int(jrow["seq"]), "landed": landed, "empty": False}
 
+    # The card acts that are the ledger's own transitions when observed at land (03 §6; Q-W8 [owner, 2026-09-09]),
+    # and what the landed state must hold for each to have something to transition: `answered` unparks, `reopened`
+    # reopens a closed execution, `withdrawn` / `demoted` abandon a run in flight, `accepted` marks a landed closure.
+    ACT_EVENTS = ("answered", "reopened", "withdrawn", "demoted", "accepted")
+
+    def _chain_start(self) -> str | None:
+        """Where a tenant's first land starts its walk: the parent of the commit that first wrote `config.toml`
+        under the root — `init`'s commit, the first journaled act. Nothing before it is journaled by definition; the
+        alternative, the root, reports every earlier commit `unjournaled` at O(history). Two gits, once per tenant."""
+        first = self.repo.history_of(self.rp("config.toml"), None)
+        if not first:
+            return None
+        parents = self.repo.parents(first[0][0])
+        return parents[0] if parents else None
+
+    def _reconcile_range(
+        self, since: str | None, flagged: Iterable[str] = ()
+    ) -> tuple[dict[str, dict[str, list[str]]], list[events_mod.Event]]:
+        """9.5's walk at land: every first-parent commit in `(since, head]` that touched the root, in ONE git
+        (`changes_under`, K7b's rule — never a `touched()` per commit), every governed blob it names prefetched in
+        one round trip, then per (commit, governed path) the shared reason function. Answers the reasons by governed
+        path, each reason naming the commits that earned it — `{path: {reason: [sha, …]}}` — and the act events the
+        walk saw (Q-W8). Per land O(commits × governed files touched), never O(cards) (9.4's ingest row).
+
+        **The flagged commits are walked again** [L4 finding, measured on the first real-git test]: the cursor moves
+        at a merge, and a commit flagged behind it would leave the range and its reason vanish unrepaired if only
+        `(since, head]` were read. So every commit the landed map names is re-checked too — one `log` each when it
+        is not already in the range (two gits with its parent), bounded by the number of flagged commits, which is
+        zero on a tenant nobody bypasses and one owner act (`repair --journal`) away from zero otherwise. The map is
+        recomputed whole, never merged: a repaired commit drops out at the next land. The commit is in the record
+        because it is what the owner needs to repair it."""
+        changes = self.repo.changes_under(self.root, since)
+        seen = {c.sha for c in changes}
+        for sha in sorted(set(flagged) - seen):
+            parents = self.repo.parents(sha)
+            changes.extend(self.repo.changes_under(self.root, parents[0] if parents else None, sha))
+        touched = [(c, rp, pair) for c in changes for rp, pair in c.touched.items() if self.is_governed_repo_path(rp)]
+        self.repo.prefetch(b for _c, _rp, (bb, ab) in touched for b in (bb, ab) if b)
+        parsed: dict[str, Document] = {}
+        rows: dict[str, list[dict[str, Any]]] = {}
+        reasons: dict[str, dict[str, set[str]]] = {}
+        acts: list[events_mod.Event] = []
+        for c, rp, (bb, ab) in touched:
+            path = rp[len(self.root) :]
+            if path not in rows:
+                rows[path] = self.journal.rows_for(path)
+            rs, entry = self._reasons_for(path, bb, ab, rows[path], c, parsed)
+            for r in rs:
+                reasons.setdefault(path, {}).setdefault(r, set()).add(c.sha)
+            if entry is not None and not rs:
+                acts.extend(self._act_events(entry))
+        return {p: {r: sorted(s) for r, s in sorted(by.items())} for p, by in sorted(reasons.items())}, acts
+
+    def _reasons_for(
+        self,
+        path: str,
+        before_blob: str | None,
+        after_blob: str | None,
+        rows: Sequence[dict[str, Any]],
+        commit: CommitChange | None,
+        parsed: dict[str, Document],
+    ) -> tuple[set[str], tuple[int, Mapping[str, Any]] | None]:
+        """One governed path's transition through `reconcile.reasons`: a card path is parsed on both sides (a blob
+        that does not parse is `tampered`, as at load) and answers the entry the commit added; any other governed
+        path — the policy file, the inbox, the sidecar, the board — answers the chain's verdict alone."""
+        if not str(self.row_for(path)["schema"]).startswith("card@"):
+            v = reconcile.reconcile_path(before_blob, after_blob, rows)
+            return ({"unjournaled"} if v != "explained" else set()), None
+        schema = self.doc_schema("card@1")
+
+        def model(oid: str) -> Document:
+            if oid not in parsed:
+                parsed[oid] = parse_markdown(self.repo.blob(oid).decode("utf-8"), schema)
+            return parsed[oid]
+
+        try:
+            after = model(after_blob) if after_blob else None
+            before = model(before_blob) if before_blob else None
+        except Refusal:
+            out: set[str] = {"tampered"}
+            if reconcile.reconcile_path(before_blob, after_blob, rows) != "explained":
+                out.add("unjournaled")
+            return out, None
+        landed_head = None
+        cid = int(after.head["id"]) if after is not None and isinstance(after.head.get("id"), int) else None
+        if cid is not None:
+            landed_head = self.state.get("cards", {}).get(f"{cid:04d}", {}).get("history_head")
+        ctx = reconcile.Context(self.gated_x(), self.verify_entry, self.time_skew())
+        rs = reconcile.reasons(
+            before, after, before_blob, after_blob, rows, ctx, landed_head=landed_head, commit=commit
+        )
+        entry = (cid, after.history[-1]) if cid is not None and after is not None and after.history else None
+        return set(rs), entry
+
+    def _act_events(self, entry: tuple[int, Mapping[str, Any]]) -> list[events_mod.Event]:
+        """The ledger's own transition for a card act the walk observed (03 §6: *"carrying the card entry's `seq`
+        as its reference — never the entry's content"*): only an entry newer than the landed `history_head` (a
+        re-walk of the same range emits nothing twice), only a verified signature, and only when the landed state
+        holds what the act transitions — a run to unpark, a closed execution to reopen, a run in flight to abandon,
+        a landed closure to mark. In v1b nothing is dispatched, so the live tenant emits none; the mechanism is
+        exercised by a report that parks a card first."""
+        cid, e = entry
+        act = str(e.get("act", ""))
+        if act not in self.ACT_EVENTS or not (chain.is_signed(e) and self.verify_entry(e)):
+            return []
+        sc = self.state.get("cards", {}).get(f"{cid:04d}", {})
+        head = sc.get("history_head") or {}
+        if int(e["seq"]) <= int(head.get("seq", 0)):
+            return []
+        execution = sc.get("execution")
+        wanted = {
+            "answered": execution == "parked",
+            "reopened": execution == "closed",
+            "withdrawn": execution in ("dispatched", "parked", "answered"),
+            "demoted": execution in ("dispatched", "parked", "answered"),
+            "accepted": bool(sc.get("closures")),
+        }[act]
+        if not wanted:
+            return []
+        return [events_mod.parse_event({"kind": act, "card": cid, "seq": int(e["seq"]), "at": str(e["at"])})]
+
     def _grant_on(self, path: str, caller: Caller) -> None:
         """The per-path half of the grant check, as `write` does it: the manifest row must carry the caller's grant."""
         row = self.row_for(path)
@@ -1327,7 +1484,7 @@ class Store:
     def _render_board(self, state: Mapping[str, Any], inbox: Sequence[Mapping[str, Any]]) -> str:
         """The board over a state the store does not hold yet — the landed one — through the same renderer `show`
         uses; `merged, not landed` is 0 by construction, the cursor being the newest merge."""
-        inp = dataclasses.replace(self._inputs(), state=state)
+        inp = self._inputs(state)
         projections = status.project(inp)
         q = status.queue(inp, projections, inbox, self.policy, 0)
         return board_mod.render(self.cards(), projections, q, inbox, int(self.eff["wip"]))
@@ -1414,52 +1571,20 @@ class Store:
         **And one git for the history, one for the blobs** [K7b, F8, F7]. The walk used to spawn a `diff-tree` per
         first-parent commit since the cursor — every commit on the tenant, of which the ones that touched this card
         are a handful — 26 processes on tenant #0 and one more per merged pull request, forever, on the verb ingest
-        calls per card. `history_of` is one `log --raw` naming exactly those commits with their blob pairs, and
-        `prefetch` brings every blob the walk will read in one round trip on a cold clone instead of one each."""
+        calls per card. `changes_under` with the one path is one `log --raw` naming exactly those commits with
+        their blob pairs — and, since L4, the author and trailers `attribution` and `time` need — and `prefetch`
+        brings every blob the walk will read in one round trip on a cold clone instead of one each. The reasons
+        themselves are `reconcile.reasons`, the function `land` runs over every governed path (L4)."""
         out: set[str] = set()
         rp = self.rp(path)
-        schema = self.doc_schema("card@1")
         rows = self.journal.rows_for(path)
         parsed: dict[str, Document] = {}
-
-        def model(oid: str) -> Document:
-            if oid not in parsed:
-                parsed[oid] = parse_markdown(self.repo.blob(oid).decode("utf-8"), schema)
-            return parsed[oid]
-
-        history = self.repo.history_of(rp, since)
-        self.repo.prefetch(b for _sha, bb, ab in history for b in (bb, ab) if b)
-        for _sha, bb, ab in history:
-            if reconcile.reconcile_path(bb, ab, rows) != "explained":
-                out.add("unjournaled")
-            try:
-                after = model(ab) if ab else None
-                before = model(bb) if bb else None
-            except Refusal:
-                out.add("tampered")
-                continue
-            if after is not None and (
-                len(after.history) != (len(before.history) if before else 0) + 1
-                or (before and after.history[:-1] != before.history)
-            ):
-                out.add("tampered")
-                continue
-            e = after.history[-1] if after else None
-            if e is not None and e.get("act") == "repaired":
-                continue
-            try:
-                d = derive.derive(before, after, e.get("ref") if e else None)
-            except Refusal:
-                out.add("tampered")
-                continue
-            assert after is not None and e is not None
-            build = (
-                str(before.history[-1]["build"])
-                if (before and not (set(d.diff) & canon.GATED_KEYS))
-                else canon.build_hash(after.head, after.scope(), self.gated_x())
-            )
-            if (d.act, d.fields, build) != (e["act"], e["fields"], e["build"]):
-                out.add("tampered")
+        changes = self.repo.changes_under(rp, since)
+        self.repo.prefetch(b for c in changes for (bb, ab) in c.touched.values() for b in (bb, ab) if b)
+        for c in changes:
+            bb, ab = c.touched[rp]
+            rs, _entry = self._reasons_for(path, bb, ab, rows, c, parsed)
+            out |= rs
         return out
 
     def verify_entry(self, e: Mapping[str, Any]) -> bool:

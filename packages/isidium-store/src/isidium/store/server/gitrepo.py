@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 import tempfile
 import weakref
@@ -37,6 +38,34 @@ def blob_id(data: bytes, object_format: str = "sha1") -> str:
     h = hashlib.sha1(usedforsecurity=False) if object_format == "sha1" else hashlib.sha256()
     h.update(b"blob " + str(len(data)).encode() + b"\0" + data)
     return h.hexdigest()
+
+
+_COAUTHOR = re.compile(r"^co-authored-by:[ \t]*(.*?)[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+
+def coauthors_of(message: str) -> tuple[str, ...]:
+    """The `Co-Authored-By` trailers of a commit message as lower-cased emails (1.15: `by` is corroborated by the
+    author email and the trailers). `Name <email>` yields the email; a bare value is taken whole."""
+    out: list[str] = []
+    for m in _COAUTHOR.finditer(message):
+        v = m.group(1)
+        if v.endswith(">") and "<" in v:
+            v = v[v.rindex("<") + 1 : -1]
+        if v.strip():
+            out.append(v.strip().lower())
+    return tuple(out)
+
+
+@dataclass(frozen=True)
+class CommitChange:
+    """One first-parent commit as the range walk reads it [L4]: who authored it (lower-cased email), its
+    `Co-Authored-By` trailers, its committer time, and the blob pairs it wrote under the walk's prefix."""
+
+    sha: str
+    author: str
+    coauthors: tuple[str, ...]
+    at: str
+    touched: dict[str, tuple[str | None, str | None]]
 
 
 class Repo(Protocol):
@@ -70,6 +99,10 @@ class Repo(Protocol):
     # replaced and the blob it wrote — what `check`'s walk used to assemble from one `touched()` per commit. One
     # git for the whole history rather than one per commit; the double answers from its dict.
     def history_of(self, path: str, since: str | None) -> list[tuple[str, str | None, str | None]]: ...
+    # L4 (9.5): every first-parent commit after `since` (to `until`, default the head) that changed a path under
+    # `prefix`, oldest first — its author, trailers and time beside the blob pairs — in ONE git for the whole range,
+    # where `touched()` per commit is a spawn per commit on the line (K7b's rule). The walk ingest runs at land.
+    def changes_under(self, prefix: str, since: str | None, until: str | None = None) -> list[CommitChange]: ...
     # K7b (F8): the merge commits on the first-parent line after `since`, oldest first — `merges_pending`'s
     # question, answered by one `rev-list` rather than a `rev-list --parents` per commit.
     def merges_since(self, since: str | None) -> list[str]: ...
@@ -208,6 +241,15 @@ class MemGit:
 
     def merges_since(self, since: str | None) -> list[str]:
         return [sha for sha in self.first_parent_walk(since) if len(self.commits[sha].parents) > 1]
+
+    def changes_under(self, prefix: str, since: str | None, until: str | None = None) -> list[CommitChange]:
+        out: list[CommitChange] = []
+        for sha in self.first_parent_walk(since, until):
+            c = self.commits[sha]
+            touched = {p: pair for p, pair in self.touched(sha).items() if p.startswith(prefix)}
+            if touched:
+                out.append(CommitChange(sha, c.author.lower(), coauthors_of(c.message), c.at, touched))
+        return out
 
     def prefetch(self, oids: Iterable[str]) -> int:
         """The double holds every blob it ever wrote; there is nothing to fetch and no remote to fetch from."""
@@ -983,4 +1025,46 @@ class GitCli:
             out.append((sha, before, after))
             if path.startswith(self.root):
                 self._vouched.update(b for b in (before, after) if b)
+        return out
+
+    def changes_under(self, prefix: str, since: str | None, until: str | None = None) -> list[CommitChange]:
+        """One `log --raw` over the whole range for every path under `prefix` [L4, 9.5] — `history_of`'s shape with
+        the pathspec widened (the `--no-renames` it kept for exactly this caller: a card renamed away is a deletion
+        at its path, K7a's F1) and a header per commit carrying the author email, the committer time and the body,
+        so the `Co-Authored-By` trailers (1.15, `attribution`) come out of the same process. The record separator
+        `\x1e` opens each commit and `\x1f` closes its body; a body cannot carry either. Blobs under the root are
+        vouched as `history_of` vouches them — the land reads them back through `blob()`."""
+        rng = f"{since}..{until or 'HEAD'}" if since else (until or "HEAD")
+        zero = "0" * (64 if self.object_format == "sha256" else 40)
+        out: list[CommitChange] = []
+        raw = self._git(
+            "log",
+            "--first-parent",
+            "--diff-merges=first-parent",
+            "--raw",
+            "--no-abbrev",
+            "--no-renames",
+            "--reverse",
+            "--format=%x1e%H%x00%ae%x00%cI%x00%B%x1f",
+            "--end-of-options",
+            rng,
+            "--",
+            prefix,
+        )
+        for chunk in raw.split("\x1e"):
+            header, sep, rest = chunk.partition("\x1f")
+            if not sep:
+                continue
+            sha, email, at, body = header.split("\x00", 3)
+            touched: dict[str, tuple[str | None, str | None]] = {}
+            for ln in rest.splitlines():
+                if not ln.startswith(":"):
+                    continue
+                meta, path = ln.split("\t", 1)
+                _m1, _m2, b1, b2, _status = meta[1:].split(" ", 4)
+                touched[path] = (None if b1 == zero else b1, None if b2 == zero else b2)
+                if path.startswith(self.root):
+                    self._vouched.update(b for b in touched[path] if b)
+            if touched:
+                out.append(CommitChange(sha.strip(), email.strip().lower(), coauthors_of(body), at.strip(), touched))
         return out

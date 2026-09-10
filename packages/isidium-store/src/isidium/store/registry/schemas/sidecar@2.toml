@@ -1,0 +1,53 @@
+name = "sidecar"
+version = 2
+form = "json"
+
+# 03 §6 — `state.json`, the current execution state per card: the fold of `state/history.jsonl` as of the ledger
+# cursor. Written only by `land` (the `lander` grant). The per-card record shape is a tagged structure the nine-member
+# vocabulary declares only at its top level; the rest is code (server/verbs/land.py). L4 (2026-09-09, 03 §9.5) adds
+# the land-time ingest facts — `integrity` per governed path and `ingest` for the run — beside the per-card fold.
+
+[[record]]
+name = "schema"
+type = "int"
+required_when = []
+
+[[record]]
+name = "ledger_cursor"
+type = "string"
+required_when = []
+
+[[record]]
+name = "landed_at"
+type = "string"
+required_when = []
+
+[[record]]
+name = "journal_head"
+type = "table"
+required_when = []
+
+[[record]]
+name = "batches"
+type = "table"
+required_when = []
+
+[[record]]
+name = "cards"
+type = "table"
+required_when = []
+dynamic-table = { key-grammar = "[0-9]{4,}" }
+
+# L4 (2026-09-09, 03 §9.5): the reasons the land's walk computed per governed path, recomputed at every land — keyed
+# by the root-relative governed path (`cards/0042-slug.md`, `config.toml`, `suggestions.jsonl`).
+[[record]]
+name = "integrity"
+type = "table"
+required_when = []
+dynamic-table = { key-grammar = "[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*" }
+
+# L4 (2026-09-09, 03 §9.5): the land-time facts no card names — `run_id`, `overflow` (suggestion-overflow).
+[[record]]
+name = "ingest"
+type = "table"
+required_when = []
