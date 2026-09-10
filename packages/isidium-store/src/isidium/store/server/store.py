@@ -1239,7 +1239,9 @@ class Store:
         `suggestion-overflow` lands beside the cursor. **Nothing is emitted for a human closure**: a closure record
         with `verified = false` projects `disputed` (row 5), and `verified = true` is the factory's verification
         (T-A12, v1c) — the label stays `closed (unverified)`. The empty diff is decided on every input: no events,
-        no suggestions, no act events, the same cursor, and the walk's reasons equal to the landed ones.
+        no suggestions, no act events, the same cursor, the walk's reasons equal to the landed ones, **and every
+        card's `history_head` as landed** — a ratification with no run report still lands its head, or the card
+        would read `pending-ingest` until an event happened to arrive [L4 live finding, 2026-09-10].
         """
         self._require(caller, "land")
         self._replay_pending()
@@ -1265,12 +1267,19 @@ class Store:
         landed_reasons: Mapping[str, Mapping[str, Sequence[str]]] = self.state.get("integrity", {})
         flagged = {sha for by_reason in landed_reasons.values() for shas in by_reason.values() for sha in shas}
         integrity, acts = self._reconcile_range(str(last) if last else self._chain_start(), flagged)
+        heads = {
+            f"{cid:04d}": {"seq": d.history[-1]["seq"], "h": d.history[-1]["h"]}
+            for cid, d in self.cards().items()
+            if d.history
+        }
+        landed_heads = {k: c["history_head"] for k, c in self.state.get("cards", {}).items() if c.get("history_head")}
         if (
             not rep.events
             and not rep.suggestions
             and not acts
             and cursor == last
             and integrity == self.state.get("integrity", {})
+            and heads == landed_heads
         ):
             # Nothing new at the same cursor: the empty diff of 03 §1.4, decided here rather than on bytes, because
             # the previous land's own row moved `journal_head` and the fold would differ by that one value alone.
@@ -1293,11 +1302,6 @@ class Store:
         events = [*self.events, *new_events]
         cap = int(self.eff["inbox"]["max_per_run"])
         overflow = max(0, len(rep.suggestions) - cap)
-        heads = {
-            f"{cid:04d}": {"seq": d.history[-1]["seq"], "h": d.history[-1]["h"]}
-            for cid, d in self.cards().items()
-            if d.history
-        }
         jseq, jh = self.journal.head
         state = events_mod.fold(
             events,

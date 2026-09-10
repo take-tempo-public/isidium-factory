@@ -189,6 +189,26 @@ def test_a_hand_written_entry_on_a_real_change_is_tampered_by_the_recompute() ->
     assert st.state["integrity"][p] == {"tampered": [sha], "unjournaled": [sha]}, st.state["integrity"]
 
 
+def test_a_commit_older_than_the_landed_head_is_not_rewritten_when_the_range_walks_it_again() -> None:
+    """Live on tenant #0 (2026-09-10): the cursor stays behind the head while nothing merges, so every land walks
+    the same commits again — and a card's draft commit, holding one entry, read `rewritten` against the head its
+    close had landed. An older commit has fewer entries; only an entry AT the landed seq with another `h` is a
+    rewrite."""
+    hz = fresh()
+    st = hz.st
+    st.land({"run_id": "r-0", "events": []}, LANDER)
+    cursor = st.state["ledger_cursor"]
+    a = ratified(hz, "a")  # two commits after the cursor: the draft (one entry) and the ratification (two)
+    r = st.land({"run_id": "r-1", "events": []}, LANDER)
+    assert r["empty"] is False, "a new head is an input of the empty diff: the ratification lands its head"
+    assert st.state["cards"][f"{a:04d}"]["history_head"]["seq"] == 2 and st.state["integrity"] == {}
+    assert st.land({"run_id": "r-1b", "events": []}, LANDER)["empty"] is True, "and the same heads again are empty"
+    r = st.land({"run_id": "r-2", "events": [{"kind": "question", "card": a, "text": "again"}]}, LANDER)
+    assert r["cursor"] == cursor, "nothing merged: the same range is walked again"
+    assert st.state["integrity"] == {}, "the draft commit is older than the landed head, not a rewrite"
+    assert st.check(a)["integrity"] == []
+
+
 def test_a_non_card_governed_path_is_reconciled_by_the_chain_alone_and_a_repair_clears_it() -> None:
     """The board is governed; a hand commit to it is `unjournaled` at the next land under its own path (Q-W7 (a):
     the home is the path, a card being not the only governed document). `repair --journal` writes the missing row
