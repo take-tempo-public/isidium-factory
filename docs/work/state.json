@@ -38,8 +38,8 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:50ac4569246379bba8d8a540efd068d21a40f95c4b1a8e19ff1c0854f82312e8",
-    "seq": 10
+    "h": "sha256:1e6fa2a111e8cbe4328e1df2b0cb34c0d999010c0c0be86b65e2e19157f24425",
+    "seq": 11
   },
   "landed_at": "2026-09-09T17:32:09Z",
   "ledger_cursor": "68ffb68b670c3789f3caade682e1bac2e07fb1e5",

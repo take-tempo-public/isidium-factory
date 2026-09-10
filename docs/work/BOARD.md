@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox run 2
+WIP 0/1 · inbox run 3
 
 ## Queue
 
@@ -16,6 +16,7 @@ WIP 0/1 · inbox run 2
 
 - s1 · docs · run · the first land is synthetic: say so where the sidecar is read
 - s2 · docs · run · the first land is synthetic: say so where the sidecar is read
+- s3 · docs · run · the first land is synthetic: say so where the sidecar is read
 
 ## Open
 
