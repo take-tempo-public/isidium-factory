@@ -210,7 +210,8 @@ def show(
         bool,
         typer.Option(
             "--text",
-            help="render the human form (board and queue, the neighborhood block; a card answers JSON until its renderer exists)",
+            help="render the human form (board and queue, the neighborhood block; "
+            "a card answers JSON until its renderer exists)",
         ),
     ] = False,
 ) -> None:
