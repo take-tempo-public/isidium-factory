@@ -119,8 +119,8 @@ def test_d1_fixtures_validate() -> None:
         ("config.type", "chain_opened_under"),
     ]
     assert cfg.journal_schema(cfg.resolve_effective(tree, REG)) == 2  # config@2's declared default, no key written
-    # the version that does not ship: `config@4` since K10 shipped `config@3` (the arm moved once more)
-    unshipped = text.replace("schema = 2", "schema = 4", 1).replace('schema = "config@2"', 'schema = "config@4"', 1)
+    # the version that does not ship: `config@5` since L4 shipped `config@4` (the arm moved once more)
+    unshipped = text.replace("schema = 2", "schema = 5", 1).replace('schema = "config@2"', 'schema = "config@5"', 1)
     _, _, rs = cfg.parse_and_validate(unshipped, REG)
     assert sorted(r.rule for r in rs) == ["config.enum", "config.schema-unknown", "config.schema-unknown"]
 

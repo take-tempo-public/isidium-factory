@@ -85,7 +85,7 @@ def test_an_intact_checkout_passes_and_every_document_is_named(tenant: tuple[Pat
     work, _ = tenant
     rc, out = run(work)
     assert rc == 0, out
-    assert re.search(r"^ok\s+config\.toml\s+\[config@3\]\s+1 entries$", out, re.M), out  # `init` adopts the newest
+    assert re.search(r"^ok\s+config\.toml\s+\[config@4\]\s+1 entries$", out, re.M), out  # `init` adopts the newest
     assert re.search(r"^ok\s+cards/\d+-tripwire\.md\s+\[card@1\]\s+1 entries$", out, re.M), out
     assert "isidium: 2 ok, 0 tampered," in out, out
 

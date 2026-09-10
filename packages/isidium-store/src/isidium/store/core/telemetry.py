@@ -184,19 +184,21 @@ def detail_on_span(detail: str) -> None:
 LAND_EVENTS = "isidium.land.events"
 LAND_INTAKE = "isidium.land.intake"
 LAND_OVERFLOW = "isidium.land.overflow"
+LAND_INTEGRITY = "isidium.land.integrity"  # governed paths the land's walk flagged (L4)
 LAND_CURSOR = "isidium.land.cursor"
 
 
-def record_land(events: int, intake: int, overflow: int, cursor: str) -> None:
+def record_land(events: int, intake: int, overflow: int, cursor: str, integrity: int = 0) -> None:
     """A land's size on its call span (C-11; T-A10 *"Emits"*): how many events and intake records it carried, how
-    many suggestions the cap dropped, and the cursor it landed — four attributes, no span per event (the module's
-    own constraint: nothing inside a loop over governed paths). Whether it landed is `record_landed`'s, as for every
-    door."""
+    many suggestions the cap dropped, the cursor it landed, and how many governed paths its walk flagged (L4) — five
+    attributes, no span per event or per commit (the module's own constraint: nothing inside a loop over governed
+    paths). Whether it landed is `record_landed`'s, as for every door."""
     sp = trace.get_current_span()
     sp.set_attribute(LAND_EVENTS, events)
     sp.set_attribute(LAND_INTAKE, intake)
     sp.set_attribute(LAND_OVERFLOW, overflow)
     sp.set_attribute(LAND_CURSOR, cursor)
+    sp.set_attribute(LAND_INTEGRITY, integrity)
 
 
 def record_landed(landed: bool, rule: str = "", detail: str = "") -> None:

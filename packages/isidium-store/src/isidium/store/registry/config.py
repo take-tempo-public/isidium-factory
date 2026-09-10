@@ -23,7 +23,7 @@ from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
 SCHEMA_VERSION: Final = (
-    3  # the config schema version this module's cross-key code mirrors (K10: config@3, root immutable)
+    4  # the config schema version this module's cross-key code mirrors (L4: config@4, the sidecar documents at @2)
 )
 
 # 04 §2.1 — scalars first, among themselves in this inventory order

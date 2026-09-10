@@ -1,0 +1,79 @@
+# L4's mutations (2026-09-10) -- ingest at land. One mutation per invocation, two workers here:
+#
+#   python tools/mutate.py tools/mutations/l4.toml --show
+#   python tools/mutate.py tools/mutations/l4.toml M1 --workers 2
+#
+# M1 starts the walk at the head: nothing is walked, no bypass is ever seen. M2 drops `unjournaled` from the reason
+# set. M3 lets the recompute accept a mismatch: a hand-written entry passes as the store's own. M4 ignores the
+# `Co-Authored-By` trailers: a vouched co-author is `attribution`. M5 lands the overflow as 0. M6 hands row 1 no
+# landed reasons: the board never shows a bypass. M7 drops the re-walk of the flagged commits: a reason behind a
+# moved cursor vanishes unrepaired. Each names the test that must notice, in tests/store/test_l4.py.
+
+[[mutation]]
+id = "M1"
+label = "the walk starts at the head -- nothing is walked"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        changes = self.repo.changes_under(self.root, since)
+        seen = {c.sha for c in changes}
+'''
+replace = '''        changes = self.repo.changes_under(self.root, self.repo.head)
+        seen = {c.sha for c in changes}
+'''
+
+[[mutation]]
+id = "M2"
+label = "unjournaled is never a reason"
+file = "packages/isidium-store/src/isidium/store/server/reconcile.py"
+find = '''    if reconcile_path(parent_blob, commit_blob, rows) != "explained":
+        out.add("unjournaled")
+    if after is None:
+'''
+replace = '''    if after is None:
+'''
+
+[[mutation]]
+id = "M3"
+label = "the recompute accepts a mismatch -- a hand-written entry passes as the store's own"
+file = "packages/isidium-store/src/isidium/store/server/reconcile.py"
+find = '''    if (d.act, d.fields, build) != (e["act"], e["fields"], e["build"]):
+        out.add("tampered")
+    return out
+'''
+replace = '''    return out
+'''
+
+[[mutation]]
+id = "M4"
+label = "the trailers are ignored -- a vouched co-author is attribution"
+file = "packages/isidium-store/src/isidium/store/server/reconcile.py"
+find = '''        if by and by != commit.author and by not in commit.coauthors:
+'''
+replace = '''        if by and by != commit.author:
+'''
+
+[[mutation]]
+id = "M5"
+label = "the overflow lands as 0"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''            ingest={"run_id": rep.run_id, "overflow": overflow},
+'''
+replace = '''            ingest={"run_id": rep.run_id, "overflow": 0},
+'''
+
+[[mutation]]
+id = "M6"
+label = "row 1 reads no landed reason -- the board never shows a bypass"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        integrity = {cid: tuple(landed[p]) for cid, p in self._by_id.items() if p in landed}  # the reasons are the keys
+'''
+replace = '''        integrity: dict[int, tuple[str, ...]] = {}
+'''
+
+[[mutation]]
+id = "M7"
+label = "the flagged commits are not walked again -- a reason behind a moved cursor vanishes"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        for sha in sorted(set(flagged) - seen):
+'''
+replace = '''        for sha in ():
+'''

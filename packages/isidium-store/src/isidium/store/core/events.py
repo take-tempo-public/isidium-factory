@@ -2,7 +2,7 @@
 
 **The union is closed and typed, one model per kind** (C-2, C-5): a kind outside it is `event.kind`; a member the
 kind does not carry, or carries in the wrong type, is `event.shape` naming the member. The set of kinds is the one
-`sidecar-events@1` declares; the per-kind members are this module's — the schema document's own comment names it
+`sidecar-events@2` declares; the per-kind members are this module's — the schema document's own comment names it
 as their home. Two of the schema's kinds, `merged` and `landed`, are the batch record's lifecycle and are **not** in
 the union yet: the schema requires `card` on every row, and a batch event has no card. Batches open with T-C3 (v1c);
 until then a report carrying one is refused `event.kind` with the reason in its detail (the WP5 plan's L1, finding 2).
@@ -240,10 +240,19 @@ def fold(
     landed_at: str,
     journal_head: Mapping[str, Any],
     heads: Mapping[str, Mapping[str, Any]],
+    integrity: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    ingest: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """`state.json` as the fold of the event file as of the cursor (03 §6). `heads` is `{"0042": {seq, h}}` — each
     card's last history entry as the store holds it, which is the sidecar's `history_head` (03 §1.4). Batches are
-    empty until T-C3 (v1c) opens them."""
+    empty until T-C3 (v1c) opens them.
+
+    **Two more non-event inputs since L4 (`sidecar@2`, Q-W7 (a))**: `integrity` — the reasons the land's walk
+    computed, `{path: {reason: [commit, …]}}`, keyed by governed path (`config.toml` and the inbox have no card, so
+    the key is the path, and the projection maps a card's path to its id) and naming the commits that earned each
+    reason (what `repair --journal <commit>` needs); and `ingest` — the land-time facts no card names (9.5): the
+    run and its `suggestion-overflow`. Both are recomputed at every land, never accumulated: a repaired commit drops
+    out at the next land. Still pure — the same inputs give the same bytes."""
     cards: dict[str, dict[str, Any]] = {}
     for e in events:
         key = f"{int(e['card']):04d}"
@@ -298,10 +307,16 @@ def fold(
     for key, h in heads.items():
         cards.setdefault(key, _new_card())["history_head"] = dict(h)
     return {
-        "schema": 1,
+        "schema": 2,
         "ledger_cursor": cursor,
         "landed_at": landed_at,
         "journal_head": dict(journal_head),
         "batches": {},
         "cards": dict(sorted(cards.items())),
+        "integrity": {
+            p: {r: sorted(set(shas)) for r, shas in sorted(by.items()) if shas}
+            for p, by in sorted((integrity or {}).items())
+            if any(by.values())
+        },
+        "ingest": dict(ingest) if ingest else {},
     }
