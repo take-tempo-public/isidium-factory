@@ -20,13 +20,28 @@
         "seq": 1
       },
       "runs": []
+    },
+    "0004": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:8eb91e2720f9a3703a47f9e9e19dfedfd08e6f369bc1787a707b636d4e4f7279",
+        "seq": 3
+      },
+      "runs": []
     }
   },
-  "journal_head": {
-    "h": "sha256:d2196d14ce6e053fd106fc2cb88569127d830a910ace244c63f05619c7fa7983",
-    "seq": 5
+  "ingest": {
+    "overflow": 0,
+    "run_id": "r-synthetic-1"
   },
-  "landed_at": "2026-09-09T10:32:09-07:00",
+  "integrity": {},
+  "journal_head": {
+    "h": "sha256:50ac4569246379bba8d8a540efd068d21a40f95c4b1a8e19ff1c0854f82312e8",
+    "seq": 10
+  },
+  "landed_at": "2026-09-09T17:32:09Z",
   "ledger_cursor": "68ffb68b670c3789f3caade682e1bac2e07fb1e5",
-  "schema": 1
+  "schema": 2
 }
