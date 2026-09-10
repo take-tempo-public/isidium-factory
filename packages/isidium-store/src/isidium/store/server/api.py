@@ -247,6 +247,11 @@ class Api:
             return {"markdown": self.store.show("Board")}
         if target == "schema":
             return {"schema": self.store.show(("Schema", _need_str(args, "name")))}
+        if target == "neighborhood":
+            # The block as a value and as the delivered text [L5]: the payload (v1c) takes the text; a planner's
+            # terminal takes either.
+            block = self.store.show(("Neighborhood", _need_int(args, "id")))
+            return {"context": block.as_dict(), "text": block.render()}
         raise Refusal("show.unsupported-target", target)
 
     def check(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:

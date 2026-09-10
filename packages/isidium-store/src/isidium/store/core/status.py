@@ -344,6 +344,20 @@ def _members_of(cards: Mapping[int, Document]) -> dict[int, list[int]]:
     return members
 
 
+# The graph readers the neighborhood projection shares [L5]: the same heads, read the same way, one home.
+depends_on_of = _depends_on
+members_of = _members_of
+
+
+def build_matches_reference(cid: int, doc: Document, inp: Inputs) -> bool:
+    """Row 2's test, asked by the neighborhood [L5, 03 §1.17 *"whose build hash equals their fingerprint"*]: the
+    card's build hash equals its reference build — the fingerprint's ratified entry when the sidecar holds one,
+    else the last verified `ratified`/`created` entry (H7). A card row 1 flags fails it too: its last entry's
+    `build` is not its bytes'."""
+    build = inp.builds.get(cid) or canon.build_hash(doc.head, doc.scope(), inp.gated_x)
+    return _reference_build(doc, _state_card(inp.state, cid), inp.verified) == build
+
+
 def _roll_up(out: dict[int, Projection], members: Mapping[int, Sequence[int]]) -> None:
     """The container roll-up over the whole set — **members before their parents, whatever the ids** [K10, item 1;
     K7b's finding 1].

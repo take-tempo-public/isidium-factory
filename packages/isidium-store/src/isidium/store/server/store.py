@@ -19,7 +19,7 @@ from typing import Any
 
 from .. import __version__
 from ..core import board as board_mod
-from ..core import canon, chain, derive, status, telemetry
+from ..core import canon, chain, derive, neighborhood, status, telemetry
 from ..core import events as events_mod
 from ..core.grammar import (
     DocSchema,
@@ -1140,7 +1140,18 @@ class Store:
             return board_mod.render(self.cards(), projections, q, self.inbox, int(self.eff["wip"]))
         if isinstance(target, tuple) and len(target) == 2 and target[0] == "Schema":
             return self.registry.get(str(target[1]))
+        if isinstance(target, tuple) and len(target) == 2 and target[0] == "Neighborhood":
+            return self.neighborhood_of(int(target[1]))
         raise Refusal("show.unsupported-target", str(target))
+
+    def neighborhood_of(self, card_id: int) -> neighborhood.Block:
+        """03 §1.17's block for one card [L5]: the pure function over the projection's inputs, each member labeled
+        in one card's time (F9 — bounded by the neighborhood, never the tenant), the caps from the effective
+        config's `[payload.context]`. A read: no schema, no row, no commit."""
+        if self.path_of(card_id) is None:
+            raise Refusal("show.unknown", str(card_id))
+        inp = self._inputs()
+        return neighborhood.project(inp, card_id, neighborhood.caps_of(self.eff), lambda c: status.project_one(inp, c))
 
     def cards(self) -> dict[int, Document]:
         return {cid: self.docs[p] for cid, p in sorted(self._by_id.items())}
