@@ -301,11 +301,12 @@ class Store:
         form = self.registry.get(ref).get("form")
         if form == "markdown" and ref != "board@1":
             doc = parse_markdown(data.decode("utf-8"), self.doc_schema(ref))
+            previous = self.docs.get(path)  # `None` at load; the card it already held on a re-read [Q-W9]
             self.docs[path] = doc
             if ref.startswith("card@"):
                 self._by_id[int(doc.head["id"])] = path
                 self._build[path] = self._cached_build(blob, doc)
-                self._reparent(int(doc.head["id"]), None, doc)
+                self._reparent(int(doc.head["id"]), previous, doc)
         elif ref.startswith("inbox@"):
             self.inbox = parse_jsonl(data.decode("utf-8"))
         elif ref.startswith("sidecar-events@"):
@@ -418,9 +419,20 @@ class Store:
                     return f"{sha[:12]} {repo_path}"
         return None
 
-    def _sync_to_main(self) -> None:
+    def _sync_to_main(self, *, reread: bool = False) -> None:
         """**(a) of Q14's ruling: before every write, re-read `main` and fast-forward onto it** — and, since K12, at
         the two doors that resolve refs before they write: the sitting (dry or signed) and a card born `ratified`.
+
+        **`reread` is `land`'s alone** [Q-W9, owner 2026-09-10]: a governed path that moved on the remote is, at
+        every other door, the refusal below; at `land` it is the thing 9.5 sends `land` to report, and a door that
+        refuses it until the container restarts reports nothing. So `land` fast-forwards past it and **re-reads the
+        moved governed paths** — every one, from ONE `log` over the range (K7b's rule) and one prefetch of their
+        blobs — so the walk that follows sees the bypass and lands its reason at once, and the row `land` journals
+        names the blob `main` holds rather than the one this store remembered (the L4 finding). **`config.toml` is
+        the one path `land` will not re-read past**: a hand-edited manifest is a hand-edited policy, and a store that
+        adopted it would be trusting the very act the walk exists to report — that path stays the refusal at every
+        door, `land` included, until an owner's `repair` or a restart reads it on purpose. A store whose ref has
+        diverged cannot re-read the tip it does not hold and stays refused too.
 
         Until this existed a running store never re-read `main` (K4's finding, and the entrypoint said so out loud),
         so under the gate every merged pull request left the store's clone stale and its next governed write refused
@@ -463,16 +475,84 @@ class Store:
             return
         attrs = {telemetry.TENANT: self.tenant, telemetry.ACTION: "fast-forward"}
         with telemetry.span(telemetry.SYNC_SPAN, **attrs) as sp:
-            moved = self._first_governed_change(head, tip)
-            if moved is not None:
-                telemetry.record_refusal_on(sp, "git.push-rejected")
-                raise Refusal("git.push-rejected", tip[:12], f"a governed path moved on the remote: {moved}")
+            changed: dict[str, str | None] = {}
+            if reread:
+                changed = self._governed_changes(head, tip)
+                if "config.toml" in changed:
+                    telemetry.record_refusal_on(sp, "git.push-rejected")
+                    raise Refusal("git.push-rejected", tip[:12], "a governed path moved on the remote: config.toml")
+            else:
+                moved = self._first_governed_change(head, tip)
+                if moved is not None:
+                    telemetry.record_refusal_on(sp, "git.push-rejected")
+                    raise Refusal("git.push-rejected", tip[:12], f"a governed path moved on the remote: {moved}")
             # A ref that has diverged — this store holding a commit the remote does not — is left where it is
             # (`fast_forward` never resets). Since K7a that is a legitimate state: a `write` whose push failed
             # keeps its commit and its pending row, and the next push carries both. It is recorded on the span
             # rather than refused, so an operator can see a store that is journaling ahead of its forge (F17).
-            sp.set_attribute(telemetry.DIVERGED, not self.repo.fast_forward(tip))
+            diverged = not self.repo.fast_forward(tip)
+            sp.set_attribute(telemetry.DIVERGED, diverged)
+            if changed:
+                if diverged:
+                    telemetry.record_refusal_on(sp, "git.push-rejected")
+                    raise Refusal("git.push-rejected", tip[:12], "a governed path moved and this store has diverged")
+                self._reread(changed)
+                sp.set_attribute(telemetry.REREAD, len(changed))
             telemetry.record_ok()
+
+    def _governed_changes(self, base: str, tip: str) -> dict[str, str | None]:
+        """Every governed path that moved between `base` and `tip`, with the blob it holds at `tip` (`None` when
+        deleted) — one `log` for the range, the last write to a path winning. The list `_first_governed_change`
+        stops short of, for the one caller that needs all of it."""
+        out: dict[str, str | None] = {}
+        for c in self.repo.changes_under(self.root, base, tip):
+            for rp, (_before, after) in c.touched.items():
+                if self.is_governed_repo_path(rp):
+                    out[rp[len(self.root) :]] = after
+        return out
+
+    def _reread(self, changed: Mapping[str, str | None]) -> None:
+        """Replace the store's copy of each moved governed path with what `main` holds, as `load` read it: the
+        blobs in one prefetch, a file that does not parse `unreadable` for `check` to report, a deleted one
+        forgotten. Only the paths named — never the collection (C-13)."""
+        self.repo.prefetch(b for b in changed.values() if b is not None)
+        for path, after in changed.items():
+            if after is None:
+                self._forget(path)
+                continue
+            row = cfg.governed_resolve(self.eff, path)
+            if row is None:
+                continue
+            data = self.repo.blob(after)
+            self.unreadable.pop(path, None)
+            try:
+                self._ingest_file(path, str(row["schema"]), data)
+            except Refusal as r:
+                self.unreadable[path] = r
+                self.raw[path] = data
+
+    def _forget(self, path: str) -> None:
+        """A governed path deleted on `main` leaves every index it was in."""
+        self.raw.pop(path, None)
+        self._blob.pop(path, None)
+        self.unreadable.pop(path, None)
+        self._build.pop(path, None)
+        doc = self.docs.pop(path, None)
+        if doc is not None and "id" in doc.head:
+            cid = int(doc.head["id"])
+            if self._by_id.get(cid) == path:
+                del self._by_id[cid]
+            parent = doc.head.get("parent")
+            if isinstance(parent, int):
+                self._kids.get(parent, set()).discard(cid)
+        row = cfg.governed_resolve(self.eff, path)
+        ref = str(row["schema"]) if row is not None else ""
+        if ref.startswith("inbox@"):
+            self.inbox = []
+        elif ref.startswith("sidecar-events@"):
+            self.events = []
+        elif ref.startswith("sidecar@"):
+            self.state = {}
 
     def _push_or_rebuild(self, changes: dict[str, bytes], author: str, at: str, message: str, sha: str) -> str:
         """**(b) of Q14's ruling: one bounded rebuild on a rejected push, and only when nothing governed moved.**
@@ -1208,12 +1288,17 @@ class Store:
         path is assembled below, and the rows refuse the lander on them anyway.
 
         **The cursor** is the newest pending merge commit — the batch PR's merge, observed the way `merges_pending`
-        observes it (pin 3, *"no human step between merge and land"*) — else the cursor the last land put down, else
-        the head for a tenant's first land: the standalone case and the synthetic report's. `landed_at` is that
-        commit's time (G11). A second
-        land of the same cursor with nothing new **is an empty diff**: nothing folded, nothing journaled, nothing
-        committed, the result saying so — decided on the inputs, since the previous land's own row moves
-        `journal_head` and the bytes alone would never agree.
+        observes it (pin 3, *"no human step between merge and land"*) — else **the head, when the walk found the
+        range clean** [Q-W10 (a), owner 2026-09-10: tenant #0's forge squash-merges, so no merge commit ever moved
+        it, and every land re-walked the whole range since the first], else the cursor the last land put down when
+        the range holds a commit the walk flagged (it stays in the range until repaired), else the head for a
+        tenant's first land: the standalone case and the synthetic report's. `landed_at` is that commit's time
+        (G11). A land with nothing new **is an empty diff**: nothing folded, nothing journaled, nothing committed,
+        the result saying so — decided on the inputs, since the previous land's own row moves `journal_head` and
+        the bytes alone would never agree. The cursor's own advance over a clean range is bookkeeping and never
+        alone makes the diff: a land of nothing after a land of nothing would otherwise commit the moved cursor,
+        and the next land the moved cursor again, forever — one commit per land with nothing landed. A pending
+        merge is not bookkeeping: it is what X2's land is for, and it lands.
 
         **The fold** (`core/events.fold`) reads the event file plus this report's events, never the file it replaces —
         a hand-edited `state.json` is `integrity:unjournaled` to `check` and is overwritten here (03 §6). `journal_head`
@@ -1245,28 +1330,24 @@ class Store:
         """
         self._require(caller, "land")
         self._replay_pending()
-        self._sync_to_main()
+        self._sync_to_main(reread=True)  # Q-W9: past K4's door, the moved governed paths re-read
         for p in self.SIDECAR_PATHS:
             if p in self.unreadable:
                 raise Refusal("land.sidecar-unreadable", p, str(self.unreadable[p]))
             self._grant_on(p, caller)
         rep = events_mod.parse_report(report)
         pending = self.merges_pending()
-        # The newest pending merge is the cursor (pin 3). With nothing merged since, the cursor STAYS where the last
-        # land put it — the store's own commits on `main` between lands are not merges and do not move it — and
-        # only the first land of a tenant takes the head. That is what keeps *"the same cursor twice"* the same.
         last = self.state.get("ledger_cursor")  # absent on a first land, and on a planted or garbled sidecar
-        cursor = pending[-1] if pending else (str(last) if last else self.repo.head)
+        landed_reasons: Mapping[str, Mapping[str, Sequence[str]]] = self.state.get("integrity", {})
+        flagged = {sha for by_reason in landed_reasons.values() for shas in by_reason.values() for sha in shas}
+        integrity, acts, clean = self._reconcile_range(str(last) if last else self._chain_start(), flagged)
+        # The newest pending merge is the cursor (pin 3); else the head when the range is clean [Q-W10 (a)]; else
+        # the cursor the last land put down, so a flagged commit stays in the range until it is repaired; and the
+        # head for a tenant's first land.
+        cursor = pending[-1] if pending else (self.repo.head if clean or not last else str(last))
         if cursor is None:
             raise Refusal("land.no-head", "", "the store holds no commit to land on")
         at = self.now()
-        # In the store's own form — UTC, `Z` [L2 live finding, 2026-09-09]: git answers a commit's time with its
-        # author's offset (`10:32:09-07:00`) and the first live land wrote that beside `at`s written as `Z`. One
-        # form per file; the projection compares `landed_at` against entries' `at` as strings.
-        landed_at = self._utc(self.repo.commit_time(cursor))
-        landed_reasons: Mapping[str, Mapping[str, Sequence[str]]] = self.state.get("integrity", {})
-        flagged = {sha for by_reason in landed_reasons.values() for shas in by_reason.values() for sha in shas}
-        integrity, acts = self._reconcile_range(str(last) if last else self._chain_start(), flagged)
         heads = {
             f"{cid:04d}": {"seq": d.history[-1]["seq"], "h": d.history[-1]["h"]}
             for cid, d in self.cards().items()
@@ -1277,16 +1358,18 @@ class Store:
             not rep.events
             and not rep.suggestions
             and not acts
-            and cursor == last
+            and last is not None
+            and not pending  # the cursor's advance over a clean range alone is bookkeeping, not a diff [Q-W10]
             and integrity == self.state.get("integrity", {})
             and heads == landed_heads
         ):
             # Nothing new at the same cursor: the empty diff of 03 §1.4, decided here rather than on bytes, because
             # the previous land's own row moved `journal_head` and the fold would differ by that one value alone.
-            telemetry.record_land(0, 0, 0, cursor, len(integrity))
+            # The cursor answered is the landed one: nothing moved it.
+            telemetry.record_land(0, 0, 0, str(last), len(integrity))
             return {
-                "cursor": cursor,
-                "landed_at": landed_at,
+                "cursor": str(last),
+                "landed_at": self.state.get("landed_at"),
                 "events": [],
                 "intake": [],
                 "overflow": 0,
@@ -1295,6 +1378,10 @@ class Store:
                 "landed": True,
                 "empty": True,
             }
+        # In the store's own form — UTC, `Z` [L2 live finding, 2026-09-09]: git answers a commit's time with its
+        # author's offset (`10:32:09-07:00`) and the first live land wrote that beside `at`s written as `Z`. One
+        # form per file; the projection compares `landed_at` against entries' `at` as strings.
+        landed_at = self._utc(self.repo.commit_time(cursor))
         new_events = [
             events_mod.record_of(ev, f"e{len(self.events) + n}", at)
             for n, ev in enumerate([*acts, *rep.events], start=1)
@@ -1375,12 +1462,14 @@ class Store:
 
     def _reconcile_range(
         self, since: str | None, flagged: Iterable[str] = ()
-    ) -> tuple[dict[str, dict[str, list[str]]], list[events_mod.Event]]:
+    ) -> tuple[dict[str, dict[str, list[str]]], list[events_mod.Event], bool]:
         """9.5's walk at land: every first-parent commit in `(since, head]` that touched the root, in ONE git
         (`changes_under`, K7b's rule — never a `touched()` per commit), every governed blob it names prefetched in
         one round trip, then per (commit, governed path) the shared reason function. Answers the reasons by governed
         path, each reason naming the commits that earned it — `{path: {reason: [sha, …]}}` — and the act events the
-        walk saw (Q-W8). Per land O(commits × governed files touched), never O(cards) (9.4's ingest row).
+        walk saw (Q-W8), and **whether the range itself is clean** — no reason names a commit in `(since, head]`;
+        a flagged commit re-walked from behind the cursor does not make it unclean [Q-W10]. Per land O(commits ×
+        governed files touched), never O(cards) (9.4's ingest row).
 
         **The flagged commits are walked again** [L4 finding, measured on the first real-git test]: the cursor moves
         at a merge, and a commit flagged behind it would leave the range and its reason vanish unrepaired if only
@@ -1409,7 +1498,8 @@ class Store:
                 reasons.setdefault(path, {}).setdefault(r, set()).add(c.sha)
             if entry is not None and not rs:
                 acts.extend(self._act_events(entry))
-        return {p: {r: sorted(s) for r, s in sorted(by.items())} for p, by in sorted(reasons.items())}, acts
+        clean = not any(sha in seen for by in reasons.values() for shas in by.values() for sha in shas)
+        return {p: {r: sorted(s) for r, s in sorted(by.items())} for p, by in sorted(reasons.items())}, acts, clean
 
     def _reasons_for(
         self,

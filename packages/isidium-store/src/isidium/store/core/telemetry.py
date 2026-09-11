@@ -66,6 +66,7 @@ DRAINED: Final = "isidium.drained"  # on the stop span: whether every connection
 # was. Not a refusal: a write whose push failed leaves exactly this (its row is pending and the next push carries
 # it), but an operator reading a sync that recorded `OK` could not see it, and it is the state F2 grew from.
 DIVERGED: Final = "isidium.diverged"
+REREAD: Final = "isidium.reread"  # governed paths re-read past K4's door at land [Q-W9]
 # K7b (Q18, ruled 2026-09-06): on a write's call span — whether the act reached the remote's `main` in this call.
 # `False` is a journaled act whose push failed: memory holds it, the next push carries it, and the caller was told
 # so in the result rather than refused. An operator reading `landed = false` is looking at a store journaling ahead
