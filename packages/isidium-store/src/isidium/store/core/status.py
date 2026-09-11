@@ -142,6 +142,12 @@ class Inputs:
     # parent id → its members, when the caller keeps that index (the store does, E3's shape); `None` means
     # `project_one` scans the heads for them — linear in the set, at a fraction of one label's cost (F9).
     kids: Mapping[int, Collection[int]] | None = None
+    # The dispatchable leaf [V3, Q-V6/Q-V11 (a)]: the effective `[ladder].leaf`, supplied by the caller (the store's
+    # `_leaf`) and never written here (C-1) — empty labels nothing `ready`.
+    leaf: str = ""
+    # A sitting's members carry `batch` and no `sig` (1.15: the manifest signs once) — manifest seq → its signer's
+    # key fingerprint, so a card ratified in a sitting is graded by the key that signed the sitting [V3, F-b].
+    batch_fprs: Mapping[int, str] = field(default_factory=dict)
 
 
 def _state_card(st: Mapping[str, Any], cid: int) -> Mapping[str, Any]:
@@ -208,6 +214,14 @@ def _guards(doc: Document, all_cards: Mapping[int, Document], labels: Mapping[in
 def _hold_kind(hold: Mapping[str, Any]) -> HoldKind | None:
     k = hold.get("kind")
     return k if k in ("blocked", "deferred", "watching") else None
+
+
+def _signer_fpr(e: Entry, inp: Inputs) -> str:
+    """The key that signed the entry: its own `sig`'s, or — a sitting's member, `batch` and no `sig` — the manifest's
+    [V3, F-b: before this a card ratified in a sitting was never software-grade, the member having no `sig`]."""
+    if "sig" not in e and isinstance(e.get("batch"), int):
+        return inp.batch_fprs.get(int(e["batch"]), "")
+    return _fpr_of(e)
 
 
 def _fpr_of(e: Entry) -> str:
@@ -306,14 +320,14 @@ def _projected(
     drift (F9)."""
     label, kind = core
     status = str(doc.head.get("status"))
-    sw = any(chain.is_signed(e) and _fpr_of(e) in inp.software_fprs for e in doc.history)
+    sw = any(chain.is_signed(e) and _signer_fpr(e, inp) in inp.software_fprs for e in doc.history)
     if label.row == "draft":
         return Projection(cid, kind, status, label, _guards(doc, inp.cards, labels), False, sw)
     if label.row == "ratified" and label.modifier is None:
         guards = _guards(doc, inp.cards, labels)
         if guards:
             return Projection(cid, kind, status, label, guards, False, sw)
-        if kind == "story":
+        if kind == inp.leaf:
             return Projection(cid, kind, status, Label("ready"), (), True, sw)
         return Projection(cid, kind, status, label, (), False, sw)
     return Projection(cid, kind, status, label, (), False, sw)

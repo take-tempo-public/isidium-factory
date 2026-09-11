@@ -120,7 +120,8 @@ def test_the_door_is_the_landers_alone() -> None:
     r0 = refuses("write.grant", lambda: st.land(rep, PLANNER))
     assert r0.path == "" and "may not land" in r0.detail, "the matrix, not a row, must have refused"
     r = st.land(rep, LANDER)
-    assert r["events"] == ["e1", "e2", "e3", "e4", "e5"] and r["landed"] is True and r["empty"] is False
+    # e1-e3: the walk's `ratified` for a, b, c (V3 — the fingerprints' birth, ahead of the report's); e4-e8 the report's
+    assert r["events"] == [f"e{i}" for i in range(1, 9)] and r["landed"] is True and r["empty"] is False
 
 
 # ---- the prototype's checks, on the real store --------------------------------------------------------------------------
@@ -147,8 +148,10 @@ def test_the_land_folds_the_events_and_lands_everything_in_one_row_and_one_commi
     assert set(landed) == {st.rp(p) for p in ("state.json", "state/history.jsonl", "suggestions.jsonl", "BOARD.md")}
     # the events file
     lines = parse_jsonl(st.raw["state/history.jsonl"].decode("utf-8"))
-    assert [e["id"] for e in lines] == ["e1", "e2", "e3", "e4", "e5"] and st.events == lines
-    assert lines[3]["class"] == "budget" and all(e["at"] for e in lines)
+    # the walk's three `ratified` (V3: a, b, c were ratified since the last land) ahead of the report's five
+    assert [e["id"] for e in lines] == [f"e{i}" for i in range(1, 9)] and st.events == lines
+    assert [e["kind"] for e in lines[:3]] == ["ratified"] * 3
+    assert lines[6]["class"] == "budget" and all(e["at"] for e in lines)
     # the fold
     s = json.loads(st.raw["state.json"].decode("utf-8"))
     assert s == st.state and s["schema"] == 2 and s["ledger_cursor"] == head_before and s["batches"] == {}
@@ -231,7 +234,7 @@ def test_the_cursor_is_the_pending_merge_and_the_land_opens_dispatch() -> None:
     )
     assert r["cursor"] == merge and st.state["ledger_cursor"] == merge
     assert st.state["landed_at"] == st.repo.commit_time(merge) and r["landed_at"] == st.state["landed_at"]
-    assert st.merges_pending() == [] and st.dispatch(a) == {"dispatched": a}
+    assert st.merges_pending() == [] and st.dispatch(a)["card"] == a
     assert st.show("Queue").merged_not_landed == 0
     assert st.repo.parents(r["commit"]) == [merge], "the land is the store's own commit on the merged tip"
 
@@ -316,7 +319,7 @@ def test_the_api_carries_land_and_not_yet_names_accept_alone() -> None:
     assert "land" in Api.CALLS and "accept" not in Api.CALLS, "accept is a client verb (L3), never a call"
     refuses("api.unknown-call", lambda: api.call("accept", LANDER, {}))
     r = api.call("land", LANDER, {"run_id": "r-1", "events": [{"kind": "dispatched", "card": a, "run_id": "r-1"}]})
-    assert r["events"] == ["e1"] and r["landed"] is True
+    assert r["events"] == ["e1", "e2"] and r["landed"] is True  # e1 the walk's `ratified` for a (V3), e2 the report's
     refuses("service.arguments", lambda: api.call("land", LANDER, {"run_id": "r", "events": "not a list"}))
     refuses("service.arguments", lambda: api.call("land", LANDER, {"events": []}))
 

@@ -23,7 +23,7 @@ from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
 SCHEMA_VERSION: Final = (
-    4  # the config schema version this module's cross-key code mirrors (L4: config@4, the sidecar documents at @2)
+    5  # the config schema version this module's cross-key code mirrors (V3: config@5, `[ladder].leaf`)
 )
 
 # 04 §2.1 — scalars first, among themselves in this inventory order
@@ -433,18 +433,22 @@ def _v_effort_cross(rs: list[Refusal], t: Any, dfl: Mapping[str, Any]) -> None:
 
 
 def _v_ladder_cross(rs: list[Refusal], t: Any) -> None:
-    """[ladder].levels: the one home for ladder Ext declarations (Y2) — never hashed; Ext grammar, no collision."""
+    """[ladder].levels: the one home for ladder Ext declarations (Y2) — never hashed; Ext grammar, no collision.
+    [ladder].leaf (config@5, V3): the dispatchable leaf is a kind the ladder has — a core kind or a declared level."""
     if not isinstance(t, dict):
         return
     levels = t.get("levels")
-    if not isinstance(levels, list):
-        return
-    _set_dup(rs, levels, "ladder.levels")
-    for x in levels:
-        if not isinstance(x, str) or not EXT_NAME.match(x):
-            _r(rs, "config.pattern", "ladder.levels[]", f"{x!r} does not match the Ext name grammar [a-z][a-z0-9-]*")
-        elif x in KIND_CORE:
-            _r(rs, "config.enum", "ladder.levels[]", f"{x!r} collides with a core kind member (L2-6/L2-8)")
+    if isinstance(levels, list):
+        _set_dup(rs, levels, "ladder.levels")
+        for x in levels:
+            if not isinstance(x, str) or not EXT_NAME.match(x):
+                grammar = "does not match the Ext name grammar [a-z][a-z0-9-]*"
+                _r(rs, "config.pattern", "ladder.levels[]", f"{x!r} {grammar}")
+            elif x in KIND_CORE:
+                _r(rs, "config.enum", "ladder.levels[]", f"{x!r} collides with a core kind member (L2-6/L2-8)")
+    leaf = t.get("leaf")
+    if isinstance(leaf, str) and leaf not in KIND_CORE and leaf not in (levels if isinstance(levels, list) else ()):
+        _r(rs, "config.enum", "ladder.leaf", f"{leaf!r} is neither a core kind nor a declared ladder level")
 
 
 def _v_surfaces(rs: list[Refusal], t: Mapping[str, Any]) -> None:

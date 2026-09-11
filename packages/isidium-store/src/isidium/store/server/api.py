@@ -325,7 +325,27 @@ class Api:
 
     # ---- dispatch by name (the transports' one entry point) --------------------------------------------------------
 
-    CALLS = ("init", "write", "write_set", "ratify", "show", "check", "suggest", "disposition", "repair", "land")
+    # ---- dispatch (T-A6's reads, V3) ---------------------------------------------------------------------------
+
+    def dispatch(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
+        """The factory's pick over its channel [V3, F-a]: `dispatch.pending-land` first, then the ready view; with
+        `card`, that card's live `check` and its landed fingerprint too. Reads only — nothing is written here."""
+        self.store._require(caller, "dispatch")
+        return self.store.dispatch(_int(args, "card"))
+
+    CALLS = (
+        "init",
+        "write",
+        "write_set",
+        "ratify",
+        "show",
+        "check",
+        "suggest",
+        "disposition",
+        "repair",
+        "land",
+        "dispatch",
+    )
 
     # Nine of the ten verbs cross this surface. `accept` never does [L3, Q-W2 ruled 2026-09-09]: it runs the card's
     # scenarios at the caller's terminal (03 §1.13) and reaches the store through `show` and, for `--close`, `write`.

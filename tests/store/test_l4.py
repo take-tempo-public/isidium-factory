@@ -322,12 +322,13 @@ def test_a_withdrawal_of_a_dispatched_card_is_the_ledgers_own_transition_once() 
     seq = int(st.docs[path_of(st, a)].history[-1]["seq"])
     r = st.land({"run_id": "r-1", "events": [{"kind": "question", "card": b, "text": "still?"}]}, LANDER)
     lines = parse_jsonl(st.raw["state/history.jsonl"].decode("utf-8"))
-    assert r["events"] == ["e2", "e3"] and lines[1]["kind"] == "withdrawn" and lines[1]["card"] == a
-    assert lines[1]["seq"] == seq and lines[1]["at"] == st.docs[path_of(st, a)].history[-1]["at"]
-    assert lines[2]["kind"] == "question", "the walk's events go ahead of the report's"
+    # e1-e2: the first land's `ratified` for a and b (V3), e3 its `dispatched`; this land's e4 and e5
+    assert r["events"] == ["e4", "e5"] and lines[3]["kind"] == "withdrawn" and lines[3]["card"] == a
+    assert lines[3]["seq"] == seq and lines[3]["at"] == st.docs[path_of(st, a)].history[-1]["at"]
+    assert lines[4]["kind"] == "question", "the walk's events go ahead of the report's"
     assert not any(e["kind"] == "withdrawn" and e["card"] == b for e in lines), "nothing in flight on b"
     again = st.land({"run_id": "r-2", "events": []}, LANDER)
-    assert again["empty"] is True and len(st.events) == 3, "the same range emits nothing twice"
+    assert again["empty"] is True and len(st.events) == 5, "the same range emits nothing twice"
     assert "closed" not in Store.ACT_EVENTS, "a human closure is never emitted (row 5 reads verified=false as disputed)"
 
 

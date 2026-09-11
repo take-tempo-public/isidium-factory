@@ -122,7 +122,13 @@ def test_the_same_graph_answers_the_same_bytes_twice_and_across_insertion_order(
     once = neighborhood.project(inp, g.subject, caps, lambda c: status.project_one(inp, c)).canonical()
     twice = st.neighborhood_of(g.subject).canonical()
     reversed_inp = status.Inputs(
-        dict(reversed(list(inp.cards.items()))), inp.state, inp.gated_x, inp.verified, inp.integrity, inp.software_fprs
+        dict(reversed(list(inp.cards.items()))),
+        inp.state,
+        inp.gated_x,
+        inp.verified,
+        inp.integrity,
+        inp.software_fprs,
+        leaf=inp.leaf,
     )
     shuffled = neighborhood.project(reversed_inp, g.subject, caps, lambda c: status.project_one(reversed_inp, c))
     assert once == twice == shuffled.canonical()

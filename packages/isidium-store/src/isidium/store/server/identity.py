@@ -39,8 +39,9 @@ GRANT_MATRIX: Final[Mapping[str, frozenset[str]]] = {
     # owner makes it. Raising the suggestion stays the contributor's.
     "contributor": frozenset({"write", "suggest", "show", "accept", "check", "ratify:dry-run"}),
     # `show` beside `land`: reads are not restricted anywhere (03 §1.17, "restrict writes, never reads") and the
-    # lander renders the board it lands. Stated here rather than left silent (the review's C7).
-    "lander": frozenset({"land", "show"}),
+    # lander renders the board it lands. Stated here rather than left silent (the review's C7). `dispatch` [V3, F-a]:
+    # the factory's pick reads — the pending-land precondition, the ready view, one card's check — as the lander.
+    "lander": frozenset({"land", "show", "dispatch"}),
 }
 # The owner-only verbs are owner-only by ABSENCE here — `repair`, `disposition`, `config-policy` appear in no
 # grant's set, so only `"*"` reaches them. They are named nowhere else: `repair` carried a hand-written
