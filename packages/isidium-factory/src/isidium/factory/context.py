@@ -28,6 +28,7 @@ import subprocess
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, Final
 
@@ -77,16 +78,33 @@ class ForgeCoords:
         raise Refusal("factory.forge-url", remote, f"not a forge url this factory can parse: {url!r}")
 
 
+class ForgeKind(Enum):
+    """How the identity authenticates — the two credential shapes a forge offers [V2b, ruled 2026-09-10 after the
+    Terms finding]. `APP`: a GitHub App — an org-owned registration, no account, no email, no 2FA, no Terms count;
+    the secret is the App's private key and the driver mints one-hour installation tokens from it. `TOKEN`: an
+    account with a static token — a Gitea/Forgejo user (no App concept there), or the one free machine account
+    GitHub's Terms allow a person; the secret is the token itself."""
+
+    APP = "app"
+    TOKEN = "token"
+
+
 @dataclass(frozen=True)
 class ForgeIdentity:
-    """The account the factory pushes and opens pull requests as (7f [owner]: *"its own git identifier and github
-    account"*). `email` is the form the forge attributes commits by — on GitHub the account's `noreply` address —
-    because a pull request whose commits no account claims is held for extra approval by tenant #0's ruleset."""
+    """The principal the factory pushes and opens pull requests as (7f [owner]: *"its own git identifier and github
+    account"*), read from `forge.toml` beside the lander's certificate: `kind`, `login`, `name`, `email`, and the
+    secret file (`key` for an App, `token` for an account). `email` is the form the forge attributes commits by — on
+    GitHub the bot user's `noreply` address — because a pull request whose commits no account claims is held for
+    extra approval by tenant #0's ruleset. An App carries `app_id` and `installation_id` too; the tenant binding is
+    the installation, the name is the function (the agent identity scheme's App row)."""
 
+    kind: ForgeKind
     login: str
     name: str
     email: str
-    token: str = field(repr=False)
+    secret: str = field(repr=False)
+    app_id: int | None = None
+    installation_id: int | None = None
 
     @classmethod
     def load(cls, directory: Path) -> ForgeIdentity:
@@ -97,17 +115,33 @@ class ForgeIdentity:
             data: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             raise Refusal("factory.no-forge", str(path), str(e)) from None
-        missing = [k for k in ("login", "name", "email", "token") if not isinstance(data.get(k), str) or not data[k]]
+        try:
+            kind = ForgeKind(str(data.get("kind", "")))
+        except ValueError:
+            raise Refusal("factory.no-forge", str(path), 'kind must be "app" or "token"') from None
+        secret_key = "key" if kind is ForgeKind.APP else "token"
+        need = ["login", "name", "email", secret_key]
+        missing = [k for k in need if not isinstance(data.get(k), str) or not data[k]]
+        if kind is ForgeKind.APP:
+            missing += [k for k in ("app_id", "installation_id") if not isinstance(data.get(k), int)]
         if missing:
             raise Refusal("factory.no-forge", str(path), f"missing {', '.join(missing)}")
-        token_path = directory / str(data["token"])
+        secret_path = directory / str(data[secret_key])
         try:
-            token = token_path.read_text(encoding="utf-8").strip()
+            secret = secret_path.read_text(encoding="utf-8").strip()
         except OSError as e:
-            raise Refusal("factory.no-forge", str(token_path), str(e)) from None
-        if not token:
-            raise Refusal("factory.no-forge", str(token_path), "the token file is empty")
-        return cls(str(data["login"]), str(data["name"]), str(data["email"]), token)
+            raise Refusal("factory.no-forge", str(secret_path), str(e)) from None
+        if not secret:
+            raise Refusal("factory.no-forge", str(secret_path), f"the {secret_key} file is empty")
+        return cls(
+            kind,
+            str(data["login"]),
+            str(data["name"]),
+            str(data["email"]),
+            secret,
+            int(data["app_id"]) if kind is ForgeKind.APP else None,
+            int(data["installation_id"]) if kind is ForgeKind.APP else None,
+        )
 
 
 @dataclass(frozen=True)

@@ -907,62 +907,79 @@ shipped): `config@4`, `sidecar@2`, `sidecar-events@2` beside the twelve. Then, f
   changed. The branch was rebased onto `main` and reopened as #49 (the same two commits; green on all seven checks
   both times). Base a PR on `main`, or merge the base first.
 
-### The factory's forge identity — a machine account, its token a file beside the lander's — 2026-09-10 (V2)
+### The factory's forge identity — a GitHub App on GitHub, an account on Gitea; the secret a file beside the lander's — 2026-09-10 (V2)
 
 The lander is the factory's identity **to the store** (a grant on a client certificate, above). The factory's identity
-**to the forge** — the account it pushes branches and opens pull requests as — is a second credential of the **same**
-principal, ruled 2026-09-10 (Q-V9 (a), Q-V10): a **machine account**, one per tenant repository, a collaborator with
-write, and a fine-grained token scoped to that repository; the token in a file beside the lander's certificate,
-mounted read-only where the factory runs. Two credentials, one service principal — and neither is the store's deploy
-key: that key bypasses the gate on `main` (S-12) and the factory must never hold it. The account's pushes are gated
-like a human's — `main` refuses them, a pull request carries them, the required checks run on them — and revoking
-the token stops the factory's pushes and nothing else.
+**to the forge** — the principal it pushes branches and opens pull requests as — is the **same lander, a second
+credential** (ruled 2026-09-10). What the credential is depends on the forge, and `forge.toml`'s `kind` says which:
 
-**The name** follows the agent identity scheme (ruled 2026-09-10): tenant first, then the product's short code —
-which lives only inside identities; the products keep their full names — then the agent, then `-bot` because a
-machine account has no other class marker: `<tenant>-isdm-fac-lander-bot`. Tenant #0's is
-`isidium-factory-isdm-fac-lander-bot` (35 of GitHub's 39 characters); sartor's will be `sartor-isdm-fac-lander-bot`.
-The same identity is `lander.isdm-fac@<tenant>` wherever a name is email-shaped (the certificate's CN, once reissued).
+- **`kind = "app"` — GitHub.** A **GitHub App** owned by the organisation: a registration, not an account — no email,
+  no password, no 2FA, and no count against GitHub's Terms, which allow a person **one** free machine account beside
+  their own (and `sartor-bot` is that one — found 2026-09-10, which is why this is not a machine account). GitHub
+  gives the App a bot user, `isdm-fac-lander[bot]`, with a user id and a `noreply` address; commits authored with that
+  address are attributed to it, which tenant #0's ruleset requires. The name carries the **function**; the **tenant
+  is the installation** (the App is installed on the org with a repository list). The secret is the App's private
+  key; the factory mints a one-hour installation token from it, narrowed to the tenant's repository, and renews it
+  five minutes before it expires. Nothing long-lived exists but the key, and revoking is deleting the key or
+  uninstalling the App.
+- **`kind = "token"` — Gitea / Forgejo, or the one machine account.** A user account with a static access token. Gitea
+  has no App concept: its automation identities are accounts, tokens with scopes, and deploy keys. A Gitea account
+  is named by the agent identity scheme's login row and marked `-bot` (Gitea marks nothing); its **real mailbox** is
+  the git author email, because Gitea attributes a commit by matching its email to an account's.
+
+Neither credential is the store's deploy key: that key bypasses the gate on `main` (S-12) and the factory must never
+hold it. The factory's pushes are gated like a human's — `main` refuses them, a pull request carries them, the
+required checks run on them.
 
 ```
-<deploy home>/<tenant>/factory/forge.toml    # login, name, email, and the token file's path (relative to this file)
-<deploy home>/<tenant>/factory/forge.token   # one line: the token; 0600; never in client.toml, never in git
+<deploy home>/<tenant>/factory/forge.toml      # kind, login, name, email; app_id + installation_id + key (app) or token
+<deploy home>/<tenant>/factory/forge.key.pem   # the App's private key (kind = app); 0600; never in git
+<deploy home>/<tenant>/factory/forge.token     # the static token (kind = token); one line; 0600; never in git
 ```
 
-**The recipe** (the local tier; on the realm tier the realm writes the two files):
+**The recipe, GitHub** (the local tier; on the realm tier the realm writes the files):
 
 ```sh
-# 1. The account (a person's hand, on the forge): a GitHub user named <tenant>-isdm-fac-lander-bot, with its own
-#    email and TOTP (GitHub requires 2FA of code contributors) — then, as the repository owner, a collaborator
-#    invitation with write, which the account accepts:
-login=<tenant>-isdm-fac-lander-bot
-gh api -X PUT repos/<owner>/<repo>/collaborators/$login -f permission=push
-# 2. The token, minted while signed in AS THE ACCOUNT: Settings → Developer settings → Fine-grained tokens; resource
-#    owner = the repository's owner; repository access = only <repo>; permissions: Contents read-and-write, Pull
-#    requests read-and-write, Checks read, Metadata read (automatic). Nothing else — no Administration, no Workflows.
-#    An organisation allows fine-grained tokens by default but REQUIRES AN OWNER'S APPROVAL of each one by default
-#    (org Settings → Personal access tokens → Pending requests): the token is inert until approved.
-# 3. The two files. The email is the account's noreply address — the form the forge attributes commits by; tenant
-#    #0's ruleset holds a pull request whose commits no account claims (`require_extra_approval_for_unattributed_changes`):
-id=$(gh api users/$login --jq .id)
-printf '%s\n' "login = \"$login\"" "name = \"$login\"" "email = \"${id}+$login@users.noreply.github.com\"" \
-  'token = "forge.token"' > <deploy home>/<tenant>/factory/forge.toml
-printf '%s\n' '<the token>' > <deploy home>/<tenant>/factory/forge.token && chmod 600 <deploy home>/<tenant>/factory/forge.token
-# 4. A commit the factory will push is authored AS the account, or the ruleset holds the pull request as unattributed:
-git -c user.name="$login" -c user.email="${id}+$login@users.noreply.github.com" commit -m "..."
+# 1. Register the App under the organisation (a person's hand, on the forge): org Settings → Developer settings →
+#    GitHub Apps → New GitHub App. Name: isdm-fac-lander (34 characters max, unique across GitHub; the function, per the
+#    agent identity scheme — the tenant is the installation). Homepage URL: the tenant repository's URL. Webhook:
+#    Active OFF (V3 polls). Repository permissions: Contents read-and-write, Pull requests read-and-write, Checks read
+#    (Metadata read is implied). Nothing else — no Administration, no Workflows. "Where can this GitHub App be
+#    installed?": Only on this account. Create.
+# 2. On the App's page: note the App ID; under Private keys, Generate a private key — the .pem downloads once:
+mv ~/Downloads/isdm-fac-lander.*.private-key.pem <deploy home>/<tenant>/factory/forge.key.pem
+chmod 600 <deploy home>/<tenant>/factory/forge.key.pem
+# 3. Install the App on the organisation for the tenant repository only (the App's page → Install App → the org →
+#    Only select repositories → <repo>). The installation id is the last segment of the resulting settings URL
+#    (…/settings/installations/<id>), or:
+gh api orgs/<org>/installations --jq '.installations[] | select(.app_slug=="isdm-fac-lander") | .id'
+# 4. The bot user's id, for the noreply address the forge attributes commits by:
+id=$(gh api 'users/isdm-fac-lander%5Bbot%5D' --jq .id)
+# 5. The identity file:
+printf '%s\n' 'kind = "app"' 'login = "isdm-fac-lander[bot]"' 'name = "isdm-fac-lander"' \
+  "email = \"${id}+isdm-fac-lander[bot]@users.noreply.github.com\"" 'app_id = <App ID>' \
+  'installation_id = <installation id>' 'key = "forge.key.pem"' > <deploy home>/<tenant>/factory/forge.toml
+# 6. A commit the factory will push is authored AS the bot user, or the ruleset holds the pull request as unattributed:
+git -c user.name="isdm-fac-lander[bot]" -c user.email="${id}+isdm-fac-lander[bot]@users.noreply.github.com" commit -m "..."
 ```
+
+**The recipe, Gitea / Forgejo** (the second driver is not built yet; the identity file's shape is): a user
+`<tenant>-isdm-fac-lander-bot` with its own mailbox (`<tenant>-isdm-fac-lander@<your domain>`), a collaborator with
+write on the repository, an access token with `write:repository` and `write:issue`; then
+`kind = "token"`, `login`, `name`, `email` = the mailbox, `token = "forge.token"`, the token's one line in that file.
 
 **The verbs** (`ISIDIUM_DEPLOY=<deploy home>`, the checkout a clone of the tenant repository with `origin` the forge):
 
 - `isidium factory context --tenant <tenant> --checkout <path>` — the tenant context (T-C1): one delta fetch of
   `main`, the config read at the fetched tip, the toolkit pin checked against the range this factory reads, the
-  governed rows resolved; printed with its hash, and the same hash twice is the round trip. The token is in it nowhere.
+  governed rows resolved; printed with its hash, and the same hash twice is the round trip. The secret is in it nowhere.
 - `isidium factory push --tenant <tenant> --checkout <path> --branch <name> [--at <sha>]` — the branch pushed as the
-  account, **after** the code-only check: a governed path in `main...<name>` is refused (`forge.governed-path`, every
+  identity, **after** the code-only check: a governed path in `main...<name>` is refused (`forge.governed-path`, every
   path named) before any push, by the same predicate the pre-commit hook and `verify --diff-base` run. The token
-  reaches git through the process environment (`GIT_CONFIG_*`, an `http.<host>.extraheader`), never the command line.
+  reaches git through the process environment (`GIT_CONFIG_*`, an `http.<host>.extraheader`), never the command line;
+  an App's key reaches git never — only the token minted from it.
 - `isidium factory pr-open --tenant <tenant> --checkout <path> --branch <name>` — the pull request, its body
-  generated from the context and the diff, opened as the account; a second run answers `forge.pr-exists` with the
+  generated from the context and the diff, opened as the identity; a second run answers `forge.pr-exists` with the
   number, not a second pull request.
 - `isidium factory pr-status --tenant <tenant> --checkout <path> --pr <n>` — the merge state (GitHub's own closed set)
   and the checks on the head, the verdict read over the contexts **the ruleset requires**, not over whatever ran.

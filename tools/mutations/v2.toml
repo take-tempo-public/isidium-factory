@@ -8,8 +8,9 @@
 # tests may notice too). M3 puts the token on git's command line. M4 never consults TOOLKIT_RANGE at the door.
 # M5 retries without bound. M6 reads the verdict over the runs that exist, not the required contexts (a required
 # check that never ran reads green). M7 swallows `pr-exists` (a second pull request is opened). M8 drops
-# `--no-renames` (a `git mv` out of the root reads as an ungoverned addition). Each names the test that must
-# notice, in tests/factory/test_v2.py.
+# `--no-renames` (a `git mv` out of the root reads as an ungoverned addition). M9 never renews an App's installation
+# token (V2b). M10 mints it for every repository of the installation, not the tenant's (V2b). Each names the test
+# that must notice, in tests/factory/test_v2.py.
 
 [[mutation]]
 id = "M1"
@@ -82,3 +83,17 @@ label = "--no-renames dropped -- a rename out of the root reads as an addition"
 file = "packages/isidium-factory/src/isidium/factory/github.py"
 find = '''        out = self._git("diff", "--name-only", "--no-renames", "-z", f"{base}...{head}", rule="forge.git")'''
 replace = '''        out = self._git("diff", "--name-only", "-z", f"{base}...{head}", rule="forge.git")'''
+
+[[mutation]]
+id = "M9"
+label = "the installation token never renewed (V2b)"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''        if self._token is None or self._now() + RENEW >= self._expires:'''
+replace = '''        if self._token is None:'''
+
+[[mutation]]
+id = "M10"
+label = "the installation token not narrowed to the tenant's repository (V2b)"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            json={"repositories": [self.ctx.forge.repo]},'''
+replace = '''            json=None,'''

@@ -14,6 +14,7 @@ import json
 import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ from isidium.factory import cli as cli_mod
 from isidium.factory import context as context_mod
 from isidium.factory import forge as forge_mod
 from isidium.factory import github as github_mod
-from isidium.factory.context import ForgeCoords, ForgeIdentity, TenantContext, ToolkitPins, toolkit_check
+from isidium.factory.context import ForgeCoords, ForgeIdentity, ForgeKind, TenantContext, ToolkitPins, toolkit_check
 from isidium.factory.forge import Capabilities, CheckRun, Checks, Forge, MergeableState, Verdict, pr_text
 from isidium.factory.github import GITHUB, GitHub
 from isidium.factory.payload import Caps, Identity
@@ -82,8 +83,8 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     d.mkdir(parents=True)
     (d / "client.toml").write_text(ClientConfig(tenant=TENANT).render(), encoding="utf-8")
     (d / "forge.toml").write_text(
-        f'login = "{LOGIN}"\nname = "isidium-factory"\nemail = "1234+{LOGIN}@users.noreply.github.com"\n'
-        'token = "forge.token"\n',
+        f'kind = "token"\nlogin = "{LOGIN}"\nname = "isidium-factory"\n'
+        f'email = "1234+{LOGIN}@users.noreply.github.com"\ntoken = "forge.token"\n',
         encoding="utf-8",
     )
     (d / "forge.token").write_text(TOKEN + "\n", encoding="utf-8")
@@ -133,7 +134,7 @@ def test_the_context_loads_the_same_value_and_hash_twice_and_the_token_is_outsid
     assert a.hash == b.hash and a.value() == b.value() and a.hash.startswith("sha256:")
     assert a.base_sha == git(disk.work, "ls-remote", "origin", "refs/heads/main").split()[0]
     assert a.forge == ForgeCoords("github.com", "acme", "widgets", "origin")
-    assert a.identity.login == LOGIN and a.identity.token == TOKEN
+    assert a.identity.login == LOGIN and a.identity.secret == TOKEN and a.identity.kind is ForgeKind.TOKEN
     assert TOKEN not in json.dumps(a.value()) and TOKEN not in repr(a)
     assert a.toolkit.client == "0.1.0" and a.root == ROOT
     assert any(str(r["path"]) == "cards/*.md" for r in a.governed)
@@ -170,13 +171,21 @@ def test_the_context_refuses_an_unreachable_remote_a_missing_base_and_a_missing_
         git(disk.work, "config", f"url.{disk.bare}.insteadOf", URL)
     refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path))
     (tmp_path / "forge.toml").write_text('login = "x"\nname = "x"\n', encoding="utf-8")
+    assert "kind" in refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path)).detail  # no default kind (C-1)
+    (tmp_path / "forge.toml").write_text('kind = "token"\nlogin = "x"\nname = "x"\n', encoding="utf-8")
     assert "email, token" in refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path)).detail
-    (tmp_path / "forge.toml").write_text('login = "x"\nname = "x"\nemail = "x@y"\ntoken = "t"\n', encoding="utf-8")
+    (tmp_path / "forge.toml").write_text(
+        'kind = "app"\nlogin = "x"\nname = "x"\nemail = "x@y"\nkey = "k"\n', encoding="utf-8"
+    )
+    assert "app_id, installation_id" in refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path)).detail
+    (tmp_path / "forge.toml").write_text(
+        'kind = "token"\nlogin = "x"\nname = "x"\nemail = "x@y"\ntoken = "t"\n', encoding="utf-8"
+    )
     refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path))  # no token file
     (tmp_path / "t").write_text("\n", encoding="utf-8")
     assert "empty" in refuses("factory.no-forge", lambda: ForgeIdentity.load(tmp_path)).detail
     (tmp_path / "t").write_text("tok\n", encoding="utf-8")
-    assert ForgeIdentity.load(tmp_path).token == "tok"
+    assert ForgeIdentity.load(tmp_path).secret == "tok"
 
 
 def test_a_toolkit_pin_outside_the_range_is_refused_naming_the_upgrade(disk: Disk) -> None:
@@ -655,3 +664,100 @@ def test_the_spans_carry_the_base_the_branch_the_governed_count_and_the_status(d
     [push] = otel.spans(github_mod.SPAN_PUSH)
     assert push.attributes["isidium.branch"] == "story/span-governed" and push.attributes["isidium.governed"] == 1
     assert push.attributes["isidium.rule"] == "forge.governed-path"
+
+
+# ---- the App kind: a minted installation token, renewed before it expires --------------------------------------------
+
+
+def rsa_pem() -> tuple[str, Any]:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode("ascii")
+    return pem, key.public_key()
+
+
+def pad(s: str) -> str:
+    return s + "=" * (-len(s) % 4)
+
+
+def app_identity(pem: str) -> ForgeIdentity:
+    return ForgeIdentity(
+        ForgeKind.APP,
+        "isdm-fac-lander[bot]",
+        "isdm-fac-lander",
+        "9+isdm-fac-lander[bot]@users.noreply.github.com",
+        pem,
+        app_id=4242,
+        installation_id=777,
+    )
+
+
+def test_an_app_mints_an_installation_token_from_a_signed_jwt_and_renews_it_before_expiry(
+    disk: Disk, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    pem, public = rsa_pem()
+    ctx = TenantContext(**{**load(disk).__dict__, "identity": app_identity(pem)})
+    clock = [1_800_000_000.0]
+    minted: list[dict[str, Any]] = []
+
+    def mint(req: httpx.Request) -> httpx.Response:
+        jwt = req.headers["authorization"].removeprefix("Bearer ")
+        head, body, sig = jwt.split(".")
+        try:
+            public.verify(
+                base64.urlsafe_b64decode(pad(sig)), f"{head}.{body}".encode(), padding.PKCS1v15(), hashes.SHA256()
+            )
+        except InvalidSignature:
+            return httpx.Response(401, json={"message": "bad signature"})
+        claims = json.loads(base64.urlsafe_b64decode(pad(body)))
+        assert json.loads(base64.urlsafe_b64decode(pad(head))) == {"alg": "RS256", "typ": "JWT"}
+        assert claims["iss"] == 4242 and claims["exp"] - claims["iat"] <= 600 and claims["iat"] <= clock[0]
+        minted.append(json.loads(req.content))
+        n = len(minted)
+        expires = datetime.fromtimestamp(clock[0] + 3600, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return httpx.Response(201, json={"token": f"ghs_minted_{n}", "expires_at": expires})
+
+    fake = Fake(
+        {
+            ("POST", "/app/installations/777/access_tokens"): [mint],
+            ("GET", f"{REPO}/pulls/1"): [
+                ok(200, {"head": {"sha": "h"}, "mergeable_state": "clean", "merged": False, "mergeable": True})
+            ],
+        }
+    )
+    drv = GitHub(ctx, transport=httpx.MockTransport(fake), sleep=lambda s: None, now=lambda: clock[0])
+    drv.merge_state(1)
+    assert minted == [{"repositories": ["widgets"]}]  # narrowed to the tenant's repository
+    assert [q.headers["authorization"] for q in fake.seen][1] == "Bearer ghs_minted_1"
+    assert pem not in " ".join(q.headers["authorization"] for q in fake.seen)
+    drv.merge_state(1)
+    assert len(minted) == 1  # inside the hour: the same token
+    clock[0] += 3600 - github_mod.RENEW + 1  # renewal window reached
+    drv.merge_state(1)
+    assert len(minted) == 2 and fake.seen[-1].headers["authorization"] == "Bearer ghs_minted_2"
+    # the git half carries the minted token, never the key
+    spawned: list[tuple[list[str], dict[str, str] | None]] = []
+
+    class Recording(subprocess.Popen[bytes]):
+        def __init__(self, cmd: Any, *a: Any, **kw: Any) -> None:
+            spawned.append((list(cmd), kw.get("env")))
+            super().__init__(cmd, *a, **kw)
+
+    monkeypatch.setattr(subprocess, "Popen", Recording)
+    drv.fetch("main")
+    env = spawned[0][1]
+    assert env is not None and "ghs_minted_2" in base64.b64decode(env["GIT_CONFIG_VALUE_0"].split()[-1]).decode()
+    assert all("PRIVATE KEY" not in part for cmd, _ in spawned for part in cmd)
+    # a key that is not RSA, or does not parse, is the identity file's defect
+    bad = TenantContext(**{**ctx.__dict__, "identity": app_identity("not a pem")})
+    refuses("factory.no-forge", lambda: GitHub(bad, transport=httpx.MockTransport(fake)).merge_state(1))

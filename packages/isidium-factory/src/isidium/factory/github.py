@@ -24,15 +24,17 @@ the seam has no such method; the rest are false because they are the recipe's or
 from __future__ import annotations
 
 import base64
+import json
 import subprocess
 import time
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any, Final
 
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
-from .context import TenantContext
+from .context import ForgeKind, TenantContext
 from .forge import (
     Capabilities,
     Changed,
@@ -55,6 +57,12 @@ BACKOFF: Final = (1.0, 2.0, 4.0)
 # a hundred is every run there is, so `checks` is one call and not a walk.
 PAGE: Final = 100
 TIMEOUT: Final = 30.0  # seconds per API call; the calls are small reads and one small write
+# A GitHub App's JWT may live ten minutes at most; nine leaves the cap untouched by a slow clock, and `iat` a minute
+# back absorbs the skew GitHub itself documents. An installation token lives an hour; renewing five minutes early
+# means no push or API call of a run is made with a token that expires inside it.
+JWT_TTL: Final = 540
+JWT_SKEW: Final = 60
+RENEW: Final = 300
 
 SPAN_PUSH: Final = "isidium.factory.forge.push"
 SPAN_API: Final = "isidium.factory.forge.api"
@@ -82,7 +90,12 @@ class GitHub:
     sleep) and nothing else's."""
 
     def __init__(
-        self, ctx: TenantContext, *, transport: Any = None, sleep: Callable[[float], None] = time.sleep
+        self,
+        ctx: TenantContext,
+        *,
+        transport: Any = None,
+        sleep: Callable[[float], None] = time.sleep,
+        now: Callable[[], float] = time.time,
     ) -> None:
         import httpx
 
@@ -90,20 +103,72 @@ class GitHub:
             raise Refusal("forge.host", ctx.forge.host, "this driver speaks github.com; a GHES host is a second driver")
         self.ctx = ctx
         self._sleep = sleep
+        self._now = now
         self._repo = f"/repos/{ctx.forge.owner}/{ctx.forge.repo}"
+        self._token: str | None = None  # the installation token, minted on first use (an App) — never the key
+        self._expires: float = 0.0
         headers = {
-            "Authorization": f"Bearer {ctx.identity.token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
             "User-Agent": USER_AGENT,
         }
         self.http = httpx.Client(base_url=f"https://{API_HOST}", headers=headers, timeout=TIMEOUT, transport=transport)
 
+    # ---- the credential ----------------------------------------------------------------------------------------
+
+    def _bearer(self) -> str:
+        """The token every request and every push carries: the static one (`TOKEN`), or an installation token
+        minted from the App's key and renewed `RENEW` seconds before it expires — a push must not straddle the hour."""
+        ident = self.ctx.identity
+        if ident.kind is ForgeKind.TOKEN:
+            return ident.secret
+        if self._token is None or self._now() + RENEW >= self._expires:
+            self._mint()
+        assert self._token is not None
+        return self._token
+
+    def _jwt(self) -> str:
+        """A GitHub App JWT: RS256 over `{iat, exp, iss}` — `iat` a minute back for clock skew, `exp` under GitHub's
+        ten-minute cap, `iss` the App id. `cryptography` (the store's dependency) is imported here, lazily, as
+        `httpx` is: only an App pays for it, and only when it mints."""
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+        ident = self.ctx.identity
+        try:
+            key = serialization.load_pem_private_key(ident.secret.encode("utf-8"), password=None)
+        except ValueError as e:
+            raise Refusal("factory.no-forge", "key", f"the App key does not parse: {e}") from None
+        if not isinstance(key, rsa.RSAPrivateKey):
+            raise Refusal("factory.no-forge", "key", "the App key is not an RSA key")
+        now = int(self._now())
+        head = _b64(json.dumps({"alg": "RS256", "typ": "JWT"}, separators=(",", ":")).encode())
+        body = _b64(
+            json.dumps(
+                {"iat": now - JWT_SKEW, "exp": now + JWT_TTL, "iss": ident.app_id}, separators=(",", ":")
+            ).encode()
+        )
+        sig = key.sign(f"{head}.{body}".encode("ascii"), padding.PKCS1v15(), hashes.SHA256())
+        return f"{head}.{body}.{_b64(sig)}"
+
+    def _mint(self) -> None:
+        """One installation token, narrowed to the tenant's repository — the tenant binding is the installation, and
+        the token says which repository of it this run may touch."""
+        ident = self.ctx.identity
+        data = self._call(
+            "POST",
+            f"/app/installations/{ident.installation_id}/access_tokens",
+            json={"repositories": [self.ctx.forge.repo]},
+            auth=self._jwt(),
+        )
+        self._token = str(data["token"])
+        self._expires = datetime.fromisoformat(str(data["expires_at"])).timestamp()
+
     # ---- the git half ------------------------------------------------------------------------------------------
 
     def _env(self) -> dict[str, str]:
         """The token as an `extraheader` for the origin's scheme and host — in the environment, not the command."""
-        basic = base64.b64encode(f"x-access-token:{self.ctx.identity.token}".encode()).decode("ascii")
+        basic = base64.b64encode(f"x-access-token:{self._bearer()}".encode()).decode("ascii")
         return {
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": f"http.https://{self.ctx.forge.host}/.extraheader",
@@ -160,13 +225,20 @@ class GitHub:
 
     # ---- the API half ------------------------------------------------------------------------------------------
 
-    def _call(self, method: str, path: str, json: Mapping[str, Any] | None = None, **params: Any) -> Any:
+    def _call(
+        self, method: str, path: str, json: Mapping[str, Any] | None = None, *, auth: str | None = None, **params: Any
+    ) -> Any:
+        """One API call with the bearer set **per request** (`auth` is the mint's JWT; every other call carries the
+        installation or static token), so no credential sits on the client object between calls."""
         import httpx
 
+        bearer = auth if auth is not None else self._bearer()
         with telemetry.span(SPAN_API, **{"http.request.method": method, "isidium.forge.path": path}) as sp:
             for i, wait in enumerate((*BACKOFF, None)):
                 try:
-                    r = self.http.request(method, path, json=json, params=params or None)
+                    r = self.http.request(
+                        method, path, json=json, params=params or None, headers={"Authorization": f"Bearer {bearer}"}
+                    )
                 except httpx.TransportError as e:
                     if wait is None:
                         raise Refusal(
@@ -232,6 +304,11 @@ class GitHub:
 
     def capabilities(self) -> Capabilities:
         return GITHUB
+
+
+def _b64(b: bytes) -> str:
+    """base64url without padding — the JWT's alphabet."""
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
 
 
 def _message(r: Any) -> str:
