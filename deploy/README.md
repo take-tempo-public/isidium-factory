@@ -990,6 +990,33 @@ force push, no branch-protection setup (this recipe's), no path rules (refused o
 webhooks, no account provisioning, no signed-commit status. A forge API that is down is retried three times with
 backoff (1, 2, 4 s) and then refused `forge.unavailable`; an exhausted rate limit is refused at once, naming the reset.
 
+### V2 live on tenant #0: the App registered and installed, the context stable, the first pull request the factory opened — 2026-09-11
+
+**The App** `isdm-fac-lander` was registered under `take-tempo-public` through GitHub's app-manifest flow (a localhost
+page posting the manifest from the owner's browser; the callback code converted with
+`gh api app-manifests/<code>/conversions`, which returns the App id and the private key in one answer, so nothing
+was downloaded): id `4906490`, the four permissions exactly (contents write, pull requests write, checks read,
+metadata read), no webhook — GitHub refuses a localhost hook url, so the manifest carries no `hook_attributes` at
+all. Installed on the organisation for `isidium-factory` only: installation `160802014`; bot user
+`isdm-fac-lander[bot]`, id `327828114`. `forge.toml` (`kind = "app"`) and `forge.key.pem` at the deploy home's
+`factory/`, beside the lander's certificate.
+
+**The context**, twice, from the workstation checkout: `sha256:261e5418f2c917b2c5fc9224b68a0cea20ce6167dd5a2c3889d410ddc8273b0e`
+both times — base `main` `0af0e23`, six governed rows, toolkit `0.1.0`, the identity's login and nothing of its key.
+
+**The first minted token** read pull request #51 (V2 itself) as `green` on the three required contexts and `clean`,
+before the owner merged it — the App's first real call.
+
+**The governed push, refused live:** a branch off `main` with one commit authored as the bot appending a line to
+`docs/work/BOARD.md` (committed `--no-verify`, because the checkout's own pre-commit hook refuses it first — the
+hook's job); `isidium factory push` answered `forge.governed-path @ docs/work/BOARD.md`, exit 2, and the remote
+never saw the branch.
+
+**This pull request** is the first the factory opened: this paragraph, committed as `isdm-fac-lander[bot]` on a
+branch off `main`, pushed by `isidium factory push`, opened by `isidium factory pr-open` with a generated body, its
+checks and merge state read by `isidium factory pr-status`; the merge is the owner's, as every merge is. Its number
+and merge commit are in the-factory's chunk plan (the V2 entry).
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
