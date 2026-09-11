@@ -117,8 +117,11 @@ def gather(
     context_of: ContextOf,
     identity: Identity,
     caps: Caps,
+    registry: Registry | None = None,
 ) -> Inputs:
-    """Everything `assemble` needs, from the checkout at `rev` and one store call."""
+    """Everything `assemble` needs, from the checkout at `rev` and one store call. `registry` is the context's when
+    the caller holds one (V2's `TenantContext` builds it once per run — finding 15); the verb at a terminal, which
+    holds no context, builds it here."""
     with telemetry.span(SPAN) as sp:
         root = root_of(repo, root)
         path = card_path(repo, rev, root, card_id)
@@ -133,7 +136,8 @@ def gather(
             got = cat.get(f"{base_sha}:{path}")
             if got is None:
                 raise Refusal("factory.unknown-card", str(card_id), f"{path} not at {base_sha}")
-            registry = Registry.for_checkout(repo)
+            if registry is None:
+                registry = Registry.for_checkout(repo)
             tree, _entries, rs = parse_config(cfg[2].decode("utf-8"), CONFIG_ORDERS)
             fatal = [r for r in rs if r.rule == "head.toml"]
             if fatal:

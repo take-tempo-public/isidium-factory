@@ -31,7 +31,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -160,17 +160,26 @@ def staged(repo: Path) -> list[str]:
     return [p for p in out.stdout.split("\0") if p]
 
 
-def offending(repo: Path, paths: Sequence[str] | None = None) -> list[str]:
-    """The staged governed paths — the whole hook."""
-    root, rows = governed_paths(repo)
-    eff = {"governed": rows}
+def governed_in(root: str, rows: Sequence[Mapping[str, object]], paths: Iterable[str]) -> list[str]:
+    """The governed paths among `paths` (repo-relative): under `root` and matching a manifest row — **the one
+    predicate three doors run** [V2, 2026-09-10]: this hook over the index, `verify --diff-base` over a pull request's
+    diff, and the factory's forge driver over a branch before it is pushed (X2: *"the PR carries code only"*). One
+    matcher, three callers, so they agree by construction; a row set the caller already holds is passed in rather
+    than read again (C-13)."""
+    eff = {"governed": list(rows)}
     out: list[str] = []
-    for p in paths if paths is not None else staged(repo):
+    for p in paths:
         if root and not p.startswith(root):
             continue
         if governed_resolve(eff, p[len(root) :] if root else p) is not None:
             out.append(p)
     return out
+
+
+def offending(repo: Path, paths: Sequence[str] | None = None) -> list[str]:
+    """The staged governed paths — the whole hook."""
+    root, rows = governed_paths(repo)
+    return governed_in(root, rows, paths if paths is not None else staged(repo))
 
 
 def check(repo: Path) -> int:
