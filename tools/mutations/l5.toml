@@ -1,0 +1,76 @@
+# L5's mutations (2026-09-10) -- the neighborhood projection. One mutation per invocation, two workers:
+#
+#   python tools/mutate.py tools/mutations/l5.toml --show
+#   python tools/mutate.py tools/mutations/l5.toml M1 --workers 2
+#
+# M1 admits a drifted card (the build check gone). M2 ignores `depth`. M3 evicts dependents before dependencies.
+# M4 drops the stub: an evicted member vanishes without a handle. M5 never says `truncated`. M6 drops the status
+# test (a draft's reference build is none, so only a withdrawn card whose build still matches can tell). M7 reads
+# a held card as planned. Each names the test that must notice, in tests/store/test_l5.py.
+
+[[mutation]]
+id = "M1"
+label = "a drifted card is settled -- the build check gone"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''        return d.head.get("status") in ("ratified", "closed") and status.build_matches_reference(cid, d, inp)
+'''
+replace = '''        return d.head.get("status") in ("ratified", "closed")
+'''
+
+[[mutation]]
+id = "M2"
+label = "depth is ignored"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''    for _ in range(caps.depth):
+'''
+replace = '''    for _ in range(8):
+'''
+
+[[mutation]]
+id = "M3"
+label = "dependents are evicted before dependencies"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''    evict_in("depends_on")
+    evict_in("dependents")
+'''
+replace = '''    evict_in("dependents")
+    evict_in("depends_on")
+'''
+
+[[mutation]]
+id = "M4"
+label = "an evicted member vanishes without a stub"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''                ms = tuple(_evict(m) if m.id == cid and m.evicted is None else m for m in getattr(b, field))
+'''
+replace = '''                ms = tuple(m for m in getattr(b, field) if not (m.id == cid and m.evicted is None))
+'''
+
+[[mutation]]
+id = "M5"
+label = "truncated is never said"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''        out = replace(nxt, truncated=True)
+'''
+replace = '''        out = nxt
+'''
+
+[[mutation]]
+id = "M6"
+label = "the status test gone -- a withdrawn card whose build still matches is settled"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''        return d.head.get("status") in ("ratified", "closed") and status.build_matches_reference(cid, d, inp)
+'''
+replace = '''        return status.build_matches_reference(cid, d, inp)
+'''
+
+[[mutation]]
+id = "M7"
+label = "a held card is planned"
+file = "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+find = '''    if lab.row == "disputed" or any(g.kind in ("held", "held_by") for g in pr.guards):
+        return "held"
+'''
+replace = '''    if lab.row == "disputed":
+        return "held"
+'''

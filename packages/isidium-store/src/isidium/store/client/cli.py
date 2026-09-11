@@ -203,20 +203,21 @@ def write(
 
 @app.command()
 def show(
-    target: Annotated[str, typer.Argument(help="card | board | queue | inbox | schema")] = "board",
-    id: Annotated[int, typer.Argument(help="the card id, for `card`")] = 0,
+    target: Annotated[str, typer.Argument(help="card | board | queue | inbox | schema | neighborhood")] = "board",
+    id: Annotated[int, typer.Argument(help="the card id, for `card` and `neighborhood`")] = 0,
     name: Annotated[str, typer.Option(help="name@version, for `schema`")] = "",
     text: Annotated[
         bool,
         typer.Option(
             "--text",
-            help="render the human form (board and queue; a card answers JSON until its renderer exists)",
+            help="render the human form (board and queue, the neighborhood block; "
+            "a card answers JSON until its renderer exists)",
         ),
     ] = False,
 ) -> None:
     """The one typed read (03 §1.2)."""
     args: dict[str, Any] = {"target": target}
-    if target == "card":
+    if target in ("card", "neighborhood"):
         args["id"] = id
     if target == "schema":
         args["name"] = name
@@ -225,6 +226,8 @@ def show(
         result = transport.call("show", args)
         if text and target in ("board", "queue"):
             _out(result["markdown"], text=True)
+        elif text and target == "neighborhood":
+            _out(result["text"], text=True)
         else:
             _out(result)
     except Refusal as r:
