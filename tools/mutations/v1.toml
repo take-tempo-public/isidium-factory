@@ -1,0 +1,92 @@
+# V1's mutations (2026-09-10) -- the run payload. One mutation per invocation, two workers:
+#
+#   python tools/mutate.py tools/mutations/v1.toml --show
+#   python tools/mutate.py tools/mutations/v1.toml M1 --workers 2
+#
+# M1 breaks the round trip (the build hash is not the card's). M2 sorts the refs instead of keeping the written
+# order. M3 skips the locus check (a bad range, a missing anchor, an ambiguous symbol all pass). M4 never refuses
+# oversize. M5 drops the block's text from the value (and so from the hash). M6 drops the bot from the identity.
+# M7 pins the config hash's schema version (the policy chain's `build` no longer matches). M8 leaves the milestone
+# and sprint out of `context.cards`. M9 hands the gatherer's ref bytes in empty. Each names the test that must
+# notice, in tests/factory/test_v1.py.
+
+[[mutation]]
+id = "M1"
+label = "the build hash is not the card's -- the round trip broken"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''            "build_hash": canon.build_hash(head, scope, inp.gated_x),
+'''
+replace = '''            "build_hash": "sha256:" + canon.sha256_hex(b""),
+'''
+
+[[mutation]]
+id = "M2"
+label = "the refs sorted, not in the written order"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''        rows = [r for r in (rs.row(t) for t in cited) if r is not None]
+'''
+replace = '''        rows = [r for r in (rs.row(t) for t in sorted(cited, reverse=True)) if r is not None]
+'''
+
+[[mutation]]
+id = "M3"
+label = "the locus check skipped"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''        why = locus_check(ref, locus)
+'''
+replace = '''        why = None
+'''
+
+[[mutation]]
+id = "M4"
+label = "oversize never refused"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''        if len(data) > inp.caps.max_bytes:
+'''
+replace = '''        if len(data) > inp.caps.max_bytes and False:
+'''
+
+[[mutation]]
+id = "M5"
+label = "the block's text out of the value"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''        "text": str(answer["text"]),
+'''
+replace = '''        "text": "",
+'''
+
+[[mutation]]
+id = "M6"
+label = "the bot out of the identity"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''            "identity": {"bot": inp.identity.bot, "adapter": inp.identity.adapter},
+'''
+replace = '''            "identity": {"bot": "", "adapter": inp.identity.adapter},
+'''
+
+[[mutation]]
+id = "M7"
+label = "the config hash's schema version pinned"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''    return canon.policy_build_hash(dict(tree), v if isinstance(v, int) and not isinstance(v, bool) else 1)
+'''
+replace = '''    return canon.policy_build_hash(dict(tree), 1)
+'''
+
+[[mutation]]
+id = "M8"
+label = "the milestone and sprint out of context.cards"
+file = "packages/isidium-factory/src/isidium/factory/payload.py"
+find = '''    for key in ("milestone", "sprint"):
+'''
+replace = '''    for key in ():
+'''
+
+[[mutation]]
+id = "M9"
+label = "the gatherer hands the ref bytes in empty"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''                    refs[p] = (blob[0], blob[2])
+'''
+replace = '''                    refs[p] = (blob[0], b"")
+'''

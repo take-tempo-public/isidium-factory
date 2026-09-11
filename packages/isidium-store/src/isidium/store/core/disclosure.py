@@ -102,6 +102,9 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         "validate": _VALIDATION,  # the aggregate: `validate.failed` carries the verdicts as data (Q7)
         "hook": _VALIDATION,  # client-side only: the pre-commit hook, refusing to a human at their own terminal
         "accept": _VALIDATION,  # client-side only: `accept` at the owner's terminal — its label, block and runs (L3)
+        # the run payload (`isidium.factory.payload`, V1): a ref that does not resolve at `base_sha`, a card too broad
+        # for the cap — the card's own defects, named whole for the design queue (T-B3's failure protocol)
+        "payload": _VALIDATION,
         # ---- about us: terse (C-12 rule 2) ------------------------------------------------------------------------
         # Before the caller is identified, a refusal carries its rule id and nothing else. `auth` is that surface
         # exactly: no certificate, a certificate that will not parse, a certificate the registration does not name.
