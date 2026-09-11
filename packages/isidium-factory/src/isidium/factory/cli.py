@@ -1,5 +1,6 @@
 """`isidium-factory` — the factory's own verbs; reached as `isidium factory <verb>` through the umbrella's PATH
-dispatch (7bf.3), or directly. v1b carries `land`; v1c's V1 adds `payload`."""
+dispatch (7bf.3), or directly. v1b carries `land`; v1c's V1 adds `payload`; V2 adds `context`, `push`, `pr-open` and
+`pr-status` — the tenant context printed with its hash (T-C1's observable), and the forge driver's four calls."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from isidium.store.client.transport import Transport
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
-from . import checkout, lander
+from . import checkout, context, forge, github, lander
 from . import payload as payload_mod
 from .registration import tenant_client
 
@@ -23,7 +24,8 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="isidium-fact
 
 @app.callback()
 def _verbs() -> None:
-    """The factory's verbs — `isidium factory <verb>`, or `isidium-factory <verb>`: `land`, `payload`."""
+    """The factory's verbs — `isidium factory <verb>`, or `isidium-factory <verb>`: `land`, `payload`, `context`,
+    `push`, `pr-open`, `pr-status`."""
     # A callback keeps `land` a subcommand: with one command and no callback typer makes it the root, and the
     # umbrella's dispatch (`isidium factory land …` → `isidium-factory land …`) would hand it its own name as an
     # argument.
@@ -87,6 +89,97 @@ def payload(
     if out is not None:
         out.write_text(json.dumps(p.value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     _out(p.record())
+
+
+TENANT = Annotated[str, typer.Option("--tenant", help="the tenant, a directory under $ISIDIUM_DEPLOY")]
+CHECKOUT = Annotated[Path, typer.Option("--checkout", help="the project checkout the factory works in")]
+BASE = Annotated[str, typer.Option("--base", help="the ref the line syncs from (fetched from the remote)")]
+ROOT = Annotated[str | None, typer.Option("--root", help="the tracking root; default: the checkout's client")]
+
+
+def _driver(
+    tenant: str, checkout_path: Path, base: str, root: str | None
+) -> tuple[context.TenantContext, github.GitHub]:
+    ctx = context.load(tenant, checkout_path, base=base, root=root)
+    return ctx, github.GitHub(ctx)
+
+
+@app.command("context")
+def context_verb(tenant: TENANT, checkout_path: CHECKOUT, base: BASE = "main", root: ROOT = None) -> None:
+    """Load the tenant context (T-C1) and print its value and hash — the same hash twice is the round trip."""
+    try:
+        ctx = context.load(tenant, checkout_path, base=base, root=root)
+    except Refusal as r:
+        _refuse(r)
+    _out({"hash": ctx.hash, "value": ctx.value()})
+
+
+@app.command()
+def push(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    branch: Annotated[str, typer.Option("--branch", help="the local branch to push")],
+    at: Annotated[str | None, typer.Option("--at", help="create the branch at this commit first")] = None,
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """Push a code-only branch as the tenant's forge identity; a governed path in the diff is refused before any
+    push (exit 2, every offending path named)."""
+    try:
+        ctx, drv = _driver(tenant, checkout_path, base, root)
+        if at is not None:
+            drv.branch(branch, at)
+        ch = drv.push(branch)
+    except Refusal as r:
+        _refuse(r)
+    _out({"branch": branch, "base_sha": ctx.base_sha, "files": list(ch.paths)})
+
+
+@app.command("pr-open")
+def pr_open(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    branch: Annotated[str, typer.Option("--branch", help="the pushed branch")],
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """Open the pull request for a pushed branch, its body generated from the context and the diff."""
+    try:
+        ctx, drv = _driver(tenant, checkout_path, base, root)
+        spec = forge.pr_text(ctx, branch, drv.changed(ctx.base_sha, branch))
+        pr = drv.open_pr(spec)
+    except Refusal as r:
+        _refuse(r)
+    _out({"number": pr.number, "url": pr.url, "head": pr.head})
+
+
+@app.command("pr-status")
+def pr_status(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    number: Annotated[int, typer.Option("--pr", help="the pull request number")],
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """The pull request's merge state and the required checks on its head, with the verdict."""
+    try:
+        _ctx, drv = _driver(tenant, checkout_path, base, root)
+        state = drv.merge_state(number)
+        checks = drv.checks(state.head)
+    except Refusal as r:
+        _refuse(r)
+    _out(
+        {
+            "merged": state.merged,
+            "mergeable": state.mergeable,
+            "state": state.state.value,
+            "merge_commit": state.merge_commit,
+            "head": state.head,
+            "verdict": checks.verdict.value,
+            "required": list(checks.required),
+            "runs": [{"name": c.name, "status": c.status, "conclusion": c.conclusion} for c in checks.runs],
+        }
+    )
 
 
 def main() -> int:

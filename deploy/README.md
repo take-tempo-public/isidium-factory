@@ -907,6 +907,61 @@ shipped): `config@4`, `sidecar@2`, `sidecar-events@2` beside the twelve. Then, f
   changed. The branch was rebased onto `main` and reopened as #49 (the same two commits; green on all seven checks
   both times). Base a PR on `main`, or merge the base first.
 
+### The factory's forge identity — a machine account, its token a file beside the lander's — 2026-09-10 (V2)
+
+The lander is the factory's identity **to the store** (a grant on a client certificate, above). The factory's identity
+**to the forge** — the account it pushes branches and opens pull requests as — is a second thing, ruled 2026-09-10
+(Q-V9 (a), Q-V10): a **machine account**, one per tenant repository, a collaborator with write, and a fine-grained
+token scoped to that repository; the token in a file beside the lander's, mounted read-only where the factory runs.
+Two credentials, two parties, and neither is the store's deploy key: that key bypasses the gate on `main` (S-12) and
+the factory must never hold it. The account's pushes are gated like a human's — `main` refuses them, a pull request
+carries them, the required checks run on them — and revoking the token stops the factory's pushes and nothing else.
+
+```
+<deploy home>/<tenant>/factory/forge.toml    # login, name, email, and the token file's path (relative to this file)
+<deploy home>/<tenant>/factory/forge.token   # one line: the token; 0600; never in client.toml, never in git
+```
+
+**The recipe** (the local tier; on the realm tier the realm writes the two files):
+
+```sh
+# 1. The account (a person's hand, on the forge): a GitHub user for the factory — its name is the tenant's choice —
+#    then, as the repository owner, a collaborator invitation with write, which the account accepts:
+gh api -X PUT repos/<owner>/<repo>/collaborators/<login> -f permission=push
+# 2. The token, minted while signed in AS THE ACCOUNT: Settings → Developer settings → Fine-grained tokens; resource
+#    owner = the repository's owner (an organisation must allow fine-grained tokens for it to appear); repository
+#    access = only <repo>; permissions: Contents read-and-write, Pull requests read-and-write, Checks read,
+#    Metadata read (automatic). Nothing else — no Administration, no Workflows.
+# 3. The two files. The email is the account's noreply address — the form the forge attributes commits by; tenant
+#    #0's ruleset holds a pull request whose commits no account claims (`require_extra_approval_for_unattributed_changes`):
+id=$(gh api users/<login> --jq .id)
+printf '%s
+' 'login = "<login>"' 'name = "<login>"' "email = \"${id}+<login>@users.noreply.github.com\""   'token = "forge.token"' > <deploy home>/<tenant>/factory/forge.toml
+printf '%s
+' '<the token>' > <deploy home>/<tenant>/factory/forge.token && chmod 600 <deploy home>/<tenant>/factory/forge.token
+```
+
+**The verbs** (`ISIDIUM_DEPLOY=<deploy home>`, the checkout a clone of the tenant repository with `origin` the forge):
+
+- `isidium factory context --tenant <tenant> --checkout <path>` — the tenant context (T-C1): one delta fetch of
+  `main`, the config read at the fetched tip, the toolkit pin checked against the range this factory reads, the
+  governed rows resolved; printed with its hash, and the same hash twice is the round trip. The token is in it nowhere.
+- `isidium factory push --tenant <tenant> --checkout <path> --branch <name> [--at <sha>]` — the branch pushed as the
+  account, **after** the code-only check: a governed path in `main...<name>` is refused (`forge.governed-path`, every
+  path named) before any push, by the same predicate the pre-commit hook and `verify --diff-base` run. The token
+  reaches git through the process environment (`GIT_CONFIG_*`, an `http.<host>.extraheader`), never the command line.
+- `isidium factory pr-open --tenant <tenant> --checkout <path> --branch <name>` — the pull request, its body
+  generated from the context and the diff, opened as the account; a second run answers `forge.pr-exists` with the
+  number, not a second pull request.
+- `isidium factory pr-status --tenant <tenant> --checkout <path> --pr <n>` — the merge state (GitHub's own closed set)
+  and the checks on the head, the verdict read over the contexts **the ruleset requires**, not over whatever ran.
+
+The driver declares what it has and has not (T-C7's capability matrix): fetch, push a branch, open a pull request,
+read checks, read merge state — and **no merge** (the pull request's merge stays the forge's button, the owner's), no
+force push, no branch-protection setup (this recipe's), no path rules (refused on the Free plan, measured), no
+webhooks, no account provisioning, no signed-commit status. A forge API that is down is retried three times with
+backoff (1, 2, 4 s) and then refused `forge.unavailable`; an exhausted rate limit is refused at once, naming the reset.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider

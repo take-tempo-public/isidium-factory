@@ -1,0 +1,84 @@
+# V2's mutations (2026-09-10) -- the tenant context and the forge driver. One mutation per invocation, two workers:
+#
+#   python tools/mutate.py tools/mutations/v2.toml --show
+#   python tools/mutate.py tools/mutations/v2.toml M1 --workers 2
+#
+# M1 skips the code-only check (a governed path pushes). M2 matches the bare path instead of the root-prefixed one
+# (a `cards/*.md` outside the tracking root is refused as governed; the predicate is shared with the hook, so its
+# tests may notice too). M3 puts the token on git's command line. M4 never consults TOOLKIT_RANGE at the door.
+# M5 retries without bound. M6 reads the verdict over the runs that exist, not the required contexts (a required
+# check that never ran reads green). M7 swallows `pr-exists` (a second pull request is opened). M8 drops
+# `--no-renames` (a `git mv` out of the root reads as an ungoverned addition). Each names the test that must
+# notice, in tests/factory/test_v2.py.
+
+[[mutation]]
+id = "M1"
+label = "the code-only check skipped -- a governed path pushes"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            if ch.governed:
+                telemetry.record_refusal_on(sp, "forge.governed-path")'''
+replace = '''            if ch.governed and False:
+                telemetry.record_refusal_on(sp, "forge.governed-path")'''
+
+[[mutation]]
+id = "M2"
+label = "the predicate matches the bare path, not the root-prefixed one"
+file = "packages/isidium-store/src/isidium/store/client/hook.py"
+find = '''        if root and not p.startswith(root):
+            continue
+        if governed_resolve(eff, p[len(root) :] if root else p) is not None:'''
+replace = '''        if governed_resolve(eff, p.removeprefix(root) if root else p) is not None:'''
+
+[[mutation]]
+id = "M3"
+label = "the token on git's command line"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            self._git(
+                "push",
+                "-q",
+                self.ctx.forge.remote,'''
+replace = '''            self._git(
+                "push",
+                "-q",
+                "-c",
+                "http.extraheader=Authorization: Basic " + self.ctx.identity.token,
+                self.ctx.forge.remote,'''
+
+[[mutation]]
+id = "M4"
+label = "TOOLKIT_RANGE never consulted at the door"
+file = "packages/isidium-factory/src/isidium/factory/context.py"
+find = '''        toolkit_check(pins)
+'''
+replace = '''        pins = pins
+'''
+
+[[mutation]]
+id = "M5"
+label = "the retry unbounded"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            for i, wait in enumerate((*BACKOFF, None)):'''
+replace = '''            for i, wait in enumerate(BACKOFF * 1000):'''
+
+[[mutation]]
+id = "M6"
+label = "the verdict over the runs that exist, not the required contexts"
+file = "packages/isidium-factory/src/isidium/factory/forge.py"
+find = '''            if got is None or got.status != "completed":
+                pending = True'''
+replace = '''            if got is None or got.status != "completed":
+                pass'''
+
+[[mutation]]
+id = "M7"
+label = "pr-exists swallowed -- a second pull request opened"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            if r.rule == "forge.api" and "already exists" in r.detail:'''
+replace = '''            if r.rule == "forge.api" and "already exists" in r.detail and False:'''
+
+[[mutation]]
+id = "M8"
+label = "--no-renames dropped -- a rename out of the root reads as an addition"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''        out = self._git("diff", "--name-only", "--no-renames", "-z", f"{base}...{head}", rule="forge.git")'''
+replace = '''        out = self._git("diff", "--name-only", "-z", f"{base}...{head}", rule="forge.git")'''
