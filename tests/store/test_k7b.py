@@ -791,13 +791,13 @@ def test_a_policy_write_cannot_move_the_root_and_init_records_the_stores_own() -
     key where the default would differ — is refused, and the tree in memory is unchanged.
 
     **Which id the policy write answers depends on the adopted version** [K10, Q16's schema half]: since `config@3`
-    (carried into `config@4`, L4) the key is `immutable = true`, so the schema's own gate fires first
+    (carried into `config@4`, L4, and `config@5`, V3) the key is `immutable = true`, so the schema's own gate fires first
     (`config.immutable`, the generic row every immutable key answers with) and the store's `config.root-mismatch` is
     what remains for `init` and for a tenant still on `config@2` — `tests/store/test_k10.py` asserts the `config@2`
     tenant's answer."""
     hz = fresh("q16")
     st = hz.st
-    assert st.config_tree["root"] == "docs/work/" == st.root and st.config_tree["schema"] == 4
+    assert st.config_tree["root"] == "docs/work/" == st.root and st.config_tree["schema"] == 5
     tree = dict(st.config_tree)
     tree["root"] = "other/"
     base = {"seq": st.policy[-1]["seq"], "h": st.policy[-1]["h"]}
