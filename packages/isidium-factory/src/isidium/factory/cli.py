@@ -16,7 +16,10 @@ from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 from . import checkout, context, forge, github, lander
+from . import dispatch as dispatch_mod
+from . import ledger as ledger_mod
 from . import payload as payload_mod
+from . import tenant as tenant_mod
 from .registration import tenant_client
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="isidium-factory — the line's own verbs.")
@@ -59,9 +62,9 @@ def payload(
     tenant: Annotated[str, typer.Option("--tenant", help="the tenant, a directory under $ISIDIUM_DEPLOY")],
     checkout_path: Annotated[Path, typer.Option("--checkout", help="the project checkout the payload is read from")],
     card: Annotated[int, typer.Option("--card", help="the card id")],
-    bot: Annotated[str, typer.Option("--bot", help="the identity the run carries (V3 fills it from config)")],
-    adapter: Annotated[str, typer.Option("--adapter", help="the execution adapter the run names (V4's)")],
-    max_bytes: Annotated[int, typer.Option("--max-bytes", help="the byte cap the value must fit (Q-V8)")],
+    bot: Annotated[str | None, typer.Option("--bot", help="override: default the forge identity's login")] = None,
+    adapter: Annotated[str | None, typer.Option("--adapter", help="override: default tenant.toml's")] = None,
+    max_bytes: Annotated[int | None, typer.Option("--max-bytes", help="override: default tenant.toml's")] = None,
     rev: Annotated[str, typer.Option("--rev", help="the revision the payload is read at")] = "HEAD",
     root: Annotated[
         str | None, typer.Option("--root", help="the tracking root; default: the checkout's client")
@@ -72,6 +75,12 @@ def payload(
     record's fields; `--out` keeps the value."""
     try:
         cfg, workdir = tenant_client(tenant)
+        if adapter is None or max_bytes is None:  # V3: their homes exist now (tenant.toml, Q-V8 (a))
+            reg = tenant_mod.require(tenant_mod.Registration.load(workdir), workdir)
+            adapter = reg.adapter if adapter is None else adapter
+            max_bytes = reg.max_bytes if max_bytes is None else max_bytes
+        if bot is None:
+            bot = context.ForgeIdentity.load(workdir).login
         channel = Transport(cfg, workdir)
         inp = checkout.gather(
             checkout_path,
@@ -180,6 +189,48 @@ def pr_status(
             "runs": [{"name": c.name, "status": c.status, "conclusion": c.conclusion} for c in checks.runs],
         }
     )
+
+
+@app.command("dispatch")
+def dispatch_verb(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    card: Annotated[int | None, typer.Option("--card", help="pick this card — only if it is in the ready-view")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="answer the pick, write nothing")] = False,
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """Pick the head of the tenant's ready-view (T-A6): the ledger row written first, then `story/<run-id>` at the
+    synced head. Prints the run row; `--dry-run` prints what it would be and writes nothing."""
+    try:
+        ctx, drv = _driver(tenant, checkout_path, base, root)
+        channel = Transport(ctx.client, ctx.home)
+        with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+            row = dispatch_mod.pick(ctx, led, channel.call, drv, card=card, dry_run=dry_run)
+    except Refusal as r:
+        _refuse(r)
+    _out(row)
+
+
+@app.command("runs")
+def runs_verb(
+    tenant: TENANT,
+    run: Annotated[str | None, typer.Option("--run", help="one run: its row, its events and its report")] = None,
+) -> None:
+    """The tenant's ledger: every run's row, or one run with its events and the run report generated from them."""
+    try:
+        _cfg, home = tenant_client(tenant)
+        with ledger_mod.Ledger.open(home, tenant) as led:
+            if run is None:
+                _out(led.runs())
+                return
+            row = led.run(run)
+            if row is None:
+                raise Refusal("ledger.unknown-run", run, "no such run in this ledger")
+            out = {"run": row, "events": led.events_of(run), "report": led.report(run).model_dump(by_alias=True)}
+    except Refusal as r:
+        _refuse(r)
+    _out(out)
 
 
 def main() -> int:

@@ -131,6 +131,9 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         # governed path, an API unavailable or rate-limited, a pull request that already exists -- spoken to the
         # operator at the terminal or to V3's ledger, never to a peer over a door.
         "forge": Row(422, TERSE),
+        # the factory's ledger (`isidium.factory.ledger`, V3): its own sqlite at the deploy home -- a run id it already
+        # holds, a file another tenant's -- the operator's to read at the terminal, never a peer's over a door.
+        "ledger": Row(422, TERSE),
         # Raised by a tool, not by the package [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified
         # fails"*]: `tools/verify_chain.py` refuses a shallow checkout (`verify.shallow`, K7a). A tool speaks to the
         # operator at the forge and at the terminal and never to a peer, so C-12's reason for *terse* does not reach

@@ -105,7 +105,8 @@ def test_the_lander_lands_over_the_wire_as_its_credential(tmp_path: Path, monkey
         client_file(home, "l2", address, ca.path, lander_cred)
         # the land, as the lander
         r = await asyncio.to_thread(lander.land, "l2", lander.read_report(report_file))
-        assert r["events"] == ["e1", "e2"] and r["intake"] == ["s1"] and r["landed"] is True and r["empty"] is False
+        # e1: the walk's `ratified` for the card (V3 — its fingerprint's birth), ahead of the report's e2, e3
+        assert r["events"] == ["e1", "e2", "e3"] and r["intake"] == ["s1"] and r["landed"] is True and not r["empty"]
         assert hz.st.state["cards"][f"{cid:04d}"]["execution"] == "closed"
         assert hz.st.projection_of(cid).label.row == "closed"
         assert hz.st.inbox[-1]["by"] == "lander@l2" and hz.st.inbox[-1]["source"] == "run"

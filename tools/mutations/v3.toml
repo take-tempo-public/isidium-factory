@@ -1,0 +1,129 @@
+# V3 (2026-09-11) — the ledger and dispatch: the mutations the properties need. The brief's nine, then the four the
+# ruled option 3 and the F-b fix add, then three more the build found worth holding (the sitting's grade, the grant,
+# the event schema's gate). Run one at a time against the one test file that owns the property (the chunk plan's
+# targeted practice: tests/factory/test_v3.py for M1-M7, M9, M12, M14; tests/store/test_v3.py for the rest).
+
+[[mutation]]
+id = "M1"
+label = "the record after the branch -- the story branch asked for before the ledger row exists"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    run_id = ledger.dispatch(run)
+    sp.set_attribute("isidium.run_id", run_id)
+    branch = f"story/{run_id}"
+    try:
+        forge.branch(branch, ctx.base_sha)'''
+replace = '''    forge.branch(f"story/r-{len(ledger.runs()) + 1}", ctx.base_sha)
+    run_id = ledger.dispatch(run)
+    sp.set_attribute("isidium.run_id", run_id)
+    branch = f"story/{run_id}"
+    try:
+        pass'''
+
+[[mutation]]
+id = "M2"
+label = "the duplicate accepted -- a held run id is not refused as the ledger's"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''            except sqlite3.IntegrityError as e:'''
+replace = '''            except ZeroDivisionError as e:'''
+
+[[mutation]]
+id = "M3"
+label = "the WIP cap ignored"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    if len(flying) >= reg.wip:'''
+replace = '''    if len(flying) >= reg.wip + 100:'''
+
+[[mutation]]
+id = "M4"
+label = "the software-grade check skipped"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    if ready[chosen.card] and not reg.allows_software_grade(at.date()):'''
+replace = '''    if False and ready[chosen.card] and not reg.allows_software_grade(at.date()):'''
+
+[[mutation]]
+id = "M5"
+label = "the allowance's date compared the wrong way"
+file = "packages/isidium-factory/src/isidium/factory/tenant.py"
+find = '''today <= self.allow_software_grade_until'''
+replace = '''today >= self.allow_software_grade_until'''
+
+[[mutation]]
+id = "M6"
+label = "the tie-break by id before the ratification"
+file = "packages/isidium-factory/src/isidium/factory/ordering.py"
+find = '''    return OrderKey(0 if h.expedite and expedite_open else 1, pr, 0, h.ratified_at, h.card)'''
+replace = '''    return OrderKey(0 if h.expedite and expedite_open else 1, pr, 0, str(h.card).zfill(9), h.card)'''
+
+[[mutation]]
+id = "M7"
+label = "--card accepted off the view"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    if card is not None and card not in ready:'''
+replace = '''    if False:'''
+
+[[mutation]]
+id = "M8"
+label = "the leaf literal left as story in the projection"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''        if kind == inp.leaf:'''
+replace = '''        if kind == "story":'''
+
+[[mutation]]
+id = "M9"
+label = "--dry-run writing"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    if dry_run:
+        return'''
+replace = '''    if False and dry_run:
+        return'''
+
+[[mutation]]
+id = "M10"
+label = "the fingerprint not folded at a ratified event"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''        elif k == "ratified":'''
+replace = '''        elif k == "ratified-never":'''
+
+[[mutation]]
+id = "M11"
+label = "refs_resolved left empty in the ratified event"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''                        "refs_resolved": resolved,'''
+replace = '''                        "refs_resolved": [],'''
+
+[[mutation]]
+id = "M12"
+label = "a ready card with no fingerprint let through (not-landed not refused)"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    fp = one.get("fingerprint")'''
+replace = '''    fp = one.get("fingerprint") or {"refs_resolved": []}'''
+
+[[mutation]]
+id = "M13"
+label = "software-grade not derived from the policy (init's memory only)"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if not rat.get("software_key_ack"):
+            return frozenset(fprs)'''
+replace = '''        if True:
+            return frozenset(fprs)'''
+
+[[mutation]]
+id = "M14"
+label = "a sitting's member graded by its own (absent) sig, not the manifest's"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''        return inp.batch_fprs.get(int(e["batch"]), "")'''
+replace = '''        return ""'''
+
+[[mutation]]
+id = "M15"
+label = "the lander's grant without dispatch"
+file = "packages/isidium-store/src/isidium/store/server/identity.py"
+find = '''    "lander": frozenset({"land", "show", "dispatch"}),'''
+replace = '''    "lander": frozenset({"land", "show"}),'''
+
+[[mutation]]
+id = "M16"
+label = "the ratified event emitted whatever the adopted event schema declares"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        return kind in kinds'''
+replace = '''        return True'''
