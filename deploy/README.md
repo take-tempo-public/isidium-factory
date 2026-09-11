@@ -874,6 +874,39 @@ shipped): `config@4`, `sidecar@2`, `sidecar-events@2` beside the twelve. Then, f
   in 32 s — and the report landed a third time: `e3`, `s3`, commit **`9fb8f37`**, the map still empty; `isidium
   check 4` now answers `integrity: []`, agreeing with the land.
 
+### L4c, L5 and V1 live on tenant #0 in one image swap: the cursor moves at a clean land, the block is read, the first payload is assembled — 2026-09-11
+
+- **One image for three chunks.** PRs #45 (L4c), #46 (L5) and #49 (V1) merged in that order; the image built from
+  `main` at `7cadb0f` is `isidium-store:v1` (`a8737ac428ac`). Tenant #0 was recreated on it from the deploy home's
+  `recreate.sh` — **which had dropped the healthcheck** the compose file carries (it was transcribed from `podman
+  inspect`'s `CreateCommand`, and the health flags are not part of that line): the first recreate ran with no
+  health state at all, `podman ps` showed `Up` without `(healthy)`, and the script's own `{{.State.Health.Status}}`
+  template failed on the nil. The script now passes `--health-cmd python3 /usr/local/bin/isidium-healthcheck
+  --health-interval 30s --health-timeout 5s --health-retries 3 --health-start-period 60s` (the compose values) and
+  guards the template; the second recreate reported healthy in 35 s. The VM's `eth0` read mtu 1420 at the time and
+  the clone came up regardless — the `isidium-mtu1400` network caps the container's own interface.
+- **L4c's land (Q-W9, Q-W10 (a)).** The synthetic report landed as `e4`/`s4`, commit **`f70a371`**, journal seq 13,
+  and the cursor moved off `68ffb68` — where it had sat since L2 — to **`7cadb0f`**, the head of `main` at a clean
+  walk. A second land of the same report landed again (`e5`/`s5`, `96f3023`, seq 14) and the cursor moved to
+  `f70a371`, the first land's own commit. `isidium check 4` answers `integrity: []`, chain `ok` ×3. **A finding for
+  V3:** the store lands a report whose `run_id` it has already landed (`r-synthetic-1`, twice) — idempotence by
+  run id is the ledger's to hold (*"no record, no run"*), not the store's, and the ledger is V3's.
+- **L5's block.** `isidium show neighborhood 4 --text` answers the delimited block with every list empty and
+  `truncated=false`: card 0004 has no parent, siblings or dependencies, and that is the honest answer.
+- **V1's payload, the first real number.** `isidium factory payload --tenant isidium-factory --checkout
+  C:/Dev/isidium-factory --card 4 --bot lander@isidium-factory --adapter none --max-bytes 1048576` at `main`
+  `96f3023`: **`payload_hash sha256:e30f855f…`**, **157,288 bytes**, the same hash on a second run; two refs
+  resolved (`client/accept.py` 6,412 bytes of excerpt, `docs/design/03-card-schema.md` 142,209 — a whole-file `Path`
+  ref to the schema is nine tenths of the payload); `context` `{depth 2, bytes 89, cards [], truncated false}`;
+  `config_hash sha256:3f4adb2c…` equal to `config.toml`'s policy-chain head `build`; the deny set the effective
+  config's six paths; `effort default`, no budget (none is named). The value is kept at the deploy home
+  (`factory/payload-0004.json`, outside git). Q-V8 (the byte cap's home) now has its first datum: 157 KB for a card
+  citing one design document whole.
+- **A forge trap, new:** PR #48 was opened with its base on #46's branch so the diff read cleanly; when #46 merged
+  and its branch was deleted, GitHub **closed** #48 rather than retargeting it, and a closed PR's base cannot be
+  changed. The branch was rebased onto `main` and reopened as #49 (the same two commits; green on all seven checks
+  both times). Base a PR on `main`, or merge the base first.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
