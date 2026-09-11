@@ -26,7 +26,7 @@ from isidium.store.server.journal import Journal
 from isidium.store.server.signer import SoftwareKey, SoftwareKeyAck
 from isidium.store.server.store import NewCard, Store
 
-from ..conftest import Telemetry  # noqa: F401
+from ..conftest import Telemetry as Telemetry  # an explicit re-export: ten store test files import it from here
 
 OWNER = Caller("amodal1@example", "owner")
 PLANNER = Caller("sartor-planner@agents.example", "contributor", "amodal1@example")
