@@ -441,14 +441,13 @@ def test_git_is_spawned_twice_per_gather(disk: tuple[Path, Store, int], monkeypa
     """The brief's number, held: one `ls-tree`, one `cat-file --batch` — however many refs the card cites."""
     work, st, cid = disk
     spawned: list[list[str]] = []
-    real_popen = subprocess.Popen
 
-    class Popen(real_popen):  # type: ignore[type-arg]  # every spawn — `run` included — passes through here
+    class Counting(subprocess.Popen[bytes]):  # every spawn — `run` included — passes through Popen
         def __init__(self, cmd: Any, *a: Any, **kw: Any) -> None:
             spawned.append(list(cmd))
             super().__init__(cmd, *a, **kw)
 
-    monkeypatch.setattr(subprocess, "Popen", Popen)
+    monkeypatch.setattr(subprocess, "Popen", Counting)
     checkout_mod.gather(
         work, "HEAD", cid, tenant="t", root=ROOT, context_of=lambda c: answer_of(st, c), identity=WHO, caps=WIDE
     )
