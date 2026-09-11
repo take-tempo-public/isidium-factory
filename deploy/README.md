@@ -910,12 +910,19 @@ shipped): `config@4`, `sidecar@2`, `sidecar-events@2` beside the twelve. Then, f
 ### The factory's forge identity — a machine account, its token a file beside the lander's — 2026-09-10 (V2)
 
 The lander is the factory's identity **to the store** (a grant on a client certificate, above). The factory's identity
-**to the forge** — the account it pushes branches and opens pull requests as — is a second thing, ruled 2026-09-10
-(Q-V9 (a), Q-V10): a **machine account**, one per tenant repository, a collaborator with write, and a fine-grained
-token scoped to that repository; the token in a file beside the lander's, mounted read-only where the factory runs.
-Two credentials, two parties, and neither is the store's deploy key: that key bypasses the gate on `main` (S-12) and
-the factory must never hold it. The account's pushes are gated like a human's — `main` refuses them, a pull request
-carries them, the required checks run on them — and revoking the token stops the factory's pushes and nothing else.
+**to the forge** — the account it pushes branches and opens pull requests as — is a second credential of the **same**
+principal, ruled 2026-09-10 (Q-V9 (a), Q-V10): a **machine account**, one per tenant repository, a collaborator with
+write, and a fine-grained token scoped to that repository; the token in a file beside the lander's certificate,
+mounted read-only where the factory runs. Two credentials, one service principal — and neither is the store's deploy
+key: that key bypasses the gate on `main` (S-12) and the factory must never hold it. The account's pushes are gated
+like a human's — `main` refuses them, a pull request carries them, the required checks run on them — and revoking
+the token stops the factory's pushes and nothing else.
+
+**The name** follows the agent identity scheme (ruled 2026-09-10): tenant first, then the product's short code —
+which lives only inside identities; the products keep their full names — then the agent, then `-bot` because a
+machine account has no other class marker: `<tenant>-isdm-fac-lander-bot`. Tenant #0's is
+`isidium-factory-isdm-fac-lander-bot` (35 of GitHub's 39 characters); sartor's will be `sartor-isdm-fac-lander-bot`.
+The same identity is `lander.isdm-fac@<tenant>` wherever a name is email-shaped (the certificate's CN, once reissued).
 
 ```
 <deploy home>/<tenant>/factory/forge.toml    # login, name, email, and the token file's path (relative to this file)
@@ -925,20 +932,24 @@ carries them, the required checks run on them — and revoking the token stops t
 **The recipe** (the local tier; on the realm tier the realm writes the two files):
 
 ```sh
-# 1. The account (a person's hand, on the forge): a GitHub user for the factory — its name is the tenant's choice —
-#    then, as the repository owner, a collaborator invitation with write, which the account accepts:
-gh api -X PUT repos/<owner>/<repo>/collaborators/<login> -f permission=push
+# 1. The account (a person's hand, on the forge): a GitHub user named <tenant>-isdm-fac-lander-bot, with its own
+#    email and TOTP (GitHub requires 2FA of code contributors) — then, as the repository owner, a collaborator
+#    invitation with write, which the account accepts:
+login=<tenant>-isdm-fac-lander-bot
+gh api -X PUT repos/<owner>/<repo>/collaborators/$login -f permission=push
 # 2. The token, minted while signed in AS THE ACCOUNT: Settings → Developer settings → Fine-grained tokens; resource
-#    owner = the repository's owner (an organisation must allow fine-grained tokens for it to appear); repository
-#    access = only <repo>; permissions: Contents read-and-write, Pull requests read-and-write, Checks read,
-#    Metadata read (automatic). Nothing else — no Administration, no Workflows.
+#    owner = the repository's owner; repository access = only <repo>; permissions: Contents read-and-write, Pull
+#    requests read-and-write, Checks read, Metadata read (automatic). Nothing else — no Administration, no Workflows.
+#    An organisation allows fine-grained tokens by default but REQUIRES AN OWNER'S APPROVAL of each one by default
+#    (org Settings → Personal access tokens → Pending requests): the token is inert until approved.
 # 3. The two files. The email is the account's noreply address — the form the forge attributes commits by; tenant
 #    #0's ruleset holds a pull request whose commits no account claims (`require_extra_approval_for_unattributed_changes`):
-id=$(gh api users/<login> --jq .id)
-printf '%s
-' 'login = "<login>"' 'name = "<login>"' "email = \"${id}+<login>@users.noreply.github.com\""   'token = "forge.token"' > <deploy home>/<tenant>/factory/forge.toml
-printf '%s
-' '<the token>' > <deploy home>/<tenant>/factory/forge.token && chmod 600 <deploy home>/<tenant>/factory/forge.token
+id=$(gh api users/$login --jq .id)
+printf '%s\n' "login = \"$login\"" "name = \"$login\"" "email = \"${id}+$login@users.noreply.github.com\"" \
+  'token = "forge.token"' > <deploy home>/<tenant>/factory/forge.toml
+printf '%s\n' '<the token>' > <deploy home>/<tenant>/factory/forge.token && chmod 600 <deploy home>/<tenant>/factory/forge.token
+# 4. A commit the factory will push is authored AS the account, or the ruleset holds the pull request as unattributed:
+git -c user.name="$login" -c user.email="${id}+$login@users.noreply.github.com" commit -m "..."
 ```
 
 **The verbs** (`ISIDIUM_DEPLOY=<deploy home>`, the checkout a clone of the tenant repository with `origin` the forge):
