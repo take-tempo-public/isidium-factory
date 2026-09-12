@@ -15,7 +15,6 @@ import datetime as _dt
 import json
 import sqlite3
 import subprocess
-import time
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -95,10 +94,9 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     st.ratify([a, b], OWNER)
     d = card(st, "still-a-draft")
     st.land(EMPTY, LANDER)
-    # `pending-ingest` (row 11) compares the newest signed entry's `at` against the landed commit's time, both at
-    # one-second resolution, so a ratification inside the land's own second is NOT newer than it. Cross the boundary
-    # deliberately: on a fast runner the whole fixture ran inside one second and this card came back `ready`.
-    time.sleep(1.1)
+    # This card's ratification is never landed, so the sidecar holds no head for it and row 11 reads
+    # `pending-ingest` — per card, not by clock [V3b]. (Until V3b the rule compared timestamps, and this fixture
+    # had to cross a one-second boundary to hold on a fast runner.)
     c = card(st, "ratified-after-the-land")
     st.ratify([c], OWNER)
     bare = (tmp / "origin.git").as_posix()

@@ -237,6 +237,53 @@ def test_on_real_git_the_fingerprints_blobs_come_from_one_ls_tree_of_the_ratifyi
     assert [row["path"] for row in fp["refs_resolved"]] == list(REF_FILES)
 
 
+# ---- row 11 is per card, not by clock (V3b) ------------------------------------------------------------------------
+
+
+def test_a_ratification_made_after_the_merge_the_land_lands_on_is_ready() -> None:
+    """V3b, found live on tenant #0 at V3's live step. The cursor is the batch pull request's merge (X2 pin 3), so
+    `landed_at` is **that merge's** time — older than a ratification made after it. Row 11 used to compare the two,
+    and answered `pending-ingest` for a card the same land had ingested and fingerprinted; no later land could clear
+    it, a land with nothing new being an empty diff (Q-W10). The question is per card, and the sidecar's
+    `history_head` is the fact that answers it."""
+    hz = fresh()
+    st = hz.st
+    main = st.repo.head
+    assert main is not None
+    branch = st.repo.commit({"src/f.py": b"print('built')\n"}, "builder", st.now(), "batch b1: code", parents=[main])
+    st.repo.head = main  # type: ignore[misc]
+    merge = st.repo.commit({"src/f.py": b"print('built')\n"}, "forge", st.now(), "merge b1", parents=[main, branch])
+    a = ratified(hz, "after-the-merge")  # the ratification is later than the merge, as it was live
+    r = st.land(EMPTY, LANDER)
+    assert r["cursor"] == merge and st.state["landed_at"] == st.repo.commit_time(merge)
+    entry = st.docs[path_of(st, a)].history[-1]
+    assert str(entry["at"]) > str(st.state["landed_at"]), "the ratification is newer than the cursor's commit"
+    assert st.state["cards"][f"{a:04d}"]["history_head"]["seq"] == int(entry["seq"]), "and this land ingested it"
+    assert st.projection_of(a).render() == "ready" and st.projection_of(a).ready
+    assert st.dispatch()["ready"] == [{"id": a, "software_grade": True}]
+    assert fingerprint(st, a)["ratified_seq"] == int(entry["seq"])
+
+
+def test_a_ratification_no_land_has_seen_is_pending_ingest() -> None:
+    """The other side, unchanged: until a land records the card's head, the card is not the factory's to pick."""
+    hz = fresh()
+    st = hz.st
+    a = ratified(hz, "landed")
+    st.land(EMPTY, LANDER)
+    assert st.projection_of(a).ready
+    b = ratified(hz, "not-landed-yet")
+    assert st.projection_of(b).render() == "ratified (pending-ingest)" and not st.projection_of(b).ready
+    assert st.dispatch()["ready"] == [{"id": a, "software_grade": True}], "only the ingested card is pickable"
+
+
+def test_a_tenant_with_no_sidecar_reads_ratified() -> None:
+    """Before the first land, and the standalone case: no sidecar, no per-card head, and the label is `ratified` —
+    what the timestamp guard (`if landed_at and …`) gave and what the new one keeps."""
+    hz = fresh()
+    a = ratified(hz, "no-sidecar-yet")
+    assert hz.st.state == {} and hz.st.projection_of(a).render() == "ready"
+
+
 # ---- the dispatch call (F-a) --------------------------------------------------------------------------------------------
 
 

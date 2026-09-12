@@ -122,6 +122,13 @@ find = '''    "lander": frozenset({"land", "show", "dispatch"}),'''
 replace = '''    "lander": frozenset({"land", "show"}),'''
 
 [[mutation]]
+id = "M17"
+label = "row 11 back to the clock -- pending-ingest by the cursor commit's time, not the card's landed head"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''    if inp.state and newest_signed is not None and int(newest_signed["seq"]) > int(landed_head or 0):'''
+replace = '''    if str(inp.state.get("landed_at", "")) and newest_signed is not None and str(newest_signed.get("at", "")) > str(inp.state.get("landed_at", "")):'''
+
+[[mutation]]
 id = "M16"
 label = "the ratified event emitted whatever the adopted event schema declares"
 file = "packages/isidium-store/src/isidium/store/server/store.py"

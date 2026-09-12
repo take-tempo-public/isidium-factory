@@ -305,9 +305,21 @@ def _core_label(cid: int, doc: Document, inp: Inputs) -> tuple[Label, str]:
     if state is not None:
         return Label("execution", execution=state[0], failure=state[1]), kind
     # row 11 (its pending-ingest half; the guards are the caller's pass)
-    landed_at = str(inp.state.get("landed_at", ""))
+    #
+    # **The question is per card, and the sidecar already answers it** [V3b, 2026-09-12, found live]: has the ingest
+    # recorded this card's newest signed entry? That is `history_head.seq` against the entry's own `seq` — the same
+    # test the land's walk uses to emit an act once (`_act_events`). It used to compare the entry's `at` against the
+    # **cursor commit's** time (`state.landed_at`), and X2 pins the cursor to the batch PR's merge, so a card
+    # ratified after that merge read `pending-ingest` even though the same land had ingested it and written its
+    # fingerprint — and no later land could clear it, a land with nothing new being an empty diff by Q-W10. Measured
+    # on tenant #0: card 5 ratified 01:23:52Z, its ratification ingested (`history_head.seq` 2, its fingerprint
+    # recorded), `landed_at` 00:47:12Z — the merge's time — and the card unreachable by dispatch.
+    #
+    # A tenant with no sidecar at all (`state` empty: before the first land, and the standalone case) reads
+    # `ratified`, as it did when the timestamp guard was `if landed_at and …`.
+    landed_head = (sc.get("history_head") or {}).get("seq")
     newest_signed = next((e for e in reversed(doc.history) if chain.is_signed(e)), None)
-    if landed_at and newest_signed and str(newest_signed.get("at", "")) > landed_at:
+    if inp.state and newest_signed is not None and int(newest_signed["seq"]) > int(landed_head or 0):
         return Label("ratified", "pending-ingest"), kind
     return Label("ratified"), kind
 
