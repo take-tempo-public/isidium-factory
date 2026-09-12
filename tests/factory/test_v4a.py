@@ -230,6 +230,7 @@ class Fake:
     """A deterministic in-process adapter — the conformance suite's second member, and what makes it a suite."""
 
     result: dict[str, Any] = field(default_factory=_harness_result)
+    writes: tuple[str, ...] = ()
     seen: list[RunJob] = field(default_factory=list)
 
     def capabilities(self) -> AdapterCapabilities:
@@ -249,6 +250,10 @@ class Fake:
 
     def execute(self, job: RunJob) -> PhaseResult:
         self.seen.append(job)
+        for rel in self.writes:  # a phase that wrote where the guard would not have let it
+            target = Path(job.worktree) / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("written past the guard", encoding="utf-8")
         spec = job.policy.agent(job.identity.agent)
         return adapter_mod.result(
             {
@@ -446,6 +451,25 @@ def test_the_phase_row_is_03_6s_and_its_event_carries_the_rest(disk: Disk, led: 
     assert all(e["kind"] != "phase" for e in led.report(disk.run_id).model_dump()["events"])
 
 
+def test_the_phase_row_and_its_event_are_one_transaction(
+    disk: Disk, led: Ledger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2: *"the same transaction discipline dispatch used"*. The discriminator is a failure **between** the two
+    writes — if the event cannot be written, the row must not be there either, or the ledger would hold a phase
+    that no transition ever recorded."""
+    run_id = fresh_run(disk, led)
+    before = len(led.phases_of(run_id))
+
+    def boom(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError("the event write failed")
+
+    monkeypatch.setattr(Ledger, "_event", boom)
+    with pytest.raises(RuntimeError):
+        led.phase(run_id, "2026-09-12T00:00:00Z", {**_harness_result(), "run_id": run_id})
+    monkeypatch.undo()
+    assert len(led.phases_of(run_id)) == before, "the row survived a failed event: the two are not one transaction"
+
+
 def test_an_unknown_run_is_refused_before_anything_is_written(disk: Disk, led: Ledger) -> None:
     refuses("ledger.unknown-run", lambda: led.phase("r-99", "2026-09-12T00:00:00Z", _harness_result()))
     refuses("ledger.unknown-run", lambda: led.finish("r-99", "2026-09-12T00:00:00Z", "failed:infra"))
@@ -490,7 +514,9 @@ def test_a_start_failure_is_retried_once_and_then_failed_infra(disk: Disk) -> No
 
     hard = Podman(fail="no such image")
     r = refuses("adapter.infra", lambda: Container(disk.home, _reg(disk), run=hard).execute(a_job(disk)))
-    assert len([a for a in hard.seen if a[1] == "run"]) == adapter_mod_attempts()
+    # The number is written here, not read from the module: a test that asks the code how many attempts it makes
+    # agrees with any answer. T-C6 says **one retry**, so two attempts is the property.
+    assert len([a for a in hard.seen if a[1] == "run"]) == 2
     assert "no such image" in r.detail
 
 
@@ -576,6 +602,28 @@ def test_a_failed_phase_ends_the_run_on_that_row(disk: Disk, led: Ledger) -> Non
     )
 
 
+def test_a_write_outside_the_surfaces_ends_the_run_failed_scope(disk: Disk, led: Ledger) -> None:
+    """The belt behind the guard, at the wrapper: a phase whose worktree holds a path the card does not declare is
+    `failed:scope` on its own row, and the work is not committed as though it were in scope. The guard denies at
+    write time; this is what catches a phase that got past it — an adapter whose runtime could not host the hook,
+    or one that wrote through a path the hook does not see."""
+    run_id = fresh_run(disk, led)
+    rogue = Fake(writes=("notes-from-the-builder.md",))
+    r = refuses(
+        "run.scope",
+        lambda: runner_mod.run_phase(
+            disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, x: rogue
+        ),
+    )
+    assert "notes-from-the-builder.md" in r.detail
+    row = led.run(run_id)
+    assert row is not None and row["outcome"] == "failed:scope" and row["ended_at"]
+    assert row["surfaces_actual"] == ["notes-from-the-builder.md"]
+    assert led.phases_of(run_id), "the phase is on the record even when it is the phase that failed"
+    ev = [e for e in led.events_of(run_id) if e["kind"] == "phase"][-1]
+    assert ev["data"]["outcome"] == "failed:scope"
+
+
 def test_a_phase_that_is_not_an_adapters_is_refused(disk: Disk, led: Ledger) -> None:
     refuses(
         "run.phase",
@@ -632,9 +680,3 @@ def _reg(disk: Disk) -> Registration:
     reg = disk.ctx.registration
     assert reg is not None
     return reg
-
-
-def adapter_mod_attempts() -> int:
-    from isidium.factory.container import ATTEMPTS
-
-    return ATTEMPTS

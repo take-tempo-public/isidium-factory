@@ -1086,6 +1086,65 @@ request's merge, older than a ratification made after it — and no later land c
 being an empty diff. Fixed in this same branch (V3b): the question is per card, and the sidecar's `history_head`
 answers it.
 
+### The execution adapter seam, the run container, and the write guard — 2026-09-12 (V4a-i)
+
+A dispatched run reaches an executor through **one typed seam** (T-C6) and nothing above it names a harness. The
+tenant's registration picks the adapter by name; an adapter that is not registered is refused rather than replaced
+by a default. V4a-i ships one adapter — a container on this workstation's podman — and runs one phase, `build`.
+
+**The executor policy is the tenant's, signed** (ruled 2026-09-12): `[agents]` and `[executor]` are `config@6` keys,
+so which model runs a phase, at what effort, under what tool allowlist and what budgets, is a decision that carries
+the owner's signature rather than an operator's file. `[runner].image` in `tenant.toml` stays factory-side: which
+image this machine runs is machinery, not policy.
+
+```sh
+# tenant.toml gains one optional table — absent means this tenant declares no image and the container adapter
+# refuses rather than inventing one.
+cat >> <deploy home>/<tenant>/factory/tenant.toml <<'EOF'
+
+[runner]
+image = "isidium-runner:v4a"
+EOF
+
+# The model credential, beside the forge token and read the same way: the secret alone in the file, 0600.
+# `claude setup-token` mints it (one year, personal, model requests only); it never enters a command line.
+install -m 0600 /dev/null <deploy home>/<tenant>/factory/claude.token
+printf '%s' '<the token>' > <deploy home>/<tenant>/factory/claude.token
+```
+
+**The run image** holds python, git, the factory package and Claude Code — and no credential and no identity. The
+harness version is a required build argument, so the version the ledger records is the version in the binary:
+
+```sh
+npm view @anthropic-ai/claude-code version          # what to pin, read on the day
+podman build -f deploy/Containerfile.runner -t isidium-runner:v4a \
+  --build-arg CLAUDE_CODE_VERSION=<version> .
+```
+
+**What the factory does around the phase**, none of which the phase can do for itself: a `git worktree` per run on
+the `story/<run-id>` branch dispatch created; the payload re-assembled at the run's own `base_sha` and refused if it
+no longer hashes to what the ledger wrote; the phase run in the container with the rendered settings and the write
+guard; the change set **recomputed from git** and a result whose claim differs refused; one commit authored by the
+wrapper with `Factory-Run` and `Factory-Agent` trailers; and the phase written onto the row the run was dispatched
+under, in one transaction. The worktree is removed either way.
+
+**The write guard** (T-B5) denies a write outside the card's `surfaces` ∪ `tests/` **as it is attempted** — a
+PreToolUse hook running `python -m isidium.factory.guard` inside the container, reading the run's own allowed set
+from a mounted file. Every denial is counted onto the run's phase record. A tenant whose policy sets
+`[executor].guard = "post-hoc"` renders no hook and says so in the capability matrix: declared degradation, never
+silent.
+
+**The verb** (`ISIDIUM_DEPLOY=<deploy home>`):
+
+- `isidium factory run --tenant <tenant> --checkout <path> --run r-<n> [--phase build]` — one phase of one
+  dispatched run. Prints the run row with its `phases`. A failed phase ends the run on its own row
+  (`failed:infra`, `failed:scope`, `failed:environment`); a clean one leaves the run in flight, because closing a
+  run is V5's.
+
+**A provider limit is not an infrastructure failure.** The subscription token draws on the same rolling five-hour
+and weekly windows as the owner's own sessions, so a limit answers `adapter.environment` and backs off; only a start
+failure or the watchdog gets T-C6's one retry.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider

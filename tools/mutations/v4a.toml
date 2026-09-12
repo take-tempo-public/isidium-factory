@@ -1,0 +1,130 @@
+# V4a-i (2026-09-12) — the execution adapter seam, the write guard and the container adapter: the mutations the
+# properties need. Every one of these is a way the chunk could look finished and not be: a guard that counts but
+# does not deny, a registry that falls back, a claim believed, a retry that never ends. Run one at a time against
+# the file that owns the property — `tests/factory/test_v4a.py` owns all of them.
+
+[[mutation]]
+id = "M1"
+label = "the guard hook is never rendered -- the policy's permission surface without the write guard behind it"
+file = "packages/isidium-factory/src/isidium/factory/render.py"
+find = '''    if policy.guard == "write-time":'''
+replace = '''    if policy.guard == "never-happens":'''
+
+[[mutation]]
+id = "M2"
+label = "the guard matches a bare prefix -- `surfaces = [src/a.py]` admits `src/a.py.bak`"
+file = "packages/isidium-factory/src/isidium/factory/guard.py"
+find = '''        elif rel == want or rel.startswith(want + "/"):
+            return True'''
+replace = '''        elif rel.startswith(want):
+            return True'''
+
+[[mutation]]
+id = "M3"
+label = "the guard counts the denial but lets the write through"
+file = "packages/isidium-factory/src/isidium/factory/guard.py"
+find = '''    _record(spec, target, reason)
+    print(reason, file=sys.stderr)
+    return BLOCK_EXIT'''
+replace = '''    _record(spec, target, reason)
+    print(reason, file=sys.stderr)
+    return 0'''
+
+[[mutation]]
+id = "M4"
+label = "the change set is believed -- the recompute never compares the result's claim with git's"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    if not res.touched:
+        return
+    claimed, actual = set(res.touched), set(touched)'''
+replace = '''    if res.touched or not res.touched:
+        return
+    claimed, actual = set(res.touched), set(touched)'''
+
+[[mutation]]
+id = "M5"
+label = "the scope check skipped -- a phase that wrote outside the card's surfaces is committed anyway"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            outside = guard.outside(touched, job.allowed_writes)'''
+replace = '''            outside = ()'''
+
+[[mutation]]
+id = "M6"
+label = "the retry is unbounded -- a container that never starts is attempted forever"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''ATTEMPTS: Final = 2'''
+replace = '''ATTEMPTS: Final = 99'''
+
+[[mutation]]
+id = "M7"
+label = "the watchdog never kills -- the timeout is noticed and the container is left running"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            except subprocess.TimeoutExpired:
+                self._kill(job)'''
+replace = '''            except subprocess.TimeoutExpired:
+                pass'''
+
+[[mutation]]
+id = "M8"
+label = "a provider limit is retried as infra -- the same shared window spent twice"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            if _rate_limited(detail):'''
+replace = '''            if False and _rate_limited(detail):'''
+
+[[mutation]]
+id = "M9"
+label = "the token is passed in argv -- readable by anything that can list processes"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            "--env",
+            "CLAUDE_CODE_OAUTH_TOKEN",  # by name: the value never enters `argv`'''
+replace = '''            "--env",
+            f"CLAUDE_CODE_OAUTH_TOKEN={self._token()}",'''
+
+[[mutation]]
+id = "M10"
+label = "an unregistered adapter falls back to the container instead of refusing"
+file = "packages/isidium-factory/src/isidium/factory/adapter.py"
+find = '''    if name == CONTAINER:
+        from .container import Container
+
+        return Container'''
+replace = '''    if name == CONTAINER or name:
+        from .container import Container
+
+        return Container'''
+
+[[mutation]]
+id = "M11"
+label = "the adapter reports its own model -- what ran is taken from the container, not from the signed policy"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''                "model": spec.model,
+                "effort": spec.effort,'''
+replace = '''                "model": raw.get("model", spec.model),
+                "effort": raw.get("effort", spec.effort),'''
+
+[[mutation]]
+id = "M12"
+label = "a failed phase leaves the run open -- what happened after the row is not on the row (R2)"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            if res.outcome != "ok":
+                ledger.finish('''
+replace = '''            if res.outcome == "never-happens":
+                ledger.finish('''
+
+[[mutation]]
+id = "M13"
+label = "the phase row and its event are two transactions, not one"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''        with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
+            self.db.execute(
+                "INSERT INTO phases (run_id, phase, agent, model, effort, prompt_version, tokens, cost_micro,"'''
+replace = '''        with telemetry.span(SPAN, **{"isidium.run_id": run_id}):
+            self.db.execute(
+                "INSERT INTO phases (run_id, phase, agent, model, effort, prompt_version, tokens, cost_micro,"'''
+
+[[mutation]]
+id = "M14"
+label = "the executor policy is defaulted rather than read from the tenant's signed config"
+file = "packages/isidium-factory/src/isidium/factory/adapter.py"
+find = '''        if not isinstance(ex, dict) or not isinstance(agents, dict):'''
+replace = '''        if False:'''
