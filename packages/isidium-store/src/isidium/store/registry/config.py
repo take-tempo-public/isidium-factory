@@ -23,7 +23,7 @@ from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
 SCHEMA_VERSION: Final = (
-    5  # the config schema version this module's cross-key code mirrors (V3: config@5, `[ladder].leaf`)
+    6  # the config schema version this module's cross-key code mirrors (V4a-i: config@6, `[agents]` + `[executor]`)
 )
 
 # 04 §2.1 — scalars first, among themselves in this inventory order
@@ -43,6 +43,8 @@ TABLE_ORDER: Final[tuple[str, ...]] = (
     "ratification",
     "signer",
     "effort",
+    "agents",  # config@6 (V4a-i, Q-V16 (b)): the executor policy under the signature — model + effort per agent
+    "executor",
     "ladder",
     "profiles",
     "shapes",
@@ -64,6 +66,7 @@ TABLE_KEY_ORDER: Final[dict[str, tuple[str, ...]]] = {
     "ratification": ("mode", "software_key_ack", "path", "verdicts_required", "pin"),
     "signer": ("backends",),
     "effort": ("tiers", "budgets"),
+    "executor": ("allowlist", "max_turns", "wall_clock_s", "max_tokens", "guard"),
     "ladder": ("levels",),
     "profiles": ("enabled",),
     "shapes": ("allowed", "default"),
@@ -375,7 +378,8 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
 
     if "toolkit" not in tree:
         _r(rs, "config.type", "toolkit", "required table absent (the four pins)")
-    for name in ("toolkit", "journal", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces"):
+    plain = ("toolkit", "journal", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces")
+    for name in (*plain, "executor"):
         t = tree.get(name)
         if t is None:
             continue
@@ -386,6 +390,7 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
     _v_payload(rs, tree.get("payload"), doc)
     _v_effort_cross(rs, tree.get("effort"), dfl)
     _v_ladder_cross(rs, tree.get("ladder"))
+    _v_agents(rs, tree.get("agents"), doc)
     if isinstance(tree.get("profiles"), dict):
         _set_dup(rs, tree["profiles"].get("enabled"), "profiles.enabled")
     if isinstance(tree.get("surfaces"), dict):
@@ -449,6 +454,42 @@ def _v_ladder_cross(rs: list[Refusal], t: Any) -> None:
     leaf = t.get("leaf")
     if isinstance(leaf, str) and leaf not in KIND_CORE and leaf not in (levels if isinstance(levels, list) else ()):
         _r(rs, "config.enum", "ladder.leaf", f"{leaf!r} is neither a core kind nor a declared ladder level")
+
+
+def _v_agents(rs: list[Refusal], t: Any, doc: SchemaDoc) -> None:
+    """[agents] (config@6, V4a-i): one row per agent kind that makes model calls, each `{model, effort}`.
+
+    The closed set and the per-member rows are read from the adopted schema document, never from a table here — the
+    roster's seven kinds are its list to change, and a default has one home (Y1, C-1). The `lander` is absent from
+    the set because it makes no model calls; naming it would be a row that could never be honoured.
+
+    `model` is checked as a non-empty string and no further: the store holds no referent for a model name, and a
+    frozen enum here would make every new model release need a schema version and a signing act before the factory
+    could run under it. The run record carries the model that actually ran (03 §6), which is where a wrong one is
+    caught."""
+    if t is None:
+        return
+    if not isinstance(t, dict):
+        _r(rs, "config.type", "agents", "expected a table")
+        return
+    dyn = _table_rows(doc, "agents").get("dynamic-table") or {}
+    over = tuple(dyn.get("over") or ())
+    members: Mapping[str, Any] = dyn.get("members") or {}
+    for k, v in t.items():
+        if k not in over:
+            _r(rs, "config.enum", f"agents.{k}", f"{k!r} is not an agent kind that makes model calls {list(over)}")
+            continue
+        if not isinstance(v, dict):
+            _r(rs, "config.type", f"agents.{k}", "expected a per-agent table")
+            continue
+        rows = {r["name"]: r for r in members.get(k, [])}
+        for kk, vv in v.items():
+            row = rows.get(kk)
+            if row is None:
+                _r(rs, "config.enum", f"agents.{k}.{kk}", f"only {sorted(rows)} under an agent")
+                continue
+            if _check_row_value(rs, vv, row, f"agents.{k}.{kk}") and kk == "model" and not str(vv).strip():
+                _r(rs, "config.type", f"agents.{k}.model", "a model name, not empty")
 
 
 def _v_surfaces(rs: list[Refusal], t: Mapping[str, Any]) -> None:
