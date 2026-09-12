@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime as _dt
 import io
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -66,6 +67,10 @@ TODAY = _dt.datetime.now(_dt.UTC).date()
 # phase may write.
 INSIDE = "client/cards/validator.py"
 OUTSIDE = "docs/work/cards/0001-anything.md"
+
+
+# rich paints the help; the text is what this asserts, never the escapes around it.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def refuses(rule: str, fn: Any) -> Refusal:
@@ -640,9 +645,16 @@ def test_a_phase_that_is_not_an_adapters_is_refused(disk: Disk, led: Ledger) -> 
 
 
 def test_the_run_verb_is_the_call_and_a_refusal_is_exit_2(disk: Disk) -> None:
-    """Card 5's S3: the adapter is reachable as a verb and says what it does."""
-    out = CliRunner().invoke(cli_mod.app, ["run", "--help"])
-    assert out.exit_code == 0 and "--run" in out.stdout
+    """Card 5's S3: the adapter is reachable as a verb and says what it does.
+
+    The help is rendered by rich, which wraps to the terminal's width and paints the option names — so the first
+    draft of this assertion passed on a wide workstation terminal and failed on CI's 80 columns, the same class as
+    V3's timing finding. The environment is pinned and the escapes are stripped, so what is asserted is the text
+    the verb prints and not the shape of the terminal it printed into."""
+    env = {"COLUMNS": "200", "NO_COLOR": "1", "TERM": "dumb"}
+    out = CliRunner().invoke(cli_mod.app, ["run", "--help"], env=env)
+    plain = _ANSI.sub("", out.stdout)
+    assert out.exit_code == 0 and "--run" in plain, plain
     bad = CliRunner().invoke(cli_mod.app, ["run", "--tenant", TENANT, "--checkout", str(disk.work), "--run", "r-99"])
     assert bad.exit_code == 2
 
