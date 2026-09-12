@@ -202,7 +202,7 @@ def test_the_journal_row_records_the_credential_and_the_version(svc: tuple[Servi
     for dropped in ("credential", "schema"):
         assert chain.link(prev, {k: v for k, v in content.items() if k != dropped}) != row["h"], dropped
     # `init` adopted the newest config version, and with it the journal version, from the first row
-    assert hz.st.config_tree["schema"] == REGISTRY.newest("config") == 5 and cfg.journal_schema(hz.st.eff) == 2
+    assert hz.st.config_tree["schema"] == REGISTRY.newest("config") == 6 and cfg.journal_schema(hz.st.eff) == 2
     assert hz.st.journal.rows()[0]["schema"] == 2  # the harness's `init` is a direct call: a version, no channel
     assert hz.st.journal.genesis == chain.genesis("journal", hz.st.tenant, 2)
 
@@ -349,7 +349,7 @@ def test_a_config1_tenant_writes_v1_rows_until_the_policy_act_moves_it(tmp_path:
         repo,
         Journal(path, "k6mig"),
         # a pre-K6 toolkit: `init` adopts the newest it has
-        registry_without(tmp_path, "config@2", "config@3", "config@4", "config@5"),
+        registry_without(tmp_path, "config@2", "config@3", "config@4", "config@5", "config@6"),
         clock,
         signer,
         root="docs/work/",
@@ -427,7 +427,7 @@ def test_the_cli_hands_the_owners_file_over_with_its_own_head_as_the_base(tmp_pa
     args = config_write_args(f)
     assert args["path"] == "config.toml" and "history" not in args["document"]
     assert args["base"] == {"seq": hz.st.policy[-1]["seq"], "h": hz.st.policy[-1]["h"]}
-    assert args["document"]["schema"] == REGISTRY.newest("config") == 5 and args["document"]["tenant"] == "k6-cli"
+    assert args["document"]["schema"] == REGISTRY.newest("config") == 6 and args["document"]["tenant"] == "k6-cli"
     (tmp_path / "bad.toml").write_text("this = [is not\n", encoding="utf-8")
     with pytest.raises(Refusal) as refused:
         config_write_args(tmp_path / "bad.toml")
@@ -458,8 +458,8 @@ def test_the_journal_key_is_config2s_and_a_version_this_store_cannot_write_is_re
     assert [r.rule for r in rs] == ["config.pattern"], rs
     rs = cfg.validate_tree({**v2, "chain_opened_under": 3}, REGISTRY)
     assert [(r.rule, r.path) for r in rs] == [("config.range", "chain_opened_under")], rs
-    # `config@5` since V3; `config@4` since L4; `config@3` since K10; still journal@2
-    assert REGISTRY.newest("config") == 5 and REGISTRY.newest("journal") == 2
+    # `config@6` since V4a-i; `config@5` since V3; `config@4` since L4; `config@3` since K10; still journal@2
+    assert REGISTRY.newest("config") == 6 and REGISTRY.newest("journal") == 2
 
 
 # ---- the registration file: re-read on change, fail closed when it will not parse --------------------------------

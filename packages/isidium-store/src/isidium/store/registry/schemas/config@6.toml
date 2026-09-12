@@ -1,0 +1,443 @@
+name = "config"
+version = 6
+form = "toml"
+footer = "history"
+
+[[scalars]]
+name = "schema"
+type = "int"
+required_when = []
+
+# K6: the config schema version this file's policy chain OPENED under -- the `<n>` in the chain's genesis
+# `schema:<n>\npolicy:<tenant>`, which a migration write cannot move (the genesis is what it is). `init` writes it
+# equal to `schema`; a file migrated from config@1 carries 1; immutable thereafter. A config@1 file has no such
+# key because its head `schema` IS the opening version -- no earlier version existed to migrate from.
+[[scalars]]
+name = "chain_opened_under"
+type = "int"
+required_when = []
+range = { min = 1 }
+immutable = true
+
+[[scalars]]
+name = "tenant"
+type = "string"
+required_when = []
+pattern = "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+immutable = true
+
+# K10 (Q16, ruled 2026-09-06): the tracking root is the store's own, fixed at construction (`serve --root`); a
+# signed policy write that moved it left every checkout's hook protecting one root while the store kept writing
+# another (the K7 review, F10). The store refuses the move in code since K7b (`config.root-mismatch`, on the
+# effective root); this is the schema's half of the same ruling -- `config.immutable` on the key, at the same
+# gate every other immutable key answers at. `init` writes the store's root; nothing moves it afterwards.
+[[scalars]]
+name = "root"
+type = "string"
+default = { value = "docs/work/" }
+immutable = true
+
+[[scalars]]
+name = "time_skew"
+type = "int"
+default = { value = 600 }
+range = { min = 30, max = 86400 }
+
+[[scalars]]
+name = "wip"
+type = "int"
+default = { value = 1 }
+range = { min = 1 }
+
+[[scalars]]
+name = "batch_boundary"
+type = "string"
+default = { value = "epic" }
+enum = ["epic", "milestone", "sprint", "on-demand"]
+
+[[scalars]]
+name = "window_reserve"
+type = "int"
+reserved = {  }
+
+[[tables]]
+name = "toolkit"
+
+[[tables.keys]]
+name = "client"
+type = "string"
+required_when = []
+pattern = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+
+[[tables.keys]]
+name = "registry"
+type = "string"
+required_when = []
+pattern = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+
+[[tables.keys]]
+name = "unidata"
+type = "string"
+required_when = []
+pattern = "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+[[tables.keys]]
+name = "object_id"
+type = "string"
+required_when = []
+enum = ["sha1", "sha256"]
+
+[[tables]]
+name = "journal"
+
+[[tables.keys]]
+name = "schema"
+type = "string"
+default = { value = "journal@2" }
+pattern = "^journal@[1-9][0-9]*$"
+
+[[tables]]
+name = "ratification"
+
+[[tables.keys]]
+name = "mode"
+type = "string"
+default = { value = "signed" }
+enum = ["signed", "declared"]
+reserved = { values = ["declared"] }
+
+[[tables.keys]]
+name = "software_key_ack"
+type = "string"
+
+[[tables.keys]]
+name = "path"
+type = "string"
+default = { value = "main" }
+
+[[tables.keys]]
+name = "verdicts_required"
+type = "bool"
+default = { value = true }
+
+[[tables.keys]]
+name = "pin"
+type = "string"
+pattern = "^(ed25519|ecdsa-p256):[0-9a-f]+$"
+
+[[tables]]
+name = "signer"
+dynamic-table = { over = ["remote-totp", "tpm-hello", "yubikey", "signal-approve", "software_key_ack"], members = { remote-totp = [{ name = "poll_interval_ms", type = "int", default = { value = 2000 }, range = { min = 250, max = 60000 } }], tpm-hello = [], yubikey = [], signal-approve = [], software_key_ack = [] }, member-keys = [] }
+
+[[tables.keys]]
+name = "backends"
+type = "array"
+default = { value = ["remote-totp"] }
+range = { min = 1 }
+subset-of = { of = ["remote-totp", "tpm-hello", "yubikey", "signal-approve", "software_key_ack"] }
+
+[[tables]]
+name = "effort"
+
+[[tables.keys]]
+name = "tiers"
+type = "array"
+default = { value = ["default"] }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "budgets"
+type = "table"
+
+# V4a-i (2026-09-12, Q-V16 (b) [owner]): the executor policy, declared once here and RENDERED per adapter
+# (7bdb.4(2): "neither harness's native form is ever the source"). It sits in the tenant's signed policy because
+# model choice is spend, and spend belongs under the one human gate -- the owner ruled it with that option's costs
+# in hand. The factory reads `[agents]` and `[executor]` at dispatch and renders them into whatever the chosen
+# adapter speaks; nothing in either table names a harness.
+#
+# 05 section 1a's table is the defaults. The `lander` has no row: it makes no model calls (05 section 1 --
+# "lander | none"), and its absence here is the statement, not an omission.
+[[tables]]
+name = "agents"
+dynamic-table = { over = ["planner", "plan-author", "plan-refuter", "judge", "builder", "reviewer"], members = { planner = [{ name = "model", type = "string", default = { value = "claude-opus-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "high" } }], plan-author = [{ name = "model", type = "string", default = { value = "claude-opus-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "high" } }], plan-refuter = [{ name = "model", type = "string", default = { value = "claude-sonnet-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "high" } }], judge = [{ name = "model", type = "string", default = { value = "claude-opus-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "high" } }], builder = [{ name = "model", type = "string", default = { value = "claude-opus-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "xhigh" } }], reviewer = [{ name = "model", type = "string", default = { value = "claude-opus-5" } }, { name = "effort", type = "string", enum = ["low", "medium", "high", "xhigh", "max"], default = { value = "xhigh" } }] }, member-keys = [] }
+keys = []
+
+# The executor's guarantees and its budgets. `guard` is the capability row T-C6's open (1) asked for as data rather
+# than a standing unknown: `write-time` is the ceiling every adapter must meet to be registered, `post-hoc` the
+# declared degradation an adapter whose runtime cannot host the hook must announce (05 section 3, owner-ratified
+# 2026-08-27 -- "declared degradation, never silent"). A tenant whose policy says `post-hoc` has said so under the
+# signature; nothing degrades quietly.
+[[tables]]
+name = "executor"
+
+# The tools the phase may call at all. Everything absent from this list is denied by construction, not by
+# instruction -- the allowlist-by-construction posture the pi assessment named (7bdb.2).
+[[tables.keys]]
+name = "allowlist"
+type = "array"
+default = { value = ["Read", "Glob", "Grep", "Edit", "Write", "Bash", "TodoWrite"] }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "max_turns"
+type = "int"
+default = { value = 40 }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "wall_clock_s"
+type = "int"
+default = { value = 3600 }
+range = { min = 60, max = 86400 }
+
+# No default: absent is "no token ceiling for this tenant", and the run's own tokens are recorded either way
+# (03 section 6). `[payload.context].max_bytes` bounds what goes in; this one bounds what the phase may spend.
+[[tables.keys]]
+name = "max_tokens"
+type = "int"
+range = { min = 1 }
+
+[[tables.keys]]
+name = "guard"
+type = "string"
+default = { value = "write-time" }
+enum = ["write-time", "post-hoc"]
+
+[[tables]]
+name = "ladder"
+
+[[tables.keys]]
+name = "levels"
+type = "array"
+default = { value = [] }
+
+# V3 (2026-09-11, Q-V11 (a) [owner]): the dispatchable leaf — the kind the projection labels `ready` and the
+# factory's picker takes. Q-V6 [owner]: *"each tenant's ladder declares its dispatchable leaf"*; `story` is
+# tenant #0's, not the rule. A core kind or a declared `levels` member (`_v_ladder_cross`).
+[[tables.keys]]
+name = "leaf"
+type = "string"
+default = { value = "story" }
+
+[[tables]]
+name = "profiles"
+
+[[tables.keys]]
+name = "enabled"
+type = "array"
+default = { value = [] }
+subset-of = { of = ["sprint", "milestone"] }
+
+[[tables]]
+name = "shapes"
+dynamic-table = { key-grammar = "^[a-z][a-z0-9-]*$", declares = "shape", members = { ears = [{ name = "weak_words", type = "array", default = { value = ["should", "may", "might", "could", "quickly", "easily", "efficiently", "appropriate", "adequate", "sufficient"] } }], bdd = [], classic = [], task = [], spike = [] }, member-keys = [] }
+
+[[tables.keys]]
+name = "allowed"
+type = "array"
+default = { value = ["bdd", "task", "spike"] }
+subset-of = { ref = "shape-enum" }
+
+[[tables.keys]]
+name = "default"
+type = "string"
+default = { value = "bdd" }
+subset-of = { ref = "shapes.allowed" }
+
+[[tables]]
+name = "surfaces"
+
+[[tables.keys]]
+name = "deny"
+type = "array"
+default = { value = [".github/", ".gitlab/", ".gitlab-ci.yml", ".githooks/", ".git/", ".isidium/"] }
+
+[[tables]]
+name = "payload.context"
+
+[[tables.keys]]
+name = "depth"
+type = "int"
+default = { value = 2 }
+range = { min = 0, max = 8 }
+
+[[tables.keys]]
+name = "max_bytes"
+type = "int"
+default = { value = 16384 }
+range = { min = 1024, max = 1048576 }
+
+[[tables]]
+name = "runners"
+dynamic-table = { key-grammar = "^[a-z][a-z0-9-]*$", declares = "scenario-kind", value-type = "string" }
+
+[[tables.keys]]
+name = "test"
+type = "string"
+default = { value = "pytest" }
+
+[[tables.keys]]
+name = "command"
+type = "string"
+default = { value = "shell" }
+
+[[tables.keys]]
+name = "http"
+type = "string"
+default = { value = "http" }
+
+[[tables.keys]]
+name = "file"
+type = "string"
+default = { value = "file" }
+
+[[tables]]
+name = "board"
+
+[[tables.keys]]
+name = "commit"
+type = "bool"
+default = { value = true }
+
+[[tables]]
+name = "inbox"
+
+[[tables.keys]]
+name = "max_per_run"
+type = "int"
+default = { value = 10 }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "max_per_actor_per_day"
+type = "int"
+range = { min = 1 }
+
+[[tables]]
+name = "prioritization"
+
+[[tables.keys]]
+name = "time_criticality"
+type = "int"
+default = { value = 350 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "unblocking"
+type = "int"
+default = { value = 300 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "resume"
+type = "int"
+default = { value = 150 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "aging"
+type = "int"
+default = { value = 100 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "batch"
+type = "int"
+default = { value = 100 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "risk"
+type = "int"
+default = { value = 0 }
+range = { min = 0, max = 1000 }
+
+[[tables.keys]]
+name = "expedite_limit"
+type = "int"
+default = { value = 1 }
+range = { min = 0 }
+
+[[tables.keys]]
+name = "expedite_bump"
+type = "int"
+default = { value = 1 }
+range = { min = 0 }
+
+[[tables.keys]]
+name = "aging_horizon_days"
+type = "int"
+default = { value = 30 }
+range = { min = 1 }
+
+[[tables.keys]]
+name = "job_size"
+type = "int"
+reserved = {  }
+
+[[tables]]
+name = "origin"
+
+[[tables.keys]]
+name = "card"
+type = "array"
+default = { value = ["session", "review", "planner", "suggestion", "digest"] }
+subset-of = { ref = "origin-enum" }
+
+[[tables.keys]]
+name = "inbox"
+type = "array"
+default = { value = ["run", "planner", "session", "review", "digest"] }
+subset-of = { ref = "origin-enum" }
+
+[[tables]]
+name = "extensions"
+dynamic-table = { key-grammar = "[a-zA-Z0-9_-]+", member-keys = [{ name = "type", type = "string", required_when = [], enum = ["string", "int", "bool", "date", "array", "table"] }, { name = "class", type = "string", required_when = [], enum = ["gated", "tending", "log"] }, { name = "required_when", type = "array" }, { name = "enum", type = "array" }] }
+keys = []
+
+# L4 (2026-09-09): config@4 adopts the sidecar@2 / sidecar-events@2 documents in the default manifest rows;
+# nothing else moved.
+# V3 (2026-09-11): config@5 adopts sidecar-events@3 (the `ratified` kind) and names itself; `[ladder].leaf`
+# is the one new key.
+# V4a-i (2026-09-12): config@6 names itself; `[agents]` and `[executor]` are the new tables. The sidecar
+# documents do not move.
+[[tables]]
+name = "governed"
+default = { value = [{ path = "cards/*.md", schema = "card@1", write = ["owner", "contributor"] }, { path = "suggestions.jsonl", schema = "inbox@1", write = ["owner", "contributor", "lander"] }, { path = "state.json", schema = "sidecar@2", write = ["lander"] }, { path = "state/history.jsonl", schema = "sidecar-events@3", write = ["lander"] }, { path = "BOARD.md", schema = "board@1", write = ["lander"] }, { path = "config.toml", schema = "config@6", write = ["owner"] }] }
+array-of-tables = true
+
+[[tables.keys]]
+name = "path"
+type = "string"
+required_when = []
+
+[[tables.keys]]
+name = "schema"
+type = "string"
+required_when = []
+pattern = "^[a-z][a-z0-9-]*@[1-9][0-9]*$"
+
+[[tables.keys]]
+name = "write"
+type = "array"
+required_when = []
+range = { min = 1 }
+subset-of = { of = ["owner", "contributor", "lander"] }
+
+[[tables.keys]]
+name = "read"
+type = "array"
+subset-of = { of = ["owner", "contributor", "lander"] }
+
+[[tables]]
+name = "grants"
+reserved = {  }
+keys = []
+
+[[tables]]
+name = "history"
+
+[[tables.keys]]
+name = "entries"
+type = "array"
+required_when = []

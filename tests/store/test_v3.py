@@ -190,7 +190,15 @@ def test_a_config4_tenant_is_handed_no_ratified_line_and_keeps_its_story_leaf(tm
     repo = MemGit()
     repo.commit(dict(REF_FILES), "seed@example", "2026-08-01T00:00:00Z", "seed")
     path = tmp_path / "journal.sqlite"
-    v1 = Store("v3mig", repo, Journal(path, "v3mig"), registry_without(tmp_path, "config@5"), clock, signer, root=ROOT)
+    v1 = Store(
+        "v3mig",
+        repo,
+        Journal(path, "v3mig"),
+        registry_without(tmp_path, "config@5", "config@6"),
+        clock,
+        signer,
+        root=ROOT,
+    )
     v1.init(OWNER, software_key_ack="ok for the migration test")
     r = v1.write(NewCard("before"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER)
     assert r.id is not None

@@ -75,7 +75,7 @@ def test_opening_a_registry_reads_nothing_and_installed_costs_no_parse(schemas: 
         held = {ref for ref in refs if reg.has(ref)}
     assert parsed == [], f"opening a registry parsed {parsed}"
     on_disk = {p.name.removesuffix(".toml") for p in schemas.glob("*.toml")}
-    assert refs == frozenset(on_disk) == held and len(refs) == 17, sorted(refs)
+    assert refs == frozenset(on_disk) == held and len(refs) == 18, sorted(refs)
 
 
 def test_the_shipped_registry_is_opened_the_same_way() -> None:
@@ -85,7 +85,7 @@ def test_the_shipped_registry_is_opened_the_same_way() -> None:
         reg = Registry.shipped()
         refs = reg.installed
     assert parsed == [], f"opening the shipped registry parsed {parsed}"
-    assert {"registry@1", "config@1", "card@1", "config@5", "sidecar-events@3"} <= refs and len(refs) == 17, sorted(
+    assert {"registry@1", "config@1", "card@1", "config@6", "sidecar-events@3"} <= refs and len(refs) == 18, sorted(
         refs
     )
 
@@ -191,7 +191,7 @@ def test_a_toml_the_registry_cannot_name_is_refused_when_the_directory_is_listed
 
     # `INSTALLED` is not a `*.toml`, so the file `init` writes beside the schemas is not caught by this
     (schemas / "notes.toml").unlink()
-    assert (schemas / "INSTALLED").is_file() and len(Registry.from_directory(schemas).installed) == 17
+    assert (schemas / "INSTALLED").is_file() and len(Registry.from_directory(schemas).installed) == 18
 
 
 def test_the_eager_constructor_still_refuses_a_registry_with_no_bytes() -> None:

@@ -1,0 +1,76 @@
+# The run container — one phase of one run, and nothing else [V4a-i, T-C6's headless CLI-in-container adapter].
+#
+# **The contract with the factory is two files.** `/run/job.json` comes in (the typed `RunJob`), `/run/result.json`
+# goes out (the typed `PhaseResult`), and `/work` is the run's worktree. Nothing about podman, the forge or the
+# store crosses that boundary in either direction — which is the only reason `adapter.py` can be free of harness
+# words. What happens between the two files is this image's business.
+#
+# **The image holds no credential and no identity.** The model token arrives in the environment at `podman run`
+# (by name, never in `argv`); the git identity is the wrapper's, outside, because *"the model never holds git
+# credentials"* (7j.5) and the builder holds no store credential at all (W9). There is no `git push` in here and
+# nothing to push with.
+#
+# **The write guard runs inside.** `settings.json`, rendered by the factory from the tenant's signed `[executor]`
+# policy, points a PreToolUse hook at `python -m isidium.factory.guard`, which reads `/run/allow.json` — the card's
+# own `surfaces`. The factory package is installed here for exactly that: one implementation of the rule, used by
+# the hook inside and the recompute outside (see packages/isidium-factory/.../guard.py).
+#
+# **The base is pinned by digest**, the same multi-arch index the store's image pins, for the same reason: a tag is
+# a moving name and two builds of one commit must be one image (K5, ruling 7bg.5). Renovate proposes the bump.
+
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS build
+COPY --from=ghcr.io/astral-sh/uv:0.12.10@sha256:2bb3ebca0a796a155094a27773d290c4b074572e6107f171d88d086682fd2500 /uv /usr/local/bin/uv
+WORKDIR /src
+COPY pyproject.toml uv.lock /src/
+COPY packages /src/packages
+# The factory's runtime dependencies from the lock, every version `==` and every artifact carrying its sha256, plus
+# the factory's own wheel — the store's build stage, narrowed to the other member. `--locked` fails the build on a
+# manifest that drifted from the lock rather than shipping a resolution nobody recorded.
+RUN uv export --locked --no-dev --no-emit-workspace --package isidium-factory \
+      --format requirements-txt -o /wheels/requirements.txt \
+ && uv build --wheel --package isidium-factory --out-dir /wheels \
+ && uv build --wheel --package isidium-store --out-dir /wheels
+
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+
+# **No default for the harness version** (C-1: no default lives in code, and a container is code). Which Claude Code
+# the runs are executed by is a decision — it is recorded per run as `harness_version` and it decides what the
+# conformance suite was green against — so the build refuses rather than silently taking whatever `latest` is on
+# the day. `deploy/README.md` says how to read the current one; Renovate proposes the bump like any other pin.
+ARG CLAUDE_CODE_VERSION
+RUN test -n "$CLAUDE_CODE_VERSION" || { echo "build with --build-arg CLAUDE_CODE_VERSION=<version>" >&2; exit 2; }
+
+# git is the phase's own tool for reading the tree it works in — never for pushing, and there is no credential here
+# to push with. nodejs is what the harness runs on.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates nodejs npm \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+ && npm cache clean --force
+
+COPY --from=build /wheels /wheels
+RUN python -m pip install --no-cache-dir --require-hashes -r /wheels/requirements.txt \
+ && python -m pip install --no-cache-dir --no-deps /wheels/isidium_store-*.whl /wheels/isidium_factory-*.whl \
+ && rm -rf /wheels
+
+# The prompts are code (7bd.11, ruled 2026-08-26: *"repo now"* — `prompts/<agent>/<version>.md`, changed by pull
+# request, and the run record names the version it ran). They are baked in rather than mounted so that the image and
+# the prompt version move together: an image is one harness and one prompt set, and the ledger records both.
+COPY prompts /opt/isidium/prompts
+
+# The phase runs as its own unprivileged user. The worktree is bind-mounted writable and is the only thing it may
+# write to — and even there, only inside the card's surfaces, which the guard enforces at write time.
+RUN useradd --system --create-home --home-dir /home/runner runner \
+ && mkdir -p /work /run \
+ && chown -R runner:runner /work /run /home/runner
+COPY deploy/runner-entrypoint.sh /usr/local/bin/isidium-runner
+RUN chmod 0755 /usr/local/bin/isidium-runner
+
+ENV ISIDIUM_PROMPTS=/opt/isidium/prompts \
+    HOME=/home/runner
+WORKDIR /work
+USER runner
+
+# `exec`ed as PID 1, so the watchdog's `podman kill --signal TERM` reaches the harness itself and not a shell that
+# would swallow it (K6b's lesson, which cost tenant #0 a finding).
+ENTRYPOINT ["/usr/local/bin/isidium-runner"]
