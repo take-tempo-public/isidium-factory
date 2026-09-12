@@ -16,13 +16,13 @@ the adopted schema's default — or the caller's, and a checkout with neither is
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import IO, Any, Final
 
 from isidium.store.client.config import CLIENT_FILE, ClientConfig
 from isidium.store.core import telemetry
-from isidium.store.core.grammar import parse_config, parse_markdown
+from isidium.store.core.grammar import Document, parse_config, parse_markdown
 from isidium.store.core.refs import Ref
 from isidium.store.core.refusal import Refusal
 from isidium.store.registry import docschema
@@ -92,6 +92,33 @@ def card_path(repo: Path, rev: str, root: str, card_id: int) -> str:
     if len(hits) != 1:
         raise Refusal("factory.unknown-card", str(card_id), f"{len(hits)} cards with that id at {rev}")
     return hits[0]
+
+
+def heads(repo: Path, rev: str, root: str, ids: Iterable[int], registry: Registry) -> dict[int, Document]:
+    """Every named card's document at `rev` — **two spawns however many cards** [V3]: one `ls-tree` of `cards/`
+    (the id prefixes, not the parses — C-13) and one `cat-file --batch` for all of them. A card the tree does not
+    hold is `factory.unknown-card`: the ready-view and the checkout disagree, and the fetch is what is stale."""
+    want = list(dict.fromkeys(ids))
+    if not want:
+        return {}
+    r = subprocess.run(
+        ["git", "ls-tree", "--name-only", rev, f"{root}cards/"], cwd=repo, capture_output=True, text=True, check=False
+    )
+    if r.returncode != 0:
+        raise Refusal("factory.git", rev, r.stderr.strip())
+    by_prefix: dict[str, list[str]] = {}
+    for ln in r.stdout.splitlines():
+        by_prefix.setdefault(ln.rsplit("/", 1)[-1][:5], []).append(ln)
+    schema = docschema.doc_schema(registry, CARD_SCHEMA)
+    out: dict[int, Document] = {}
+    with Cat(repo) as cat:
+        for cid in want:
+            hits = by_prefix.get(f"{cid:04d}-", [])
+            got = cat.get(f"{rev}:{hits[0]}") if len(hits) == 1 else None
+            if got is None:
+                raise Refusal("factory.unknown-card", str(cid), f"{len(hits)} cards with that id at {rev}")
+            out[cid] = parse_markdown(got[2].decode("utf-8"), schema)
+    return out
 
 
 def root_of(repo: Path, root: str | None) -> str:

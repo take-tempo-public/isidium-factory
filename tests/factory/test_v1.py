@@ -115,7 +115,10 @@ def bare_inputs(head: dict[str, Any], refs: dict[str, tuple[str, bytes]], hz: Ha
 
 # ---- the pure function -------------------------------------------------------------------------------------------------
 
-GOLDEN = "cad63a82"  # the first eight hex digits of the payload hash over L5's graph — pinned by the first run
+# The first eight hex digits of the payload hash over L5's graph — pinned by the first run as `cad63a82`; moved by V3
+# (config@5: the pinned tree's `schema` 5 and the config subset's `ladder.leaf`) — the same inputs with `schema` 4 and
+# no leaf still give `cad63a82`, measured 2026-09-11.
+GOLDEN = "88fe296d"
 
 
 def test_the_same_inputs_give_the_same_hash_and_the_value_round_trips_the_card() -> None:

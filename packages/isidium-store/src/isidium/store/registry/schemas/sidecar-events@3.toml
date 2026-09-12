@@ -1,0 +1,33 @@
+name = "sidecar-events"
+version = 3
+form = "jsonl"
+
+# 03 §6 — `state/history.jsonl`: one event per line, a tagged union on `kind`; the per-kind members (`class` on
+# `failed`, `run_id`, `closure_id`, …) are code (core/events.py) — a declared limit of the nine-member vocabulary.
+# L4 (2026-09-09, finding 2): the two batch kinds (`merged`, `landed`) name no card, so `card` is required for the
+# fourteen card-scoped kinds only.
+# V3 (2026-09-11, F-c): `ratified` — the fingerprint's birth, observed by the land's walk at a verified
+# ratification and never carried by a run report; its members (`seq`, `commit`, `refs_resolved`) are code.
+
+[[record]]
+name = "id"
+type = "string"
+required_when = []
+pattern = "e[1-9][0-9]*"
+
+[[record]]
+name = "at"
+type = "string"
+required_when = []
+
+[[record]]
+name = "card"
+type = "int"
+required_when = [{ field = "kind", in = ["dispatched", "parked", "answered", "failed", "disputed", "complete", "closed", "reverted", "demoted", "withdrawn", "acked", "accepted", "reopened", "question", "ratified"] }]
+range = { min = 1 }
+
+[[record]]
+name = "kind"
+type = "string"
+required_when = []
+enum = ["dispatched", "parked", "answered", "failed", "disputed", "complete", "closed", "reverted", "demoted", "withdrawn", "acked", "accepted", "reopened", "question", "ratified", "merged", "landed"]

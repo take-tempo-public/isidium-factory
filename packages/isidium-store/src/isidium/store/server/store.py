@@ -32,6 +32,7 @@ from ..core.grammar import (
     parse_jsonl,
     parse_markdown,
 )
+from ..core.refs import Ref
 from ..core.refusal import Refusal, ValidationRefusal
 from ..registry import card as card_mod
 from ..registry import config as cfg
@@ -1250,11 +1251,57 @@ class Store:
             self.gated_x(),
             self.verify_entry,
             integrity,  # type: ignore[arg-type]
-            frozenset(self.software_fprs),
+            self._software_fprs(),
             builds,
             str(self.card_defaults().get("kind", "")),
             self._kids,
+            self._leaf(),
+            self._batch_fprs(),
         )
+
+    def _batch_fprs(self) -> dict[int, str]:
+        """Each sitting's manifest seq → the key fingerprint its one signature carries (1.15), for the grade of the
+        members, which carry no `sig` of their own. One pass over the policy chain, which holds one entry per act."""
+        out: dict[int, str] = {}
+        for m in self.policy:
+            sig = m.get("sig")
+            if m.get("act") == "batch-manifest" and isinstance(sig, str):
+                try:
+                    out[int(m["seq"])] = chain.parse_sig(sig)[1]
+                except Refusal:
+                    continue
+        return out
+
+    def _leaf(self) -> str:
+        """The dispatchable leaf [V3, Q-V11 (a)]: the effective `[ladder].leaf`. A tenant still on config@4 has no
+        such key, and its projection keeps the rule it has always had — the leaf the newest shipped schema declares
+        by default (`story`), read from that document, never written in code (C-1). A registry with no version that
+        declares the key (a toolkit older than config@5) answers no leaf, and labels nothing `ready`: fail-closed."""
+        ladder = self.eff.get("ladder") or {}
+        if "leaf" in ladder:
+            return str(ladder["leaf"])
+        shipped = self.registry.defaults_of(f"config@{self.registry.newest('config')}").get("ladder") or {}
+        return str(shipped["leaf"]) if "leaf" in shipped else ""
+
+    def _software_fprs(self) -> frozenset[str]:
+        """The keys whose signatures are software-grade (03 §1.12) — **derived from the policy, not remembered** [V3,
+        F-b]: the effective `[ratification]` carrying `software_key_ack` (the owner's waiver words) makes the pinned
+        ratifier key software-grade. Until V3 only `init()` added it, on the instance that ran `init`, so a store
+        loaded from disk — every container restart — read every card as not software-grade and the factory's
+        `dispatch.software-grade` refusal could never fire. With identity enabled there is no pin and the owner's keys
+        are the policy chain's `binding` entries; when `software_key_ack` is the tenant's only signer backend, every
+        signature is software-grade (`signer.py`), so every bound key is. A tenant with a second backend beside it
+        grades only the pin: which bound key a hardware backend holds is the realm's to say, not this file's."""
+        fprs = {f for f in self.software_fprs if f}
+        rat = self.eff.get("ratification") or {}
+        if not rat.get("software_key_ack"):
+            return frozenset(fprs)
+        pin = str(rat.get("pin", ""))
+        if pin.startswith("ed25519:"):
+            fprs.add(pin.split(":", 1)[1])
+        if list((self.eff.get("signer") or {}).get("backends") or []) == ["software_key_ack"]:
+            fprs.update(str(e["ref"]["key_fpr"]) for e in self.policy if e.get("act") == "binding")
+        return frozenset(fprs)
 
     def projections(self) -> dict[int, status.Projection]:
         return status.project(self._inputs())
@@ -1274,12 +1321,25 @@ class Store:
         # inside `show queue` and `show board`, the moment a sidecar exists.
         return self.repo.merges_since(self.state.get("ledger_cursor"))
 
-    def dispatch(self, card_id: int) -> dict[str, int]:
-        """The factory's dispatch precondition on this tenant: fail-closed while a land is pending (X2 pin 2)."""
+    def dispatch(self, card_id: int | None = None) -> dict[str, Any]:
+        """The factory's dispatch reads on this tenant [V3, F-a]: fail-closed while a land is pending (X2 pin 2), then
+        the ready view — every card the projection labels `ready` (the tenant's leaf, ratified, unguarded: Q-V6,
+        Q-V11) with its software-grade flag (03 §1.12), from ONE projection pass (T-A4's *"one computation, two
+        consumers"*: the board and the picker read the same labels). With `card_id`, that card's live `check` and
+        its landed fingerprint ride the same answer — the pick's second call — so the lander holds one grant for
+        the pick, not `check` beside it. The ordering is the factory's (`isidium.factory.ordering`), not this."""
         n = len(self.merges_pending())
         if n:
             raise Refusal("dispatch.pending-land", "", f"merged, not landed: {n}")
-        return {"dispatched": card_id}
+        prs = self.projections()
+        out: dict[str, Any] = {
+            "ready": [{"id": cid, "software_grade": p.software_grade} for cid, p in sorted(prs.items()) if p.ready]
+        }
+        if card_id is not None:
+            out["card"] = card_id
+            out["check"] = self.check(card_id)
+            out["fingerprint"] = self.state.get("cards", {}).get(f"{card_id:04d}", {}).get("fingerprint")
+        return out
 
     SIDECAR_PATHS = ("state.json", "state/history.jsonl")
     INBOX_PATH = "suggestions.jsonl"
@@ -1499,7 +1559,7 @@ class Store:
         parsed: dict[str, Document] = {}
         rows: dict[str, list[dict[str, Any]]] = {}
         reasons: dict[str, dict[str, set[str]]] = {}
-        acts: list[events_mod.Event] = []
+        observed: list[tuple[tuple[int, Mapping[str, Any]], str, Document | None]] = []
         for c, rp, (bb, ab) in touched:
             path = rp[len(self.root) :]
             if path not in rows:
@@ -1508,7 +1568,18 @@ class Store:
             for r in rs:
                 reasons.setdefault(path, {}).setdefault(r, set()).add(c.sha)
             if entry is not None and not rs:
-                acts.extend(self._act_events(entry))
+                observed.append((entry, c.sha, parsed.get(ab) if ab else None))
+        # The fingerprints' blobs [V3, F-c]: one `ls-tree` per ratifying commit for every ref its ratifications cite
+        # — a sitting of N cards is one commit and one spawn, where `oid_of` per ref was N x refs `rev-parse`s.
+        cited: dict[str, set[str]] = {}
+        if self._observes("ratified"):
+            for entry, sha, doc in observed:
+                if self._ratifies(entry[1], doc):
+                    cited.setdefault(sha, set()).update(self._ref_paths(doc))
+        trees = {sha: self.repo.oids_at(sha, sorted(paths)) for sha, paths in cited.items()}
+        acts: list[events_mod.Event] = []
+        for entry, sha, doc in observed:
+            acts.extend(self._act_events(entry, sha, doc, trees.get(sha)))
         clean = not any(sha in seen for by in reasons.values() for shas in by.values() for sha in shas)
         return {p: {r: sorted(s) for r, s in sorted(by.items())} for p, by in sorted(reasons.items())}, acts, clean
 
@@ -1553,21 +1624,82 @@ class Store:
         entry = (cid, after.history[-1]) if cid is not None and after is not None and after.history else None
         return set(rs), entry
 
-    def _act_events(self, entry: tuple[int, Mapping[str, Any]]) -> list[events_mod.Event]:
+    def _observes(self, kind: str) -> bool:
+        """Whether the adopted event file's schema declares `kind` — `ratified` exists from `sidecar-events@3`
+        (config@5's manifest row): a tenant still on config@4 is never handed a line its own schema would refuse."""
+        row = self.row_for(self.SIDECAR_PATHS[1])
+        doc = self.registry.get(str(row["schema"]))
+        kinds: list[str] = next((r.get("enum", []) for r in doc.get("record", []) if r.get("name") == "kind"), [])
+        return kind in kinds
+
+    @staticmethod
+    def _ratifies(e: Mapping[str, Any], doc: Document | None) -> bool:
+        """A ratification the fingerprint records: a `ratified` entry, or the `created` entry of a card born ratified
+        in a sitting (03 §1.12) — the same two acts `status._reference_build` reads as the reference."""
+        act = e.get("act")
+        return act == "ratified" or (act == "created" and doc is not None and doc.head.get("status") == "ratified")
+
+    @staticmethod
+    def _ref_paths(doc: Document | None) -> list[str]:
+        """The paths a card's `refs` cite, in the written order; a ref whose grammar fails cites none (the door
+        refused it at ratification)."""
+        out: list[str] = []
+        for text in (doc.head.get("refs") or []) if doc is not None else []:
+            try:
+                p = Ref.parse(str(text)).path
+            except Refusal:
+                continue
+            if p not in out:
+                out.append(p)
+        return out
+
+    def _act_events(
+        self,
+        entry: tuple[int, Mapping[str, Any]],
+        commit: str | None = None,
+        doc: Document | None = None,
+        tree: Mapping[str, str | None] | None = None,
+    ) -> list[events_mod.Event]:
         """The ledger's own transition for a card act the walk observed (03 §6: *"carrying the card entry's `seq`
         as its reference — never the entry's content"*): only an entry newer than the landed `history_head` (a
         re-walk of the same range emits nothing twice), only a verified signature, and only when the landed state
         holds what the act transitions — a run to unpark, a closed execution to reopen, a run in flight to abandon,
         a landed closure to mark. In v1b nothing is dispatched, so the live tenant emits none; the mechanism is
-        exercised by a report that parks a card first."""
+        exercised by a report that parks a card first.
+
+        **And a ratification** [V3, F-c]: a verified ratification (`_ratifies`) on a tenant whose event schema has
+        the kind is the fingerprint's birth — a `ratified` event with the entry's `seq`, the commit, and every ref's
+        blob at that commit (`tree`, the caller's one `ls-tree` for the commit), through the same `refs.resolve`
+        the door ran: the blobs the owner signed against, which `dispatch.ref-drifted` compares."""
         cid, e = entry
         act = str(e.get("act", ""))
-        if act not in self.ACT_EVENTS or not (chain.is_signed(e) and self.verify_entry(e)):
+        ratification = commit is not None and self._ratifies(e, doc) and self._observes("ratified")
+        if (act not in self.ACT_EVENTS and not ratification) or not (chain.is_signed(e) and self.verify_entry(e)):
             return []
         sc = self.state.get("cards", {}).get(f"{cid:04d}", {})
         head = sc.get("history_head") or {}
         if int(e["seq"]) <= int(head.get("seq", 0)):
             return []
+        if ratification:
+            at = tree or {}
+            resolved, _rs = refs_mod.resolve(
+                [str(r) for r in ((doc.head.get("refs") or []) if doc is not None else [])],
+                lambda p: at.get(p),
+                lambda p: (bool(self.root) and p.startswith(self.root)) or self.is_governed_repo_path(p),
+            )
+            return [
+                events_mod.parse_event(
+                    {
+                        "kind": "ratified",
+                        "card": cid,
+                        "seq": int(e["seq"]),
+                        "at": str(e["at"]),
+                        "commit": commit,
+                        "refs_resolved": resolved,
+                        "ext_schema_hash": canon.ext_schema_hash(self.config_tree),
+                    }
+                )
+            ]
         execution = sc.get("execution")
         wanted = {
             "answered": execution == "parked",

@@ -436,7 +436,7 @@ def test_config3_makes_root_immutable_and_a_config2_tenant_moves_by_one_signed_a
         "k10mig",
         repo,
         Journal(path, "k10mig"),
-        registry_without(tmp_path, "config@3", "config@4"),
+        registry_without(tmp_path, "config@3", "config@4", "config@5"),
         clock,
         signer,
         root="docs/work/",

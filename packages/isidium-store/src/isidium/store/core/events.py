@@ -112,6 +112,28 @@ class Accepted(_Event):
     ext_schema_hash: str | None = None
 
 
+class RefResolved(BaseModel):
+    """One `refs_resolved` row (03 §1.14): the ref's path and its blob id at the ratifying commit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    blob: str
+
+
+class Ratified(_Event):
+    """The fingerprint's birth [V3, 2026-09-11, F-c ruled]: observed by the land's walk at a verified ratification —
+    a `ratified` entry, or a card born ratified in a sitting — carrying the entry's `seq`, the commit that wrote it
+    and the blob of every ref at that commit. Never a run report's to carry (`parse_report` refuses it): what the
+    fingerprint records is what the owner signed, and the lander does not get to say what that was."""
+
+    kind: Literal["ratified"]
+    seq: int = Field(ge=1)
+    commit: str
+    refs_resolved: list[RefResolved] = Field(default_factory=list)
+    ext_schema_hash: str | None = None
+
+
 class Reopened(_Event):
     kind: Literal["reopened"]
     seq: int | None = Field(default=None, ge=1)
@@ -136,7 +158,8 @@ Event = Annotated[
     | Acked
     | Accepted
     | Reopened
-    | Question,
+    | Question
+    | Ratified,
     Field(discriminator="kind"),
 ]
 
@@ -155,8 +178,11 @@ KINDS: Final[tuple[str, ...]] = (
     "accepted",
     "reopened",
     "question",
+    "ratified",
 )
 BATCH_KINDS: Final[tuple[str, ...]] = ("merged", "landed")  # in the schema's enum, not in the union — see the docstring
+# Kinds only the land's own walk emits (V3): a run report carrying one is refused `event.kind`.
+OBSERVED_KINDS: Final[tuple[str, ...]] = ("ratified",)
 
 # Which kinds set the current execution status — one field, not a list (03 §6). `failed` sets it with its class.
 _EXECUTION: Final[Mapping[str, str]] = {
@@ -214,6 +240,9 @@ def parse_event(raw: Mapping[str, Any]) -> Event:
 
 def parse_report(raw: Mapping[str, Any]) -> RunReport:
     """The report as a whole; events are parsed one by one first so their refusals name the event, not the list."""
+    for e in raw.get("events", []):
+        if isinstance(e, Mapping) and e.get("kind") in OBSERVED_KINDS:
+            raise Refusal("event.kind", str(e["kind"]), "observed by the land's walk at a signed act, never reported")
     events = [parse_event(e) for e in raw.get("events", []) if isinstance(e, Mapping)]
     try:
         return RunReport(run_id=str(raw.get("run_id", "")), events=events, suggestions=raw.get("suggestions", []))
@@ -296,13 +325,26 @@ def fold(
                         "at": e["at"],
                     }
                 )
+        elif k == "ratified":
+            # The fingerprint's birth [V3, F-c]: a re-ratification replaces it whole.
+            c["fingerprint"] = {
+                "ratified_seq": int(e["seq"]),
+                "commit": e["commit"],
+                "refs_resolved": [dict(r) for r in e.get("refs_resolved", [])],
+                "ext_schema_hash": e.get("ext_schema_hash"),
+                "validator_version": "v3",
+            }
         elif k == "accepted" and e.get("ratified_seq"):
+            # An acceptance of the ratification the fingerprint already records keeps its `refs_resolved` — the
+            # blobs are the ratification's, not the acceptance's; one of another ratification starts over (L1's).
+            prior = c["fingerprint"] or {}
+            same = prior.get("ratified_seq") == int(e["ratified_seq"])
             c["fingerprint"] = {
                 "ratified_seq": int(e["ratified_seq"]),
-                "commit": e.get("commit"),
-                "refs_resolved": [],
-                "ext_schema_hash": e.get("ext_schema_hash"),
-                "validator_version": "l1",
+                "commit": e.get("commit") or (prior.get("commit") if same else None),
+                "refs_resolved": list(prior.get("refs_resolved", [])) if same else [],
+                "ext_schema_hash": e.get("ext_schema_hash") or (prior.get("ext_schema_hash") if same else None),
+                "validator_version": prior.get("validator_version", "l1") if same else "l1",
             }
     for key, h in heads.items():
         cards.setdefault(key, _new_card())["history_head"] = dict(h)

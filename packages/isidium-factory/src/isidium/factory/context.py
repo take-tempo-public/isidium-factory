@@ -42,6 +42,7 @@ from isidium.store.registry.loader import Registry
 
 from .checkout import Cat, root_of
 from .registration import tenant_client
+from .tenant import Registration
 
 SPAN: Final = "isidium.factory.context.load"
 GIT_SPAWNS: Final = "isidium.git.spawns"
@@ -184,10 +185,16 @@ class TenantContext:
     toolkit: ToolkitPins
     governed: tuple[Mapping[str, Any], ...]
     registry: Registry = field(repr=False, compare=False)
+    # V3: the factory's registration (`tenant.toml`, Q-V12) — `None` for a tenant the factory does not dispatch on —
+    # and the effective config at `base` (the ordering's `[prioritization]`; not in the value: `governed` is its part
+    # the context already names, and the rest is the payload's, hashed there as `config_hash`).
+    registration: Registration | None = None
+    eff: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     def value(self) -> dict[str, Any]:
         """The context as data — everything a reader may compare, and **not the token**."""
         return {
+            **({"registration": self.registration.value()} if self.registration is not None else {}),
             "form": "isidium-tenant-context 1",
             "tenant": self.tenant,
             "root": self.root,
@@ -250,6 +257,7 @@ def load(tenant: str, checkout: Path, *, base: str, root: str | None = None, rem
     with telemetry.span(SPAN, **{"isidium.tenant": tenant, "isidium.base": base}) as sp:
         cfg, home = tenant_client(tenant)
         identity = ForgeIdentity.load(home)
+        registration = Registration.load(home)
         root = root_of(checkout, root)
         coords = ForgeCoords.parse(_remote_url(checkout, remote), remote)
         _fetch(checkout, remote, base)
@@ -286,4 +294,6 @@ def load(tenant: str, checkout: Path, *, base: str, root: str | None = None, rem
             toolkit=pins,
             governed=tuple(dict(r) for r in eff["governed"]),
             registry=registry,
+            registration=registration,
+            eff=eff,
         )

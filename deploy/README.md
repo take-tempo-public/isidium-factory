@@ -1017,6 +1017,45 @@ branch off `main`, pushed by `isidium factory push`, opened by `isidium factory 
 checks and merge state read by `isidium factory pr-status`; the merge is the owner's, as every merge is. Its number
 and merge commit are in the-factory's chunk plan (the V2 entry).
 
+### The factory's registration, the ledger and dispatch — 2026-09-11 (V3)
+
+The factory's per-tenant registration (04 §5) is a **third file at the deploy home** on the local tier (ruled
+2026-09-11), beside the lander's `client.toml` and the forge identity's `forge.toml`; on the realm tier the realm
+writes it. Every key but one is required — nothing is defaulted in code:
+
+```sh
+cat > <deploy home>/<tenant>/factory/tenant.toml <<'EOF'
+allow_software_grade_until = 2026-12-31   # optional: a TOML date; absent = software-grade ratifications are not dispatched
+wip = 1                                   # runs in flight per tenant (T-A6's cap)
+adapter = "container"                     # the execution adapter the run names (V4 gives it its own config)
+
+[payload]
+max_bytes = 262144                        # the byte cap the run payload must fit
+EOF
+```
+
+**The ledger** is the factory's own sqlite at `<deploy home>/<tenant>/factory/ledger.sqlite`, created on first use —
+the run record as rows (03 §6), run ids `r-1`, `r-2`, … from its own counter. It is state, not configuration: back it
+up with the deploy home, never commit it.
+
+**The store side needs `config@5`** — an image with V3, then the owner's `config-policy` act adopting it (the governed
+rows move to `config@5` and `sidecar-events@3`; `[ladder].leaf` is the dispatchable kind, default `story`), then
+`isidium init` in the checkout so its installed registry has the new documents. From then on **the land after a
+ratification records the fingerprint** — the blob of every ref at the ratifying commit — which dispatch compares.
+A card ratified before the act has no fingerprint and is refused `dispatch.not-landed`: re-ratify it (or ratify a new
+one), then land.
+
+**The verbs** (`ISIDIUM_DEPLOY=<deploy home>`):
+
+- `isidium factory dispatch --tenant <tenant> --checkout <path> [--card <n>] [--dry-run]` — T-A6: the store's
+  `pending-land` refusal first, the WIP cap, the head of the ready-view under the ordering key (expedite, then
+  `P0`–`P3`, then the oldest ratification, then the id; `--card` only picks from the view), the card's live check,
+  its fingerprint, the software-grade allowance, the payload at the synced `main`, the ref-drift check — then **the
+  ledger row, before** the local branch `story/<run-id>` at that `main`. `--dry-run` answers all of it and writes
+  nothing. No executor starts yet (V4).
+- `isidium factory runs --tenant <tenant> [--run r-<n>]` — the ledger's rows; one run with its events and the run
+  report generated from them.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider

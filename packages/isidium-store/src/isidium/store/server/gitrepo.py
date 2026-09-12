@@ -78,6 +78,9 @@ class Repo(Protocol):
     # it the only thing the store may ask about a path outside the governed set, and `read` cannot answer it under
     # a footprint that holds no such content.
     def oid_of(self, path: str, sha: str | None = None) -> str | None: ...
+    # V3 (F-c): the blob ids of several paths at one commit — the fingerprint's `refs_resolved` at the ratifying
+    # commit, in ONE `ls-tree` for every ref that commit's ratifications cite, where `oid_of` is a `rev-parse` each.
+    def oids_at(self, sha: str, paths: Iterable[str]) -> dict[str, str | None]: ...
     def blob(self, oid: str) -> bytes: ...
     def commit(self, changes: Changes, author: str, at: str, message: str, parents: list[str] | None = None) -> str: ...
     def push(self) -> None: ...
@@ -198,6 +201,10 @@ class MemGit:
     def oid_of(self, path: str, sha: str | None = None) -> str | None:
         """The double's tree is already `path -> blob id`, so this is the lookup `GitCli` spends an `ls-tree` on."""
         return self.tree(sha or self._head).get(path)
+
+    def oids_at(self, sha: str, paths: Iterable[str]) -> dict[str, str | None]:
+        t = self.tree(sha)
+        return {p: t.get(p) for p in paths}
 
     def blob(self, oid: str) -> bytes:
         return self.blobs[oid]
@@ -553,6 +560,21 @@ class GitCli:
             return self._git("rev-parse", "--verify", "--end-of-options", f"{sha}:{path}").strip()
         except Refusal:
             return None
+
+    def oids_at(self, sha: str, paths: Iterable[str]) -> dict[str, str | None]:
+        """Several paths' blob ids at one commit from **one** `ls-tree` naming them — trees only, no content (Q11),
+        so it holds under the footprint as `oid_of` does. A path the tree lacks answers `None`."""
+        want = list(dict.fromkeys(paths))
+        out: dict[str, str | None] = dict.fromkeys(want)
+        if not want:
+            return out
+        for entry in self._git("ls-tree", "-z", "--end-of-options", sha, *want).split("\0"):
+            if not entry:
+                continue
+            meta, path = entry.split("\t", 1)
+            if path in out:
+                out[path] = meta.split(" ", 2)[2]
+        return out
 
     def blob(self, oid: str) -> bytes:
         """One object by id, hydrating it from the promisor remote if this clone does not hold it yet.
