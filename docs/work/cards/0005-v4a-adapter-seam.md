@@ -2,7 +2,7 @@
 schema = 1
 id = 5
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "planner"
 title = "V4a: the execution adapter seam, and the container adapter on the workstation's podman"
 shape = "bdd"
@@ -61,5 +61,6 @@ The execution adapter seam (T-C6 as typed values, the executor policy declared o
 ```toml
 history = [
   { seq = 1, at = "2026-09-12T01:22:19Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:56a898831185d547cb31b05dfcb0f0f783c5fcc88c193f104e981d373ff97238", h = "sha256:f938239c6d2d61b4d06c1ad737f02e0834e6ad64133f69f906ea8abdea0c81dc" },
+  { seq = 2, at = "2026-09-12T01:23:52Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:56a898831185d547cb31b05dfcb0f0f783c5fcc88c193f104e981d373ff97238", h = "sha256:8b731eb30a19ffa02561c07a8caf33470c75ee868643e4c7c9befdc77f70f29c", batch = 7 },
 ]
 ```
