@@ -26,7 +26,7 @@ WIP 0/1 · inbox run 5
 - **3** · K9 — the store re-reads main before it writes · draft · (derived)
 - **4** · L3: accept compiles the acceptance block and runs it through four runners at the owner's terminal · closed (unverified) · software-grade · (derived)
 - **5** · V4a: the execution adapter seam, and the container adapter on the workstation's podman · ready · software-grade · (derived)
-- **6** · The rule-id sweep resolves a module constant, not only a literal · ready · software-grade · (derived)
+- **6** · The rule-id sweep resolves a module constant, not only a literal · closed (unverified) · software-grade · (derived)
 
 ## Blocked
 
