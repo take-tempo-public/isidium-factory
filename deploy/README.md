@@ -1056,6 +1056,36 @@ one), then land.
 - `isidium factory runs --tenant <tenant> [--run r-<n>]` — the ledger's rows; one run with its events and the run
   report generated from them.
 
+### V3 live on tenant #0: `config@5` adopted, the first fingerprint, the first dispatch — 2026-09-12
+
+**The image** `isidium-store:v3` (`1eb856aa6f40`) from `main` `99f5e96`, then `:v3b` (`35b69aef0aa7`) after the second
+finding below. **The owner's act** adopting `config@5` — `schema = 5`, `[ladder].leaf = "story"`, the manifest rows to
+`config@5` and `sidecar-events@3` — is policy entry **seq 6**, commit `031d38f`, fields `governed, ladder, schema`.
+`tenant.toml` at the deploy home carries `allow_software_grade_until = 2026-10-11` (the owner's, 30 days), `wip = 1`,
+`adapter = "container"`, `[payload].max_bytes = 262144`.
+
+**The first fingerprint.** Card 5 (v1c's V4a as a card) was written as a draft, ratified in a sitting (`c4b1787`) and
+landed: the walk emitted event **`e6`, kind `ratified`**, and the fold wrote the fingerprint — `ratified_seq` 2,
+`commit c4b1787`, `refs_resolved` the two cited paths with their blobs at that commit, `validator_version "v3"`. The
+land's cursor was `99f5e96`, the merge of the V3 pull request itself (X2 pin 3), and its commit `72dd1e9`.
+
+**The first dispatch.** `isidium factory dispatch` wrote **`r-1`**: card 5, `outcome dispatched`, lane `standard`,
+`story_branch story/r-1`, adapter `container`, identity `isdm-fac-lander[bot]`, `base_sha 72dd1e9` (`origin/main`'s
+tip, where `story/r-1` was created), `payload_hash sha256:a76ff365…`, `config_hash sha256:0733f702…`, `score` rank 0
+with the six-term vector at zero. A second call answered **`dispatch.wip @ r-1 (card 5): 1 in flight, the cap is 1`**.
+`isidium factory runs --run r-1` printed the row, its one `dispatched` event, and the run report generated from it.
+The ledger is one sqlite file at the deploy home.
+
+**Two findings, both live.** (1) `signer.unavailable` at the owner's act: the container was healthy with its
+`signer.key.pem` mounted, and the store had no signer, because the recreate script — written from `podman inspect`'s
+`CreateCommand` — carried every mount but not **`ISIDIUM_SIGNER`**, the variable the entrypoint turns into
+`--signer`. `compose.yaml` has it right; the hand-written script did not. A mount is not a configuration. (2) The
+ready view was empty although card 5 was ratified, ingested and fingerprinted: row 11 read `pending-ingest` by
+comparing the entry's time against `state.landed_at`, which is the **cursor commit's** time — the batch pull
+request's merge, older than a ratification made after it — and no later land could clear it, a land with nothing new
+being an empty diff. Fixed in this same branch (V3b): the question is per card, and the sidecar's `history_head`
+answers it.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
