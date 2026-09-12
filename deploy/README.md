@@ -1201,8 +1201,14 @@ personal, model requests only. It is the one step of this live sequence that is 
 untouched and still `dispatched` (`ended_at: null`, base `72dd1e9`, payload `sha256:a76ff365…`), so the run the
 first phase will execute is the one V3 dispatched:
 
+**`claude setup-token` is two steps, and the first live attempt got the first one.** It opens a browser, and
+the page hands back an **authorization code** that must be pasted into the waiting prompt; the token is what the
+command prints *after* that. The code pasted into the file instead is the right length and shape to look like a
+credential and is refused `401 Invalid bearer token` — which is what spent `r-1`. There is no prefix to check for
+and none to add: take what the command prints at the end, whole.
+
 ```sh
-claude setup-token                                   # the owner, once
+claude setup-token                                   # the owner, once — paste the browser's code back in
 printf '%s' '<the token>' > C:/Dev/isidium-deploy/isidium-factory/factory/claude.token
 ISIDIUM_DEPLOY=C:/Dev/isidium-deploy isidium factory run \
   --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-1
