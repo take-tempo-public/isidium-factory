@@ -25,7 +25,8 @@ WIP 0/1 · inbox run 5
 - **2** · K8 — tenant #0: the store governs the repository its own work lives in · draft · (derived)
 - **3** · K9 — the store re-reads main before it writes · draft · (derived)
 - **4** · L3: accept compiles the acceptance block and runs it through four runners at the owner's terminal · closed (unverified) · software-grade · (derived)
-- **5** · V4a: the execution adapter seam, and the container adapter on the workstation's podman · ratified (pending-ingest) · software-grade · (derived)
+- **5** · V4a: the execution adapter seam, and the container adapter on the workstation's podman · ready · software-grade · (derived)
+- **6** · The rule-id sweep resolves a module constant, not only a literal · draft · (derived)
 
 ## Blocked
 

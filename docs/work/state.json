@@ -55,18 +55,28 @@
         "seq": 2
       },
       "runs": []
+    },
+    "0006": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:8636f6762a89f09d7d0060340d00f7f800c44520346efe3701f0f8ce402819cd",
+        "seq": 1
+      },
+      "runs": []
     }
   },
   "ingest": {
     "overflow": 0,
-    "run_id": "r-v3-land-1"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:76a4e2deec9679425bc2eb094c6076f8a54a3ff585c15e128ccc497f6aed1454",
-    "seq": 17
+    "h": "sha256:38e0525b03d57382aff6789336e1d9b8c3216df7e8ed103db92a9ff1570c3e40",
+    "seq": 20
   },
-  "landed_at": "2026-09-12T00:47:12Z",
-  "ledger_cursor": "99f5e9601f64f48e75a646830fd8dd3bd793fbef",
+  "landed_at": "2026-09-12T15:51:26Z",
+  "ledger_cursor": "53d23ddda60f153b990fcd8a54bd83c2d76ca2c5",
   "schema": 2
 }
