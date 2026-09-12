@@ -59,10 +59,25 @@
     "0006": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "d2e7f5fbb5f4ba7f518350cd7a89b0075d2f553d",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "5cbc6c96134ad813b4dde248d6d2ea85bb4c37df",
+            "path": "tests/unit/test_rule_ids.py"
+          },
+          {
+            "blob": "c69bdf22538e6107a5d326a310076169975ee2ce",
+            "path": "packages/isidium-store/src/isidium/store/core/disclosure.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:8636f6762a89f09d7d0060340d00f7f800c44520346efe3701f0f8ce402819cd",
-        "seq": 1
+        "h": "sha256:3587620a0e82f2577b6be6489c551c3017338e537034767dc0229d04b76c44ce",
+        "seq": 2
       },
       "runs": []
     }
@@ -73,10 +88,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:48f956940e5e6ab380d547a79c44f41445b0fdb8f06e9ca2758e4b32f124f3b1",
-    "seq": 21
+    "h": "sha256:ccfbd0e4a72565a74dd41251f3856202c28fbc38d14437a0ae7d5710030b941e",
+    "seq": 23
   },
-  "landed_at": "2026-09-12T17:31:06Z",
-  "ledger_cursor": "8bcedf7f6e7f39a20b399a2572a0f5a49941153d",
+  "landed_at": "2026-09-12T17:33:47Z",
+  "ledger_cursor": "d2e7f5fbb5f4ba7f518350cd7a89b0075d2f553d",
   "schema": 2
 }
