@@ -51,6 +51,11 @@ ATTEMPTS: Final = 2
 # does not burn its one retry on it (the adapter-auth note, 2026-08-17).
 RATE_LIMIT_MARKERS: Final[tuple[str, ...]] = ("rate limit", "rate_limit", "429", "usage limit")
 
+# The provider's words for "this credential is not accepted". A second attempt with the same token is the same
+# answer, so it is `environment` too — the thing to fix is the token at the deploy home, and the refusal has to say
+# so. Found live 2026-09-12, when a 401 was retried and then reported as `failed:infra`.
+CREDENTIAL_MARKERS: Final[tuple[str, ...]] = ("401", "invalid bearer", "failed to authenticate", "unauthorized")
+
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
@@ -115,9 +120,9 @@ class Container:
                 continue
             if proc.returncode == 0:
                 return self._result(job, rundir)
-            detail = (proc.stderr or proc.stdout or "").strip()
-            if _rate_limited(detail):
-                why = f"the provider answered a limit, not a failure: {detail[:200]}"
+            detail = self._why(proc, rundir)
+            if _environment(detail):
+                why = f"the provider answered about the environment, not the work: {detail[:300]}"
                 raise Refusal("adapter.environment", job.run_id, why)
             last = detail or f"exit {proc.returncode}"
         raise Refusal("adapter.infra", job.run_id, f"{ATTEMPTS} attempts, the last: {last[:400]}")
@@ -166,6 +171,23 @@ class Container:
             timeout=30,
         )
 
+    def _why(self, proc: subprocess.CompletedProcess[str], rundir: Path) -> str:
+        """Why the container exited non-zero — read from the run directory **this adapter mounted**, not only from
+        what podman relayed.
+
+        **Found live 2026-09-12.** The harness writes its own errors inside the container: the provider's answer
+        lands in `result.json` and `harness.err`, and podman's own stderr is empty. So a run that failed for a
+        perfectly legible reason — `401 Invalid bearer token` — was reported as *"2 attempts, the last: exit 1"*,
+        while the sentence that named the fix sat in a file on the host the whole time. An adapter that mounts a
+        directory and then does not read it when the thing fails is telling the operator less than it knows."""
+        parts = [
+            (proc.stderr or "").strip(),
+            (proc.stdout or "").strip(),
+            _text(rundir / "harness.json", "result"),  # the provider's own sentence
+            "\n".join(_lines(rundir / "harness.err")).strip(),
+        ]
+        return " | ".join(dict.fromkeys(p for p in parts if p))
+
     def _token(self) -> str:
         path = self._home / TOKEN_FILE
         try:
@@ -212,9 +234,25 @@ def _name(job: RunJob) -> str:
     return f"isidium-{job.run_id}-{job.phase}"
 
 
-def _rate_limited(detail: str) -> bool:
+def _environment(detail: str) -> bool:
+    """Is this the environment's answer rather than the work's?
+
+    Two classes, and neither is T-C6's *"adapter start/timeouts"*: a **limit** (the window is spent — the
+    adapter-auth note's *"back off, do not burn retries"*) and a **credential** (the token is not accepted — a
+    second attempt with the same token is the same 401, and the only thing that fixes it is a human minting a new
+    one). **Found live 2026-09-12:** a 401 was tried twice and reported as `failed:infra`, which named the wrong
+    thing to fix."""
     low = detail.lower()
-    return any(m in low for m in RATE_LIMIT_MARKERS)
+    return any(m in low for m in RATE_LIMIT_MARKERS + CREDENTIAL_MARKERS)
+
+
+def _text(path: Path, key: str) -> str:
+    """One field of a JSON file the container left, or nothing — a diagnosis must never fail on its own reading."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8")).get(key)
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return str(value).strip() if value else ""
 
 
 def _lines(path: Path) -> Sequence[str]:

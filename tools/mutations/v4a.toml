@@ -128,3 +128,21 @@ label = "the executor policy is defaulted rather than read from the tenant's sig
 file = "packages/isidium-factory/src/isidium/factory/adapter.py"
 find = '''        if not isinstance(ex, dict) or not isinstance(agents, dict):'''
 replace = '''        if False:'''
+
+# Added 2026-09-12 after the live step: the two findings at the first real run, each given a mutation so the
+# properties they cost us cannot quietly come back.
+
+[[mutation]]
+id = "M15"
+label = "a rejected credential is retried as infra -- the same 401 twice, and the wrong thing named to fix"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''    return any(m in low for m in RATE_LIMIT_MARKERS + CREDENTIAL_MARKERS)'''
+replace = '''    return any(m in low for m in RATE_LIMIT_MARKERS)'''
+
+[[mutation]]
+id = "M16"
+label = "the refusal reads only what podman relayed -- the reason stays in the directory the adapter mounted"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            _text(rundir / "harness.json", "result"),  # the provider's own sentence
+            "\n".join(_lines(rundir / "harness.err")).strip(),'''
+replace = ''''''

@@ -185,6 +185,7 @@ class Podman:
     makes every attempt fail; `timeout` makes every attempt time out; `once` fails only the first."""
 
     result: dict[str, Any] | None = None
+    harness: dict[str, Any] | None = None
     fail: str | None = None
     timeout: bool = False
     once: bool = False
@@ -203,6 +204,9 @@ class Podman:
         if self.fail is not None and not (self.once and not first):
             return subprocess.CompletedProcess(argv, 1, "", self.fail)
         rundir = Path(next(a for a in argv if a.endswith(f":{render.RUN}:rw")).rsplit(":", 2)[0])
+        if self.harness is not None:  # what the image leaves behind when the harness itself failed
+            (rundir / "harness.json").write_text(json.dumps(self.harness), encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 1, "", "")
         (rundir / "result.json").write_text(json.dumps(self.result or _harness_result()), encoding="utf-8")
         if self.blocks:
             lines = "".join(json.dumps({"path": OUTSIDE, "reason": "outside"}) + "\n" for _ in range(self.blocks))
@@ -550,6 +554,32 @@ def test_a_rate_limit_is_environment_and_is_not_retried(disk: Disk) -> None:
     pod = Podman(fail="429 rate limit exceeded")
     refuses("adapter.environment", lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk)))
     assert len([a for a in pod.seen if a[1] == "run"]) == 1
+
+
+def test_a_rejected_credential_is_environment_and_is_not_retried(disk: Disk) -> None:
+    """Found live 2026-09-12: the provider answered `401 Invalid bearer token`, and the adapter tried again with the
+    same token and then called it `failed:infra`. A second attempt with a rejected credential is the same answer,
+    and `infra` names the wrong thing to fix — the token at the deploy home is what a human has to replace."""
+    pod = Podman(
+        harness={
+            "is_error": True,
+            "result": "Failed to authenticate. API Error: 401 Invalid bearer token",
+            "api_error_status": 401,
+        }
+    )
+    r = refuses("adapter.environment", lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk)))
+    assert len([a for a in pod.seen if a[1] == "run"]) == 1, "a rejected credential is not retried"
+    assert "401" in r.detail
+
+
+def test_the_refusal_carries_what_the_container_left_behind(disk: Disk) -> None:
+    """The other half of the same finding: the harness writes its errors **inside** the container, so podman relays
+    an empty stream. An adapter that mounts a directory and then does not read it when the run fails tells the
+    operator less than it knows — `exit 1` where a sentence was available."""
+    pod = Podman(harness={"is_error": True, "result": "the model could not reach the tree"})
+    r = refuses("adapter.infra", lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk)))
+    assert "the model could not reach the tree" in r.detail
+    assert r.detail != "2 attempts, the last: exit 1"
 
 
 def test_a_tenant_with_no_image_is_refused_rather_than_given_one(disk: Disk) -> None:

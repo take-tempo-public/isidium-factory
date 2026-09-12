@@ -82,5 +82,12 @@ result = {
 }
 with open(os.environ["ISIDIUM_RESULT"], "w", encoding="utf-8") as fh:
     json.dump(result, fh, indent=2)
+# The provider's own sentence goes to stderr as well as into the run directory. Found live 2026-09-12: the harness
+# writes its errors inside the container, so podman relayed an empty stream and the adapter could only say "exit 1"
+# about a run whose reason ("401 Invalid bearer token") was sitting in a file. Say it where the operator looks.
+if result["outcome"] != "ok":
+    why = out.get("result") or out.get("error") or "the harness failed and said nothing"
+    status = out.get("api_error_status")
+    print(f"isidium-runner: {why}" + (f" (status {status})" if status else ""), file=sys.stderr)
 raise SystemExit(0 if result["outcome"] == "ok" else 1)
 PY
