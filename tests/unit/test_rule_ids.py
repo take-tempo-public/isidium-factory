@@ -20,7 +20,18 @@ literal in a rule-id position:
     `validate.failed` lives and which the first draft of this sweep could not see;
   * a `"rule"` key in a dict literal — how the service used to build a refusal payload without the type. **That arm
     now finds nothing in the package, and a test below asserts so**: K2b's item 0 routed the last nine of those
-    through `Refusal`, so the arm has become the guard that stops a tenth from being added.
+    through `Refusal`, so the arm has become the guard that stops a tenth from being added;
+  * a module-level constant bound to a string, in the same module as the call (`RULE_IMAGE: Final = "adapter.image"`
+    then `Refusal(RULE_IMAGE, …)`) — V4a-i's `adapter.py` and `container.py` raised this way in their first draft,
+    and the sweep did not see it: the namespace was made of literals before this round, not because the gate asked
+    for that, and a second module written the same way would have been invisible to it.
+
+**A `Refusal(...)` call whose first argument is none of the above is refused, not silently passed over** — concretely,
+a name imported from another module, which this sweep has no way to resolve without reading that module too. Reading
+nothing back used to look identical to reading a namespace with nothing unusual in it; refusing is what tells the two
+apart. This does not reach the many places a rule id travels through an ordinary parameter (`_r`'s own body, a
+`_git(..., rule=...)`-shaped helper) — those already resolve to nothing today and stay that way; the refusal targets
+only a name the sweep can prove came from an `import`.
 
 **And it reads what a rule id's namespace is even when the id itself is computed.** A handful of ids are built from
 an f-string (`f"profile.head.{k}"`), so the *id* is not a literal anywhere — but the **namespace** is, and the
@@ -69,11 +80,56 @@ def _is_refusal_name(node: ast.expr) -> bool:
     return name.endswith("Refusal")
 
 
-def _string_arg(node: ast.Call, index: int = 0) -> tuple[int, str] | None:
+def _is_bare_refusal_call(node: ast.expr) -> bool:
+    """`Refusal(...)` itself, not a subclass. `ValidationRefusal`'s own `__init__` takes `verdicts` first, not a rule
+    id, so R2's refusal must not reach a bare call to it (`ValidationRefusal(failures, path)`) — only a call that
+    is unambiguously asking `Refusal` for a rule id at that position."""
+    return (isinstance(node, ast.Name) and node.id == "Refusal") or (
+        isinstance(node, ast.Attribute) and node.attr == "Refusal"
+    )
+
+
+def _module_string_constants(tree: ast.Module) -> dict[str, str]:
+    """`NAME = "<rule>"` or `NAME: Final = "<rule>"` at module level: the fifth form (R1). Only a binding in the
+    same module resolves — a name imported from elsewhere is exactly what `_imported_names` and R2 exist for."""
+    out: dict[str, str] = {}
+    for node in tree.body:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign):
+            target, value = node.target, node.value
+        if isinstance(target, ast.Name) and isinstance(value, ast.Constant) and isinstance(value.value, str):
+            out[target.id] = value.value
+    return out
+
+
+def _imported_names(tree: ast.Module) -> frozenset[str]:
+    """Names an `import` or `from ... import ...` binds at module level — used only to recognise the one shape
+    R2 refuses: a rule id passed by a name this sweep knows came from elsewhere and so cannot resolve."""
+    out: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            out.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+    return frozenset(out)
+
+
+class UnresolvedRuleId(Exception):
+    """R2: a `Refusal(...)` call's first argument that is not a literal, an f-string, or a same-module constant
+    fails the sweep instead of being silently skipped — raised only for a name the sweep can prove is imported,
+    so silence is never the answer for the one shape it can positively identify as unresolvable."""
+
+
+def _string_arg(node: ast.Call, index: int = 0, constants: dict[str, str] | None = None) -> tuple[int, str] | None:
     if len(node.args) <= index:
         return None
     a = node.args[index]
-    return (a.lineno, a.value) if isinstance(a, ast.Constant) and isinstance(a.value, str) else None
+    if isinstance(a, ast.Constant) and isinstance(a.value, str):
+        return a.lineno, a.value
+    if constants is not None and isinstance(a, ast.Name) and a.id in constants:
+        return a.lineno, constants[a.id]
+    return None
 
 
 def _computed_namespace(node: ast.Call, index: int) -> tuple[int, str] | None:
@@ -99,8 +155,14 @@ FORMS = ("refusal", "collector", "super", "dict")
 
 
 def rule_ids(path: Path) -> Iterator[tuple[int, str, str]]:
-    """Every string literal in a rule-id position in one module, as `(line, id, form)`."""
+    """Every string literal in a rule-id position in one module, as `(line, id, form)`.
+
+    Raises `UnresolvedRuleId` if a bare `Refusal(...)` call's first argument is a name this sweep can prove is
+    imported from elsewhere (R2) — the one shape between "a literal", "an f-string", and "a same-module constant"
+    (R1) that the sweep can identify as unresolvable rather than merely not-yet-recognised."""
     tree = ast.parse(path.read_bytes())
+    constants = _module_string_constants(tree)
+    imported = _imported_names(tree)
     # a `Refusal` subclass fixes its own id in `super().__init__(...)`; that call names no Refusal, so it needs the
     # enclosing class to identify it
     in_refusal_subclass = {
@@ -113,11 +175,18 @@ def rule_ids(path: Path) -> Iterator[tuple[int, str, str]]:
         if isinstance(node, ast.Call):
             fn = node.func
             if _is_refusal_name(fn):
-                found, form = _string_arg(node), "refusal"
+                found, form = _string_arg(node, constants=constants), "refusal"
+                arg0 = node.args[0] if node.args else None
+                unresolved = found is None and _computed_namespace(node, 0) is None
+                if unresolved and _is_bare_refusal_call(fn) and isinstance(arg0, ast.Name) and arg0.id in imported:
+                    raise UnresolvedRuleId(
+                        f"{path}:{node.lineno}: Refusal's first argument `{arg0.id}` is imported from elsewhere "
+                        "and the sweep cannot resolve it to a rule id"
+                    )
             elif isinstance(fn, ast.Name) and fn.id == "_r":
-                found, form = _string_arg(node, 1), "collector"  # `_r(rs, "<rule>", path, detail)`
+                found, form = _string_arg(node, 1, constants=constants), "collector"  # `_r(rs, "<rule>", …)`
             elif isinstance(fn, ast.Attribute) and fn.attr == "__init__" and id(node) in in_refusal_subclass:
-                found, form = _string_arg(node), "super"
+                found, form = _string_arg(node, constants=constants), "super"
             else:
                 found, form = None, ""
             if found is not None:
@@ -234,6 +303,40 @@ def test_the_sweep_sees_the_whole_surface(tmp_path: Path) -> None:
     # which is what makes this the discriminator the package itself cannot supply.
     assert sorted(namespaces([planted])) == ["invented", "profile"], namespaces([planted])
     assert "invented" not in namespaces(), "the planted source leaked into the sweep of the package"
+
+
+def test_a_rule_id_raised_through_a_constant_is_swept(tmp_path: Path) -> None:
+    """R1's fifth form. `RULE_IMAGE: Final = "adapter.image"` then `Refusal(RULE_IMAGE, …)` is exactly the shape
+    V4a-i's first draft of `adapter.py` and `container.py` used, and it must be swept identically to a literal —
+    otherwise the namespace it names is invisible to `test_every_namespace_the_code_can_raise_is_classified` and
+    C-12's table can be short a row without the build ever failing on it."""
+    planted = tmp_path / "constant.py"
+    planted.write_text(
+        'from typing import Final\n\nRULE_IMAGE: Final = "adapter.image"\n\nRefusal(RULE_IMAGE, "detail")\n',
+        encoding="utf-8",
+    )
+    ids = swept([planted])
+    assert ids.get("adapter.image") == [f"{planted.name}:5"]
+    assert namespaces([planted]) == {"adapter": [f"{planted.name}:5"]}
+
+
+def test_an_unresolvable_rule_id_fails_the_sweep(tmp_path: Path) -> None:
+    """R2. A name the sweep can prove is imported from elsewhere — not a literal, not an f-string, not a constant
+    bound in the same module — is exactly the shape `_module_string_constants` cannot resolve, and this is the
+    scope note's own example of it: an id imported rather than defined where it is raised. The sweep fails outright
+    naming the site, rather than silently seeing nothing here the way it would for an ordinary parameter (`_r`'s own
+    `rule`, or a `_git(..., rule=...)`-shaped helper) — those stay unresolved without raising, because the sweep has
+    no way to tell them apart from a name that never carried a rule id at all."""
+    planted = tmp_path / "unresolvable.py"
+    planted.write_text('from other import RULE_IMAGE\n\nRefusal(RULE_IMAGE, "detail")\n', encoding="utf-8")
+    with pytest.raises(UnresolvedRuleId, match=rf"{re.escape(planted.name)}:3.*RULE_IMAGE"):
+        swept([planted])
+    # the parameter shapes already in the package must NOT trip this: silence stays silence for them
+    passthrough = tmp_path / "passthrough.py"
+    passthrough.write_text(
+        'def _r(v, rule, path="", detail=""):\n    v.append(Refusal(rule, path, detail))\n', encoding="utf-8"
+    )
+    assert swept([passthrough]) == {}
 
 
 def test_no_rule_id_reaches_a_caller_without_passing_through_refusal(tmp_path: Path) -> None:
