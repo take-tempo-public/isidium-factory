@@ -34,6 +34,10 @@ LEDGER_FILE: Final = "ledger.sqlite"
 SCHEMA: Final = 1
 SPAN: Final = "isidium.factory.ledger.write"
 DISPATCHED: Final = "dispatched"
+# The ledger's own transitions, beside `interrupt`: neither is a store event kind, so `report()`
+# filters them out and `runs --run` is where they are read.
+PHASE: Final = "phase"
+ENDED: Final = "ended"
 
 _DDL: Final = (
     "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -172,6 +176,94 @@ class Ledger:
             )
             self._event(run_id, at, "interrupt", {"reason": reason, "detail": detail})
 
+    def phase(self, run_id: str, at: str, result: Mapping[str, Any]) -> None:
+        """A phase's record, written the way `dispatch` writes a run's: the `phases` row and the ledger's own
+        `phase` event in ONE transaction (the card's R2 — *"the same transaction discipline dispatch used"*).
+
+        The row is 03 §6's `phases[]` entry exactly — agent kind, effort and prompt version beside model, tokens,
+        cost and duration — and nothing more. What the phase also produced (its artifacts by hash, the writes the
+        guard denied, the set git says it touched, how it ended) rides the **event**, because the run record's
+        shape is ratified and the ledger's own transition log is where a fact without a column belongs."""
+        if self.run(run_id) is None:
+            raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+        with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
+            self.db.execute(
+                "INSERT INTO phases (run_id, phase, agent, model, effort, prompt_version, tokens, cost_micro,"
+                " duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    result["phase"],
+                    result.get("agent"),
+                    result.get("model"),
+                    result.get("effort"),
+                    result.get("prompt_version"),
+                    result.get("tokens"),
+                    result.get("cost_micro"),
+                    result.get("duration_ms"),
+                ),
+            )
+            self._event(
+                run_id,
+                at,
+                PHASE,
+                {
+                    "phase": result["phase"],
+                    "outcome": result.get("outcome"),
+                    "artifacts": result.get("artifacts", []),
+                    "guard_blocks": result.get("guard_blocks", 0),
+                    "touched": result.get("touched", []),
+                    "harness": result.get("harness"),
+                    "harness_version": result.get("harness_version"),
+                    "billing_class": result.get("billing_class"),
+                },
+            )
+
+    def finish(
+        self,
+        run_id: str,
+        at: str,
+        outcome: str,
+        *,
+        head_sha: str | None = None,
+        surfaces_actual: Any = None,
+        billing_class: str | None = None,
+        price_table: Any = None,
+    ) -> None:
+        """The run, ended. 03 §6's tail of the record in one write: what it ended as, at which head, what it
+        actually touched (T-B7 (4): *"surfaces actual computed from the diff, not from the plan"*), and the
+        billing lane the run drew on — the measurement the ruled harness swap reads (7bdb.4(5))."""
+        with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
+            cur = self.db.execute(
+                "UPDATE runs SET outcome = ?, ended_at = ?, head_sha = COALESCE(?, head_sha),"
+                " surfaces_actual = COALESCE(?, surfaces_actual), billing_class = COALESCE(?, billing_class),"
+                " price_table = COALESCE(?, price_table) WHERE run_id = ?",
+                (
+                    outcome,
+                    at,
+                    head_sha,
+                    None if surfaces_actual is None else _dump(surfaces_actual),
+                    billing_class,
+                    None if price_table is None else _dump(price_table),
+                    run_id,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+            self._event(run_id, at, ENDED, {"outcome": outcome})
+
+    def advance(self, run_id: str, head_sha: str, surfaces_actual: Any, billing_class: str | None) -> None:
+        """A run that is further along but not over: the head its last phase committed, what it has touched so far
+        (T-B7 (4): from the diff, never the plan), and the lane it drew on. `ended_at` is untouched — V5's close is
+        what ends a run, and a run that a phase merely advanced is still in flight for the WIP cap."""
+        with self.transaction():
+            cur = self.db.execute(
+                "UPDATE runs SET head_sha = ?, surfaces_actual = ?, billing_class = COALESCE(?, billing_class)"
+                " WHERE run_id = ?",
+                (head_sha, _dump(surfaces_actual), billing_class, run_id),
+            )
+            if cur.rowcount == 0:
+                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+
     def _event(self, run_id: str, at: str, kind: str, data: Mapping[str, Any]) -> None:
         self.db.execute(
             "INSERT INTO events (run_id, at, kind, data) VALUES (?, ?, ?, ?)", (run_id, at, kind, _dump(data))
@@ -190,6 +282,11 @@ class Ledger:
 
     def runs(self) -> list[dict[str, Any]]:
         return [_row(r) for r in self.db.execute("SELECT * FROM runs ORDER BY dispatched_at, run_id").fetchall()]
+
+    def phases_of(self, run_id: str) -> list[dict[str, Any]]:
+        """03 §6's `phases[]` for one run, in the order they ran."""
+        rows = self.db.execute("SELECT * FROM phases WHERE run_id = ? ORDER BY rowid", (run_id,)).fetchall()
+        return [{k: r[k] for k in r.keys() if k != "run_id"} for r in rows]  # noqa: SIM118
 
     def events_of(self, run_id: str) -> list[dict[str, Any]]:
         rows = self.db.execute("SELECT * FROM events WHERE run_id = ? ORDER BY seq", (run_id,)).fetchall()

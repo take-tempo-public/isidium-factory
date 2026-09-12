@@ -121,6 +121,58 @@ def heads(repo: Path, rev: str, root: str, ids: Iterable[int], registry: Registr
     return out
 
 
+def worktree(repo: Path, branch: str, at: Path) -> Path:
+    """T-C1's *"a worktree per run — never a fresh clone per pick"*: one `git worktree add` on the story branch V3's
+    pick already created, one spawn. The run's work happens here and nowhere else, so the checkout the operator uses
+    is never the surface a model writes to."""
+    at.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ["git", "worktree", "add", str(at), branch], cwd=repo, capture_output=True, text=True, check=False
+    )
+    if r.returncode != 0:
+        raise Refusal("factory.worktree", branch, r.stderr.strip())
+    return at
+
+
+def worktree_remove(repo: Path, at: Path) -> None:
+    """The worktree, taken down. `--force` is the phase's own tree with its own uncommitted work in it, not a
+    force push; the branch and every commit on it survive, which is the whole record of what the run did."""
+    subprocess.run(
+        ["git", "worktree", "remove", "--force", str(at)], cwd=repo, capture_output=True, text=True, check=False
+    )
+
+
+def touched(tree: Path) -> tuple[str, ...]:
+    """What the working tree actually holds against its own HEAD — one `git status --porcelain`, tracked and
+    untracked alike, and the belt behind the write guard: *"the ledger recomputes the run's touched set from git and
+    refuses a report whose claimed set differs"* (the gajae follow-up, adopted 2026-08-21). A report is never the
+    evidence for what a report claims."""
+    r = subprocess.run(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if r.returncode != 0:
+        raise Refusal("factory.git", str(tree), r.stderr.strip())
+    out: set[str] = set()
+    fields = [f for f in r.stdout.split("\x00") if f]
+    i = 0
+    while i < len(fields):
+        entry = fields[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        # A rename's second field is the source path; both names are part of what the phase touched.
+        if ("R" in code or "C" in code) and i < len(fields):
+            out.add(fields[i])
+            i += 1
+        out.add(path)
+    return tuple(sorted(out))
+
+
 def root_of(repo: Path, root: str | None) -> str:
     """The caller's root, else the checkout's client file's (`init` wrote it from the adopted schema — never a literal
     here), else refused: a factory that does not know the tracking root cannot find `config.toml`."""

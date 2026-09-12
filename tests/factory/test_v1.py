@@ -139,7 +139,9 @@ def test_the_same_inputs_give_the_same_hash_and_the_value_round_trips_the_card()
     # than asserted: the same inputs at an effective schema of 5 still give V3's hash, and `[agents]` /
     # `[executor]` — config@6's new tables — are not in the subset at all, so the payload does not carry the
     # executor policy to the builder.
-    at5 = inputs_of(hz, g.subject, base_sha="0" * 40, tree={"schema": 5, "tenant": "sartor"}, eff={**st.eff, "schema": 5})
+    at5 = inputs_of(
+        hz, g.subject, base_sha="0" * 40, tree={"schema": 5, "tenant": "sartor"}, eff={**st.eff, "schema": 5}
+    )
     assert assemble(at5).payload_hash.removeprefix("sha256:")[:8] == "88fe296d"
     assert not {"agents", "executor"} & set(assemble(pinned).value["constraints"]["config"])
     inp = inputs_of(hz, g.subject)

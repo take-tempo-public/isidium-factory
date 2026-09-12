@@ -134,6 +134,15 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         # the factory's ledger (`isidium.factory.ledger`, V3): its own sqlite at the deploy home -- a run id it already
         # holds, a file another tenant's -- the operator's to read at the terminal, never a peer's over a door.
         "ledger": Row(422, TERSE),
+        # the execution adapter seam and the container adapter (`isidium.factory.adapter` / `.container`, V4a-i): an
+        # adapter name the registration gave that is not registered, a job or a result that does not validate, a
+        # tenant with no image or no model credential, a container that died twice, a provider limit. Every one is
+        # the operator's at the terminal or the ledger's, never a peer's over a door.
+        "adapter": Row(422, TERSE),
+        # the wrapper around a phase (`isidium.factory.runner`, V4a-i): a run already ended, a phase no adapter
+        # runs, a payload that no longer hashes to the one the ledger wrote, a change set the result does not
+        # match, a write outside the card's surfaces. The same posture, and the same reader.
+        "run": Row(422, TERSE),
         # Raised by a tool, not by the package [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified
         # fails"*]: `tools/verify_chain.py` refuses a shallow checkout (`verify.shallow`, K7a). A tool speaks to the
         # operator at the forge and at the terminal and never to a peer, so C-12's reason for *terse* does not reach

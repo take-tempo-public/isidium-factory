@@ -7,9 +7,13 @@ beside `client.toml` (the lander's store half) and `forge.toml` (its forge half)
 nothing here reads differently.
 
 **Every key is required, none is defaulted in code** (C-1): `wip` (T-A6's *"tenant-specializable"* cap), `adapter`
-(the payload's identity half until V4 declares the adapter's own config), `[payload].max_bytes` (Q-V8 (a): the byte
-cap the payload must fit). `allow_software_grade_until` is the one optional key, and its absence *is* the answer: a
-software-grade ratification is not dispatched unattended (03 §1.12, Q-V5).
+(the name the seam resolves to a driver since V4a-i — `adapter.unknown` for one that is not registered),
+`[payload].max_bytes` (Q-V8 (a): the byte cap the payload must fit). Two keys are optional, and each absence *is* an
+answer: `allow_software_grade_until` absent means a software-grade ratification is not dispatched unattended
+(03 §1.12, Q-V5), and `[runner].image` absent means this tenant declares no image — the container adapter refuses
+rather than inventing one (V4a-i). The executor policy itself is **not** here: it is the tenant's signed
+`config.toml` under `[agents]` and `[executor]` (config@6, Q-V16 (b) ruled 2026-09-12), because model choice is
+spend and spend sits under the owner's signature. This file stays the operator's machinery.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ class Registration:
     wip: int
     adapter: str
     max_bytes: int
+    runner_image: str | None = None
 
     def allows_software_grade(self, today: _dt.date) -> bool:
         """03 §1.12: *"the factory refuses unattended dispatch of software-grade ratifications unless the registration
@@ -44,6 +49,8 @@ class Registration:
         out: dict[str, Any] = {"wip": self.wip, "adapter": self.adapter, "max_bytes": self.max_bytes}
         if self.allow_software_grade_until is not None:
             out["allow_software_grade_until"] = self.allow_software_grade_until.isoformat()
+        if self.runner_image is not None:
+            out["runner_image"] = self.runner_image
         return out
 
     @classmethod
@@ -62,6 +69,8 @@ class Registration:
         payload = data.get("payload")
         max_bytes = payload.get("max_bytes") if isinstance(payload, dict) else None
         until = data.get("allow_software_grade_until")
+        runner = data.get("runner")
+        image = runner.get("image") if isinstance(runner, dict) else None
         bad: list[str] = []
         if not isinstance(wip, int) or isinstance(wip, bool) or wip < 1:
             bad.append("wip (an integer >= 1)")
@@ -72,13 +81,15 @@ class Registration:
         # A TOML date, never a datetime: the allowance is a calendar day, and a time would invite a zone.
         if until is not None and (not isinstance(until, _dt.date) or isinstance(until, _dt.datetime)):
             bad.append("allow_software_grade_until (a TOML date, YYYY-MM-DD)")
-        unknown = sorted(set(data) - {"wip", "adapter", "payload", "allow_software_grade_until"})
+        if runner is not None and (not isinstance(runner, dict) or not isinstance(image, str) or not image):
+            bad.append("[runner].image (an image reference)")
+        unknown = sorted(set(data) - {"wip", "adapter", "payload", "allow_software_grade_until", "runner"})
         if unknown:
             bad.append("unknown keys " + ", ".join(unknown))
         if bad:
             raise Refusal(RULE, str(path), "; ".join(bad))
         assert isinstance(wip, int) and isinstance(adapter, str) and isinstance(max_bytes, int)
-        return cls(until, wip, adapter, max_bytes)
+        return cls(until, wip, adapter, max_bytes, image if isinstance(image, str) else None)
 
 
 def require(reg: Registration | None, home: Path) -> Registration:
