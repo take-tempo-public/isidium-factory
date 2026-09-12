@@ -633,8 +633,14 @@ def test_a_phase_lands_on_the_row_it_was_dispatched_under(disk: Disk, led: Ledge
     assert not (disk.home / "worktrees" / run_id).exists(), "the worktree per run is taken down again"
 
 
-def test_a_failed_phase_ends_the_run_on_that_row(disk: Disk, led: Ledger) -> None:
-    """Card 5's S2, the half that matters: *"what happened after the row is on the row"*."""
+def test_the_outcome_lands_on_the_dispatched_row(disk: Disk, led: Ledger) -> None:
+    """Card 5's S2, the half that matters: *"what happened after the row is on the row"*.
+
+    **The name is the card's, and it was not at first.** Card 5 named this test
+    `test_the_outcome_lands_on_the_dispatched_row`; V4a-i built the property under another name, so the card's
+    acceptance block answered `not found` for S2 and could never pass (found 2026-09-12, running `accept 5`). The
+    card is the specification, so the test took its name — not the other way round. Card 5 was withdrawn the same
+    day for its other defects; the name stays, because a scenario pointing at a test is a contract with the test."""
     broken = Fake(result=_harness_result(outcome="failed:infra"))
     run_id = fresh_run(disk, led)
     row = runner_mod.run_phase(
