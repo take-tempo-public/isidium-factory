@@ -2,7 +2,7 @@
 schema = 1
 id = 6
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The rule-id sweep resolves a module constant, not only a literal"
 shape = "bdd"
@@ -50,5 +50,6 @@ Not in scope: changing how any package raises its refusals; the disclosure table
 ```toml
 history = [
   { seq = 1, at = "2026-09-12T15:34:36Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ee67fd4a85c481b1547eeec4a915dd7cbb5518d5703717f3e517018d8c37a1d2", h = "sha256:8636f6762a89f09d7d0060340d00f7f800c44520346efe3701f0f8ce402819cd" },
+  { seq = 2, at = "2026-09-12T17:33:47Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ee67fd4a85c481b1547eeec4a915dd7cbb5518d5703717f3e517018d8c37a1d2", h = "sha256:3587620a0e82f2577b6be6489c551c3017338e537034767dc0229d04b76c44ce", batch = 9 },
 ]
 ```
