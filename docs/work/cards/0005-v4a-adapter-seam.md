@@ -2,7 +2,7 @@
 schema = 1
 id = 5
 kind = "story"
-status = "ratified"
+status = "withdrawn"
 source = "planner"
 title = "V4a: the execution adapter seam, and the container adapter on the workstation's podman"
 shape = "bdd"
@@ -10,6 +10,7 @@ effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/dispatch.py", "packages/isidium-factory/src/isidium/factory/payload.py"]
 surfaces = ["packages/isidium-factory/src/isidium/factory/adapter.py", "packages/isidium-factory/src/isidium/factory/container.py", "tests/factory/test_v4a.py"]
 priority = "P1"
+withdrawn_reason = "Withdrawn by the owner at the sitting of 2026-09-12. Its work shipped through a session, not the factory (PR #55, merged 53d23dd); its surfaces named three files where the work wrote eight; its S4 was true of V3's code and discriminated nothing; and its S2 named a test that did not exist, so its acceptance block could not pass. r-2, dispatched against it, proved the seam and correctly wrote nothing."
 
 [narrative]
 feature = "a dispatched run reaches an execution adapter through one typed seam, and the first adapter runs it in a container on the workstation's podman, so the ledger row that says `dispatched` can say what happened next"
@@ -62,5 +63,6 @@ The execution adapter seam (T-C6 as typed values, the executor policy declared o
 history = [
   { seq = 1, at = "2026-09-12T01:22:19Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:56a898831185d547cb31b05dfcb0f0f783c5fcc88c193f104e981d373ff97238", h = "sha256:f938239c6d2d61b4d06c1ad737f02e0834e6ad64133f69f906ea8abdea0c81dc" },
   { seq = 2, at = "2026-09-12T01:23:52Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:56a898831185d547cb31b05dfcb0f0f783c5fcc88c193f104e981d373ff97238", h = "sha256:8b731eb30a19ffa02561c07a8caf33470c75ee868643e4c7c9befdc77f70f29c", batch = 7 },
+  { seq = 3, at = "2026-09-12T18:48:57Z", by = "amodal1@users.noreply.github.com", act = "withdrawn", fields = ["status", "withdrawn_reason"], build = "sha256:56a898831185d547cb31b05dfcb0f0f783c5fcc88c193f104e981d373ff97238", h = "sha256:bf9375f05304c7bd4be48c9683f1914383152ce386a3009bbb70ff3886aee628", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:CKIdP9JKz+KJa49HVZUTjfgz4vvVy6Fn3Ow7th7AiNS4yg+zq/cnOmuqPBCqHv+ajY8dmuANwCXbZWyGIC4MBg==" },
 ]
 ```
