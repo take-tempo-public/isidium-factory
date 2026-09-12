@@ -493,6 +493,18 @@ def test_the_token_reaches_the_child_by_name_and_is_in_no_argv(disk: Disk) -> No
     assert pod.env[0]["CLAUDE_CODE_OAUTH_TOKEN"] == TOKEN
 
 
+def test_the_matrix_names_the_image_it_runs_not_this_process(disk: Disk) -> None:
+    """Found live 2026-09-12: the matrix read `ISIDIUM_HARNESS_VERSION` from the **factory's** environment, where
+    the harness is not — so it said `unknown` beside a run that knew exactly which harness it ran. The version is a
+    fact about the image; the declaration names the image, and the concrete version comes back on the result from
+    inside it."""
+    caps = Container(disk.home, _reg(disk), run=Podman()).capabilities()
+    assert caps.harness_version == IMAGE
+    assert caps.harness_version not in ("", "unknown")
+    res = Container(disk.home, _reg(disk), run=Podman()).execute(a_job(disk))
+    assert res.harness_version == "1.2.3", "the version on the record is the image's own answer, not the matrix's"
+
+
 def test_one_spawn_per_phase(disk: Disk) -> None:
     """Not one per tool call: the container starts once, does the phase and exits."""
     pod = Podman()

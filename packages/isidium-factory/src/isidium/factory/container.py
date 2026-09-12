@@ -66,11 +66,18 @@ class Container:
 
     def capabilities(self) -> AdapterCapabilities:
         """Declared, not probed — and checked against behaviour by the conformance suite, which is the only thing
-        that makes a declaration worth reading (05 §3)."""
+        that makes a declaration worth reading (05 §3).
+
+        **`harness_version` is the image reference, and that is the honest answer here.** The first draft read
+        `ISIDIUM_HARNESS_VERSION` from *this* process's environment — the factory's, on the workstation — which is
+        not where the harness is: the version is a fact about the image, and the image is the other side of a
+        container boundary this method must not cross to answer a declaration. So the matrix declares **which image
+        runs**, and the concrete version comes back on the `PhaseResult` from inside it, where it is true. Found
+        live 2026-09-12, when the matrix said `unknown` beside a run that knew exactly which harness it ran."""
         return AdapterCapabilities(
             name=NAME,
             harness=HARNESS,
-            harness_version=os.environ.get("ISIDIUM_HARNESS_VERSION", "unknown"),
+            harness_version=self._reg.runner_image or "no image declared",
             write_guard_at_write_time=True,
             identity_held_by_wrapper=True,
             budgets=True,

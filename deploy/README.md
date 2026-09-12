@@ -1145,6 +1145,69 @@ silent.
 and weekly windows as the owner's own sessions, so a limit answers `adapter.environment` and backs off; only a start
 failure or the watchdog gets T-C6's one retry.
 
+### V4a-i live on tenant #0: `config@6` adopted, the run image built, the seam reading the signed policy — 2026-09-12
+
+`main` `53d23dd` (PR #55, all seven checks green). Image `isidium-store:v4a` = `78343078d8a6`;
+`recreate.sh v4a` → healthy in 35 s, no restarts.
+
+**The `config-policy` act adopting `config@6`** — policy **seq 8**, commit `62fa9ce`, journal seq 20, fields
+`governed, schema`, signed `ed25519:5a6c85e2…`. `isidium install` first, so the checkout's registry holds the new
+document (18 installed).
+
+**The registration** gained one table — `[runner].image = "isidium-runner:v4a"` — read back as
+`{'wip': 1, 'adapter': 'container', 'max_bytes': 262144, 'allow_software_grade_until': '2026-10-11',
+'runner_image': 'isidium-runner:v4a'}`.
+
+**The run image**, built with the harness version pinned at the build:
+
+```sh
+npm view @anthropic-ai/claude-code version          # 2.1.269 on the day
+podman build -f deploy/Containerfile.runner -t isidium-runner:v4a --build-arg CLAUDE_CODE_VERSION=2.1.269 .
+```
+
+Verified in the image itself: the entrypoint refuses with no job (`set ISIDIUM_JOB`), `claude --version` answers
+`2.1.269 (Claude Code)`, and `python -m isidium.factory.guard` with nothing configured **refuses every write** and
+exits 2 — the guard fails closed before it is ever handed a set.
+
+**The seam reads the live, signed policy.** Against tenant #0 at `main`, with nothing in the environment:
+
+```
+adopted config schema: 6
+guard: write-time
+allowlist: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash', 'TodoWrite']
+budgets: {'max_turns': 40, 'wall_clock_s': 3600, 'max_tokens': None}
+agents: builder claude-opus-5/xhigh · plan-refuter claude-sonnet-5/high · judge claude-opus-5/high · …
+adapter: container -> Container
+capabilities: harness claude-code · harness_version isidium-runner:v4a · write_guard_at_write_time true ·
+              identity_held_by_wrapper true · billing_class plan · hosts ['api.anthropic.com']
+```
+
+**Two findings, both at the image, both fixed here.**
+
+1. **`ISIDIUM_HARNESS_VERSION` never reached the image.** The build argument was required to *build* — the guard at
+   the top of the Containerfile fires without it — and then nothing carried it into the environment the run reads,
+   so every run would have recorded `harness_version: unknown`. The same class as `ISIDIUM_SIGNER` in
+   `recreate.sh` (2026-09-12) and the healthcheck flags before it: **a value checked at one moment and not carried
+   to the moment it is read.** The `ENV` line is there now and `podman inspect` shows
+   `ISIDIUM_HARNESS_VERSION=2.1.269`.
+2. **The capability matrix read the version from the factory's own environment**, where the harness is not — so it
+   answered `unknown` beside a run that knew exactly which harness it ran. The matrix now declares **which image
+   runs** (`isidium-runner:v4a`) and the concrete version comes back on the `PhaseResult` from inside it, where it
+   is true. A test holds both halves.
+
+**What has not run, and why.** `isidium factory run --run r-1` needs `claude.token` at the deploy home, and that
+token is minted by `claude setup-token` — an interactive browser login on the owner's own account, one year,
+personal, model requests only. It is the one step of this live sequence that is not the factory's to take. `r-1` is
+untouched and still `dispatched` (`ended_at: null`, base `72dd1e9`, payload `sha256:a76ff365…`), so the run the
+first phase will execute is the one V3 dispatched:
+
+```sh
+claude setup-token                                   # the owner, once
+printf '%s' '<the token>' > C:/Dev/isidium-deploy/isidium-factory/factory/claude.token
+ISIDIUM_DEPLOY=C:/Dev/isidium-deploy isidium factory run \
+  --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-1
+```
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
