@@ -1195,7 +1195,7 @@ capabilities: harness claude-code · harness_version isidium-runner:v4a · write
    runs** (`isidium-runner:v4a`) and the concrete version comes back on the `PhaseResult` from inside it, where it
    is true. A test holds both halves.
 
-**What has not run, and why.** `isidium factory run --run r-1` needs `claude.token` at the deploy home, and that
+**What had not run when this section was first written, and why.** `isidium factory run` needs `claude.token` at the deploy home, and that
 token is minted by `claude setup-token` — an interactive browser login on the owner's own account, one year,
 personal, model requests only. It is the one step of this live sequence that is not the factory's to take. `r-1` is
 untouched and still `dispatched` (`ended_at: null`, base `72dd1e9`, payload `sha256:a76ff365…`), so the run the
@@ -1207,6 +1207,48 @@ printf '%s' '<the token>' > C:/Dev/isidium-deploy/isidium-factory/factory/claude
 ISIDIUM_DEPLOY=C:/Dev/isidium-deploy isidium factory run \
   --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-1
 ```
+
+#### The first phase the factory executed — `r-2`, 2026-09-12
+
+**`r-1` was spent on the first attempt.** The token at the deploy home was rejected (`401 Invalid bearer token`),
+the adapter retried it, called it `failed:infra` and ended the run — so `r-1` is `failed:infra`, `ended_at`
+`16:20:25Z`, no phase row. Both halves of that are fixed above; the run it cost is the honest record of what the
+defect did.
+
+**The second run needed a land first.** `dispatch` refused `dispatch.pending-land: merged, not landed: 2` — the
+store's own precondition, fail-closed, with #55's merge and this branch's commits ahead of the cursor. One
+`isidium factory land` with an empty report moved the cursor to `53d23dd` (commit `9195e64`, journal 21), and the
+picker answered card 5 again at the new head.
+
+**`r-2`**: card 5, lane `standard`, `story/r-2` at `9195e64`, adapter `container`, identity
+`isdm-fac-lander[bot]`, payload `sha256:28d4f69d…` (26,919 bytes), config `sha256:683afefb…` — the `config@6`
+chain's own build hash.
+
+**The phase ran.** `isidium factory run --run r-2`, one container, 9m04s:
+
+| | |
+|---|---|
+| outcome | `ok` |
+| agent / model / effort | `builder` · `claude-opus-5` · `xhigh` — the tenant's signed `[agents]` row |
+| tokens | 10,090 |
+| `cost_micro` | 884,410 — imputed, `billing_class: plan` |
+| `harness` / `harness_version` | `claude-code` · **`2.1.269`** — the finding above, proven live |
+| `guard_blocks` | 0 |
+| `touched` | `[]` |
+| turns | 37, `terminal_reason: completed` |
+
+**It wrote nothing, and that was the right answer.** Card 5 *is* V4a-i, and V4a-i was built and merged before the
+factory was pointed at it — so the builder read the worktree, checked the card's rules and all four acceptance
+scenarios against what was already there, and reported that no change was needed. The wrapper did what it
+promises for that case: no commit (*"an empty commit would be a claim of work"*), no `head_sha`, the worktree
+removed, the phase on the row, and the run left **in flight** — closing a run is V5's.
+
+**What this run proves, and what it does not.** Proved live: the seam, the tenant's signed policy reaching a
+container, the worktree per run, the payload re-assembled and matching the hash the ledger wrote, the rendered
+settings and the guard installed, one spawn, the phase row and its event in the ledger, and the harness version on
+the record. **Not exercised by this run:** a write inside `surfaces` and the commit the wrapper would make, a
+denial by the guard (nothing was attempted outside), and `surfaces_actual` from a real diff. A card with work left
+in it is what exercises those, and the first one to land will.
 
 ## What is not here yet
 
