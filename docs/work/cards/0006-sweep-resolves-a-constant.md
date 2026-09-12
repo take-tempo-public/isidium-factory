@@ -2,7 +2,7 @@
 schema = 1
 id = 6
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "session"
 title = "The rule-id sweep resolves a module constant, not only a literal"
 shape = "bdd"
@@ -35,6 +35,14 @@ kind = "test-marker"
 title = "a first argument the sweep cannot resolve fails the sweep"
 rule = "R2"
 observable = { test = "tests/unit/test_rule_ids.py::test_an_unresolvable_rule_id_fails_the_sweep" }
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass" }
+evidence = ["sha256:1bbbdb385a470b60331d485467f28fa4939a10e8b3ec5a93192a7e508bd94cb5"]
+retracted = false
 ```
 
 ## Scope
@@ -51,5 +59,6 @@ Not in scope: changing how any package raises its refusals; the disclosure table
 history = [
   { seq = 1, at = "2026-09-12T15:34:36Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ee67fd4a85c481b1547eeec4a915dd7cbb5518d5703717f3e517018d8c37a1d2", h = "sha256:8636f6762a89f09d7d0060340d00f7f800c44520346efe3701f0f8ce402819cd" },
   { seq = 2, at = "2026-09-12T17:33:47Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ee67fd4a85c481b1547eeec4a915dd7cbb5518d5703717f3e517018d8c37a1d2", h = "sha256:3587620a0e82f2577b6be6489c551c3017338e537034767dc0229d04b76c44ce", batch = 9 },
+  { seq = 3, at = "2026-09-12T18:17:28Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:ee67fd4a85c481b1547eeec4a915dd7cbb5518d5703717f3e517018d8c37a1d2", ref = "c1:sha256:bd9b758ddc9b0119d6d0ce16233d8198884a433a79d785092d21199001a96194", h = "sha256:eb2fa84f4fedd5886233b574f993c67adc2a0d8693f701c20b335af6ebf69ccb", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:uToXmMHmYsVsJQwk7Ru4BGIEqdj/EnCPAYB2SeLbXu8Ew6+m9bn9OPIXwcJvDKkHmAxRAvqO7SFIH4T9ah6FAg==" },
 ]
 ```
