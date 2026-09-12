@@ -1145,6 +1145,117 @@ silent.
 and weekly windows as the owner's own sessions, so a limit answers `adapter.environment` and backs off; only a start
 failure or the watchdog gets T-C6's one retry.
 
+### V4a-i live on tenant #0: `config@6` adopted, the run image built, the seam reading the signed policy — 2026-09-12
+
+`main` `53d23dd` (PR #55, all seven checks green). Image `isidium-store:v4a` = `78343078d8a6`;
+`recreate.sh v4a` → healthy in 35 s, no restarts.
+
+**The `config-policy` act adopting `config@6`** — policy **seq 8**, commit `62fa9ce`, journal seq 20, fields
+`governed, schema`, signed `ed25519:5a6c85e2…`. `isidium install` first, so the checkout's registry holds the new
+document (18 installed).
+
+**The registration** gained one table — `[runner].image = "isidium-runner:v4a"` — read back as
+`{'wip': 1, 'adapter': 'container', 'max_bytes': 262144, 'allow_software_grade_until': '2026-10-11',
+'runner_image': 'isidium-runner:v4a'}`.
+
+**The run image**, built with the harness version pinned at the build:
+
+```sh
+npm view @anthropic-ai/claude-code version          # 2.1.269 on the day
+podman build -f deploy/Containerfile.runner -t isidium-runner:v4a --build-arg CLAUDE_CODE_VERSION=2.1.269 .
+```
+
+Verified in the image itself: the entrypoint refuses with no job (`set ISIDIUM_JOB`), `claude --version` answers
+`2.1.269 (Claude Code)`, and `python -m isidium.factory.guard` with nothing configured **refuses every write** and
+exits 2 — the guard fails closed before it is ever handed a set.
+
+**The seam reads the live, signed policy.** Against tenant #0 at `main`, with nothing in the environment:
+
+```
+adopted config schema: 6
+guard: write-time
+allowlist: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash', 'TodoWrite']
+budgets: {'max_turns': 40, 'wall_clock_s': 3600, 'max_tokens': None}
+agents: builder claude-opus-5/xhigh · plan-refuter claude-sonnet-5/high · judge claude-opus-5/high · …
+adapter: container -> Container
+capabilities: harness claude-code · harness_version isidium-runner:v4a · write_guard_at_write_time true ·
+              identity_held_by_wrapper true · billing_class plan · hosts ['api.anthropic.com']
+```
+
+**Two findings, both at the image, both fixed here.**
+
+1. **`ISIDIUM_HARNESS_VERSION` never reached the image.** The build argument was required to *build* — the guard at
+   the top of the Containerfile fires without it — and then nothing carried it into the environment the run reads,
+   so every run would have recorded `harness_version: unknown`. The same class as `ISIDIUM_SIGNER` in
+   `recreate.sh` (2026-09-12) and the healthcheck flags before it: **a value checked at one moment and not carried
+   to the moment it is read.** The `ENV` line is there now and `podman inspect` shows
+   `ISIDIUM_HARNESS_VERSION=2.1.269`.
+2. **The capability matrix read the version from the factory's own environment**, where the harness is not — so it
+   answered `unknown` beside a run that knew exactly which harness it ran. The matrix now declares **which image
+   runs** (`isidium-runner:v4a`) and the concrete version comes back on the `PhaseResult` from inside it, where it
+   is true. A test holds both halves.
+
+**What had not run when this section was first written, and why.** `isidium factory run` needs `claude.token` at the deploy home, and that
+token is minted by `claude setup-token` — an interactive browser login on the owner's own account, one year,
+personal, model requests only. It is the one step of this live sequence that is not the factory's to take. `r-1` is
+untouched and still `dispatched` (`ended_at: null`, base `72dd1e9`, payload `sha256:a76ff365…`), so the run the
+first phase will execute is the one V3 dispatched:
+
+**`claude setup-token` is two steps, and the first live attempt got the first one.** It opens a browser, and
+the page hands back an **authorization code** that must be pasted into the waiting prompt; the token is what the
+command prints *after* that. The code pasted into the file instead is the right length and shape to look like a
+credential and is refused `401 Invalid bearer token` — which is what spent `r-1`. There is no prefix to check for
+and none to add: take what the command prints at the end, whole.
+
+```sh
+claude setup-token                                   # the owner, once — paste the browser's code back in
+printf '%s' '<the token>' > C:/Dev/isidium-deploy/isidium-factory/factory/claude.token
+ISIDIUM_DEPLOY=C:/Dev/isidium-deploy isidium factory run \
+  --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-1
+```
+
+#### The first phase the factory executed — `r-2`, 2026-09-12
+
+**`r-1` was spent on the first attempt.** The token at the deploy home was rejected (`401 Invalid bearer token`),
+the adapter retried it, called it `failed:infra` and ended the run — so `r-1` is `failed:infra`, `ended_at`
+`16:20:25Z`, no phase row. Both halves of that are fixed above; the run it cost is the honest record of what the
+defect did.
+
+**The second run needed a land first.** `dispatch` refused `dispatch.pending-land: merged, not landed: 2` — the
+store's own precondition, fail-closed, with #55's merge and this branch's commits ahead of the cursor. One
+`isidium factory land` with an empty report moved the cursor to `53d23dd` (commit `9195e64`, journal 21), and the
+picker answered card 5 again at the new head.
+
+**`r-2`**: card 5, lane `standard`, `story/r-2` at `9195e64`, adapter `container`, identity
+`isdm-fac-lander[bot]`, payload `sha256:28d4f69d…` (26,919 bytes), config `sha256:683afefb…` — the `config@6`
+chain's own build hash.
+
+**The phase ran.** `isidium factory run --run r-2`, one container, 9m04s:
+
+| | |
+|---|---|
+| outcome | `ok` |
+| agent / model / effort | `builder` · `claude-opus-5` · `xhigh` — the tenant's signed `[agents]` row |
+| tokens | 10,090 |
+| `cost_micro` | 884,410 — imputed, `billing_class: plan` |
+| `harness` / `harness_version` | `claude-code` · **`2.1.269`** — the finding above, proven live |
+| `guard_blocks` | 0 |
+| `touched` | `[]` |
+| turns | 37, `terminal_reason: completed` |
+
+**It wrote nothing, and that was the right answer.** Card 5 *is* V4a-i, and V4a-i was built and merged before the
+factory was pointed at it — so the builder read the worktree, checked the card's rules and all four acceptance
+scenarios against what was already there, and reported that no change was needed. The wrapper did what it
+promises for that case: no commit (*"an empty commit would be a claim of work"*), no `head_sha`, the worktree
+removed, the phase on the row, and the run left **in flight** — closing a run is V5's.
+
+**What this run proves, and what it does not.** Proved live: the seam, the tenant's signed policy reaching a
+container, the worktree per run, the payload re-assembled and matching the hash the ledger wrote, the rendered
+settings and the guard installed, one spawn, the phase row and its event in the ledger, and the harness version on
+the record. **Not exercised by this run:** a write inside `surfaces` and the commit the wrapper would make, a
+denial by the guard (nothing was attempted outside), and `surfaces_actual` from a real diff. A card with work left
+in it is what exercises those, and the first one to land will.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider

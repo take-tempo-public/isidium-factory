@@ -66,7 +66,13 @@ RUN useradd --system --create-home --home-dir /home/runner runner \
 COPY deploy/runner-entrypoint.sh /usr/local/bin/isidium-runner
 RUN chmod 0755 /usr/local/bin/isidium-runner
 
+# The harness version a run records (7bdb.4(5)) is the one this image was built with, carried from the build
+# argument into the image's own environment. **Found live, 2026-09-12:** this line was missing from the first build
+# and every run would have recorded `harness_version: unknown` — the build argument was required to *build* and
+# reached nothing that runs. The same class as `ISIDIUM_SIGNER` in `recreate.sh`: a value that is checked at one
+# moment and never carried to the moment it is read.
 ENV ISIDIUM_PROMPTS=/opt/isidium/prompts \
+    ISIDIUM_HARNESS_VERSION=${CLAUDE_CODE_VERSION} \
     HOME=/home/runner
 WORKDIR /work
 USER runner
