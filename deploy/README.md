@@ -1256,6 +1256,38 @@ the record. **Not exercised by this run:** a write inside `surfaces` and the com
 denial by the guard (nothing was attempted outside), and `surfaces_actual` from a real diff. A card with work left
 in it is what exercises those, and the first one to land will.
 
+### V5a live on tenant #0: a run closed, a run abandoned, and the store told — 2026-09-13
+
+`main` `3882657` (#59). The store image carries the widened failure classes, so it was swapped first:
+
+```bash
+podman build -q -f deploy/Containerfile.store -t isidium-store:v5a .   # 6ba29fdce30e, 2 min 51 s
+bash C:/Dev/isidium-deploy/isidium-factory/recreate.sh v5a             # healthy in 38 s, 0 restarts
+```
+
+The first `isidium factory runs` after the swap opened the ledger at schema 1 and migrated it in place — `pr` and
+`landed_through` added, the three rows untouched. Then, with the checkout on `main`, clean:
+
+```bash
+isidium factory close --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-3 --pr 57
+isidium factory close --tenant isidium-factory --checkout C:/Dev/isidium-factory --run r-2
+```
+
+| | `r-3` (card 6) | `r-2` (card 5) |
+|---|---|---|
+| outcome | `closed`, in 1 min 23 s | `abandoned` — the card is `withdrawn` |
+| pull request | #57, head `ac2fa4c8` = the run's; merged, merge commit `61b592c` | — |
+| gate | `sweep`, `verify`, `green-bar` green on the merge commit | — |
+| identity | the one commit in the range: the lander's, with `Factory-Run: r-3` | — |
+| acceptance | S1 pass, S2 pass, manifest `sha256:1bbbdb38…` (the owner's `accept 6` gave the same), run at `3882657` | — |
+| landed | `e8 dispatched`, `e9 complete`, `e10 closed` (`closure_kind: human`, `c1`, `verified: true`); commit `2fa5c54` | nothing |
+
+**After:** card 6 reads `closed` — the store verified the human's closure against the build it ran, the first
+verified closure on this tenant. Nothing is in flight in the ledger, the board's `WIP 0/1` is now true on both sides,
+and `isidium factory dispatch --dry-run` gets past the WIP cap and refuses `dispatch.nothing-ready`: the tenant is no
+longer blocked, and has no ratified card to run. The chain that closed was `phases: ["build"]` — a build-only close,
+declared on the ledger's `ended` row until V4a-ii adds the rest.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
