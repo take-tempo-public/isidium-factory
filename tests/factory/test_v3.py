@@ -81,6 +81,12 @@ class Disk:
     ctx: TenantContext
 
     def call(self, name: str, args: Any) -> Any:
+        # Since V5a a pick lands its `dispatched` (Q-V19 (a)), which takes the card out of the ready-view — what the
+        # land is for. These tests pick the same cards again and again from one module store to discriminate T-A6's
+        # conditions, so here the land is answered and not made; the land itself is V5a's property, asserted over a
+        # real store in `test_v5a.py`.
+        if name == "land":
+            return {"events": [], "empty": True, "landed": True}
         return Api(self.store).call(name, LANDER, args)
 
 

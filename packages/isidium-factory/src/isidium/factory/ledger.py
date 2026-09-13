@@ -12,32 +12,46 @@ unchanged (finding 18: *"idempotence by run id is the ledger's"* — made mechan
 
 Tables are 03 §6's run record as rows: `runs` (the entry; `phases` / `verdicts` its two lists, V4/V5's to write), the
 ledger's own `events` (`dispatched` is a run's first), and `heads` (03 §1.15's history heads and journal head at every
-land — V5's `land` writes them). `report(run_id)` folds a run's events into the store's `RunReport`: *"the run report
-generated from it"* — V5's land hands the store what the ledger says, never a hand-written file.
+land — still unwritten after V5a: the store's `land` answers neither the journal head's hash nor the history heads,
+and the table's key, `landed_at`, is the cursor commit's time, which two lands at one cursor share). `report(run_id)`
+folds a run's events into the store's `RunReport`: *"the run report generated from it"* — since V5a
+(`lander.land_run`) the land hands the store what the ledger says, never a hand-written file, and once.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, get_args
 
 from isidium.store.core import events as events_mod
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 LEDGER_FILE: Final = "ledger.sqlite"
-SCHEMA: Final = 1
+# Schema 2 [V5a]: `runs.pr` (the pull request `close` reads) and `runs.landed_through` (the watermark: the last event
+# `seq` of the run the store has been sent).
+SCHEMA: Final = 2
 SPAN: Final = "isidium.factory.ledger.write"
 DISPATCHED: Final = "dispatched"
 # The ledger's own transitions, beside `interrupt`: neither is a store event kind, so `report()`
 # filters them out and `runs --run` is where they are read.
 PHASE: Final = "phase"
 ENDED: Final = "ended"
+# The outcomes a run ends as — a closed set since V5a (T-A7: `complete` | `failed:<class>` | `parked`; T-A9's
+# `closed`; 03 §6's *abandon the run*). `complete` is not among them: T-A9 runs straight after it, so the ledger writes
+# the store's `complete` event and ends the run `closed` in one transaction. The classes are the store's own union.
+CLOSED: Final = "closed"
+ABANDONED: Final = "abandoned"
+PARKED: Final = "parked"
+FAILED: Final = "failed:"
+ENDS: Final[frozenset[str]] = frozenset(
+    {CLOSED, ABANDONED, PARKED, *(FAILED + c for c in get_args(events_mod.FailureClass))}
+)
 
 _DDL: Final = (
     "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -46,7 +60,8 @@ _DDL: Final = (
         build_hash TEXT NOT NULL, base_sha TEXT NOT NULL, head_sha TEXT, story_branch TEXT NOT NULL,
         adapter TEXT NOT NULL, billing_class TEXT, dispatched_at TEXT NOT NULL, ended_at TEXT,
         payload_hash TEXT NOT NULL, config_hash TEXT NOT NULL, context TEXT NOT NULL, score TEXT NOT NULL,
-        refs_resolved TEXT NOT NULL, surfaces_actual TEXT, price_table TEXT, identity TEXT NOT NULL)""",
+        refs_resolved TEXT NOT NULL, surfaces_actual TEXT, price_table TEXT, identity TEXT NOT NULL,
+        pr INTEGER, landed_through INTEGER)""",
     """CREATE TABLE IF NOT EXISTS phases (
         run_id TEXT NOT NULL REFERENCES runs(run_id), phase TEXT NOT NULL, agent TEXT, model TEXT, effort TEXT,
         prompt_version TEXT, tokens INTEGER, cost_micro INTEGER, duration_ms INTEGER)""",
@@ -99,6 +114,14 @@ class Ledger:
         if held != tenant:
             self.db.close()
             raise Refusal("ledger.tenant", str(path), f"this ledger is {held!r}'s, not {tenant!r}'s")
+        if self._meta("schema") == "1":
+            # Eager, at open [V5a]: every verb reads the two columns, and tenant #0's ledger is schema 1 with three runs
+            # in it. Two `ADD COLUMN`s (no table rebuild, the rows untouched) and the version, in one transaction —
+            # after the tenant check, so another tenant's file is refused before it is changed.
+            with self.transaction():
+                self.db.execute("ALTER TABLE runs ADD COLUMN pr INTEGER")
+                self.db.execute("ALTER TABLE runs ADD COLUMN landed_through INTEGER")
+                self.db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod
     @contextmanager
@@ -169,11 +192,10 @@ class Ledger:
 
     def fail(self, run_id: str, at: str, reason: str, detail: str) -> None:
         """What happened after the record, told truthfully (T-A6's failure protocol): the run ends
-        `failed:<reason>` with the detail as an event of the ledger's own."""
+        `failed:<reason>` — with the store's `failed` event beside it since V5a — and the detail as an event of the
+        ledger's own."""
         with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
-            self.db.execute(
-                "UPDATE runs SET outcome = ?, ended_at = ? WHERE run_id = ?", (f"failed:{reason}", at, run_id)
-            )
+            self._end(run_id, at, FAILED + reason)
             self._event(run_id, at, "interrupt", {"reason": reason, "detail": detail})
 
     def phase(self, run_id: str, at: str, result: Mapping[str, Any]) -> None:
@@ -231,25 +253,104 @@ class Ledger:
     ) -> None:
         """The run, ended. 03 §6's tail of the record in one write: what it ended as, at which head, what it
         actually touched (T-B7 (4): *"surfaces actual computed from the diff, not from the plan"*), and the
-        billing lane the run drew on — the measurement the ruled harness swap reads (7bdb.4(5))."""
-        with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
-            cur = self.db.execute(
-                "UPDATE runs SET outcome = ?, ended_at = ?, head_sha = COALESCE(?, head_sha),"
-                " surfaces_actual = COALESCE(?, surfaces_actual), billing_class = COALESCE(?, billing_class),"
-                " price_table = COALESCE(?, price_table) WHERE run_id = ?",
-                (
-                    outcome,
-                    at,
-                    head_sha,
-                    None if surfaces_actual is None else _dump(surfaces_actual),
-                    billing_class,
-                    None if price_table is None else _dump(price_table),
-                    run_id,
-                ),
+        billing lane the run drew on — the measurement the ruled harness swap reads (7bdb.4(5)). `end` with nothing
+        of the caller's to add."""
+        self.end(
+            run_id,
+            at,
+            outcome,
+            head_sha=head_sha,
+            surfaces_actual=surfaces_actual,
+            billing_class=billing_class,
+            price_table=price_table,
+        )
+
+    def end(
+        self,
+        run_id: str,
+        at: str,
+        outcome: str,
+        *,
+        head_sha: str | None = None,
+        surfaces_actual: Any = None,
+        billing_class: str | None = None,
+        price_table: Any = None,
+        store_events: Sequence[tuple[str, Mapping[str, Any]]] = (),
+        detail: Mapping[str, Any] | None = None,
+    ) -> None:
+        """**The one writer of `ended_at`** [V5a]. Until V5a a run that succeeded was never ended — `advance` moved
+        its head and nothing else — so `wip = 1` meant one card, ever. Now every end is this: the outcome from the
+        closed set (`ledger.outcome` outside it), a run already ended refused (`ledger.ended`), the caller's store
+        events (`complete`, `closed`), the store's own event for the outcome (`failed{class}`, `parked`), and the
+        ledger's `ended` with the detail — one transaction, so `report()` carries the end without translating it at
+        land time."""
+        with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.outcome": outcome}), self.transaction():
+            self._end(
+                run_id,
+                at,
+                outcome,
+                head_sha=head_sha,
+                surfaces_actual=surfaces_actual,
+                billing_class=billing_class,
+                price_table=price_table,
+                store_events=store_events,
             )
+            self._event(run_id, at, ENDED, {"outcome": outcome, **(detail or {})})
+
+    def _end(
+        self,
+        run_id: str,
+        at: str,
+        outcome: str,
+        *,
+        head_sha: str | None = None,
+        surfaces_actual: Any = None,
+        billing_class: str | None = None,
+        price_table: Any = None,
+        store_events: Sequence[tuple[str, Mapping[str, Any]]] = (),
+    ) -> None:
+        if outcome not in ENDS:
+            raise Refusal("ledger.outcome", outcome, "not an outcome a run ends as: " + ", ".join(sorted(ENDS)))
+        cur = self.db.execute(
+            "UPDATE runs SET outcome = ?, ended_at = ?, head_sha = COALESCE(?, head_sha),"
+            " surfaces_actual = COALESCE(?, surfaces_actual), billing_class = COALESCE(?, billing_class),"
+            " price_table = COALESCE(?, price_table) WHERE run_id = ? AND ended_at IS NULL",
+            (
+                outcome,
+                at,
+                head_sha,
+                None if surfaces_actual is None else _dump(surfaces_actual),
+                billing_class,
+                None if price_table is None else _dump(price_table),
+                run_id,
+            ),
+        )
+        if cur.rowcount == 0:
+            was = self.db.execute("SELECT outcome, ended_at FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            if was is None:
+                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+            raise Refusal("ledger.ended", run_id, f"this run ended {was['ended_at']} as {was['outcome']}")
+        for kind, data in store_events:
+            self._event(run_id, at, kind, data)
+        if outcome.startswith(FAILED):
+            self._event(run_id, at, "failed", {"class": outcome[len(FAILED) :], "run_id": run_id})
+        elif outcome == PARKED:
+            self._event(run_id, at, PARKED, {"run_id": run_id})
+
+    def set_pr(self, run_id: str, number: int) -> None:
+        """The run's pull request, on its row [V5a] — `pr-open` writes it; `close --pr` names one the ledger missed."""
+        with self.transaction():
+            cur = self.db.execute("UPDATE runs SET pr = ? WHERE run_id = ?", (number, run_id))
             if cur.rowcount == 0:
                 raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
-            self._event(run_id, at, ENDED, {"outcome": outcome})
+
+    def landed(self, run_id: str, through: int) -> None:
+        """The watermark advanced, after the store answered [V5a] — and never backwards."""
+        with self.transaction():
+            self.db.execute(
+                "UPDATE runs SET landed_through = ? WHERE run_id = ? AND COALESCE(landed_through, 0) < ?",
+                (through, run_id, through),
+            )
 
     def advance(self, run_id: str, head_sha: str, surfaces_actual: Any, billing_class: str | None) -> None:
         """A run that is further along but not over: the head its last phase committed, what it has touched so far
@@ -288,25 +389,44 @@ class Ledger:
         rows = self.db.execute("SELECT * FROM phases WHERE run_id = ? ORDER BY rowid", (run_id,)).fetchall()
         return [{k: r[k] for k in r.keys() if k != "run_id"} for r in rows]  # noqa: SIM118
 
-    def events_of(self, run_id: str) -> list[dict[str, Any]]:
-        rows = self.db.execute("SELECT * FROM events WHERE run_id = ? ORDER BY seq", (run_id,)).fetchall()
+    def events_of(self, run_id: str, *, since: int = 0) -> list[dict[str, Any]]:
+        rows = self.db.execute(
+            "SELECT * FROM events WHERE run_id = ? AND seq > ? ORDER BY seq", (run_id, since)
+        ).fetchall()
         return [{"seq": r["seq"], "at": r["at"], "kind": r["kind"], "data": json.loads(r["data"])} for r in rows]
 
     def report(self, run_id: str) -> events_mod.RunReport:
         """The run report generated from the ledger (Q-V1): the run's events that are the store's union, as the
         store parses them. The ledger's own `interrupt` is not a store event (the union has no such kind) and stays
         here, where `runs --run` shows it."""
+        run = self._need(run_id)
+        return _report(run, self.events_of(run_id))
+
+    def unlanded(self, run_id: str) -> tuple[events_mod.RunReport, int | None]:
+        """What the store has not been sent [V5a]: the run's store events past its watermark, and the `seq` the
+        watermark moves to once the store has answered — `None` when there is nothing to send. The events past the
+        watermark are the query's to find, not a scan of the run's whole history."""
+        run = self._need(run_id)
+        fresh = self.events_of(run_id, since=int(run["landed_through"] or 0))
+        report = _report(run, fresh)
+        return report, (int(fresh[-1]["seq"]) if report.events else None)
+
+    def _need(self, run_id: str) -> dict[str, Any]:
         run = self.run(run_id)
         if run is None:
             raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
-        evs = [
-            {"kind": e["kind"], "card": run["card"], "at": e["at"], "run_id": run_id}
-            if e["kind"] == DISPATCHED
-            else {"kind": e["kind"], "card": run["card"], "at": e["at"], **e["data"]}
-            for e in self.events_of(run_id)
-            if e["kind"] in events_mod.KINDS and e["kind"] not in events_mod.OBSERVED_KINDS
-        ]
-        return events_mod.parse_report({"run_id": run_id, "events": evs, "suggestions": []})
+        return run
+
+
+def _report(run: Mapping[str, Any], events: Sequence[Mapping[str, Any]]) -> events_mod.RunReport:
+    evs = [
+        {"kind": e["kind"], "card": run["card"], "at": e["at"], "run_id": run["run_id"]}
+        if e["kind"] == DISPATCHED
+        else {"kind": e["kind"], "card": run["card"], "at": e["at"], **e["data"]}
+        for e in events
+        if e["kind"] in events_mod.KINDS and e["kind"] not in events_mod.OBSERVED_KINDS
+    ]
+    return events_mod.parse_report({"run_id": run["run_id"], "events": evs, "suggestions": []})
 
 
 def _dump(value: Any) -> str:

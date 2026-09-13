@@ -34,7 +34,7 @@ from typing import Any, Final, Protocol
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
-from . import checkout, ordering
+from . import checkout, lander, ordering
 from . import payload as payload_mod
 from .context import TenantContext
 from .ledger import Ledger, NewRun
@@ -169,9 +169,15 @@ def _pick(
     except Refusal as r:
         ledger.fail(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), "environment", f"{r.rule}: {r.detail}")
         raise Refusal("dispatch.environment", branch, f"{r.rule}: {r.detail}") from None
+    # (h) [V5a, Q-V19 (a)] the `dispatched` event landed now, not at the run's end: the board's WIP is the number (b)
+    # counts, and a withdrawal mid-flight abandons the run through the store's own walk. One store commit per dispatch
+    # is the price, ruled. A refused land does not undo the run — it is recorded and branched — and the next land of
+    # this run carries the event (`lander.land_run`'s watermark).
+    land = lander.land_run(ledger, call, run_id)
+    sp.set_attribute("isidium.landed", "refused" not in land)
     row = ledger.run(run_id)
     assert row is not None
-    return row
+    return {**row, "land": land}
 
 
 def _drifted(recorded: list[Mapping[str, str]], now: list[dict[str, str]]) -> list[str]:

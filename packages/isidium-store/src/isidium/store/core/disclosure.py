@@ -143,6 +143,10 @@ NAMESPACES: Final[Mapping[str, Row]] = MappingProxyType(
         # runs, a payload that no longer hashes to the one the ledger wrote, a change set the result does not
         # match, a write outside the card's surfaces. The same posture, and the same reader.
         "run": Row(422, TERSE),
+        # the close (`isidium.factory.close`, V5a): a run already ended, no pull request recorded, one that is not the
+        # run's or not merged, a checkout that is dirty or behind the merge, a gate still running. The operator's at
+        # the terminal; a close that fails a condition ends the run instead, and that is the ledger's record.
+        "close": Row(422, TERSE),
         # Raised by a tool, not by the package [K10, Q21, ruled 2026-09-06: *"Sweep reads tools, unclassified
         # fails"*]: `tools/verify_chain.py` refuses a shallow checkout (`verify.shallow`, K7a). A tool speaks to the
         # operator at the forge and at the terminal and never to a peer, so C-12's reason for *terse* does not reach

@@ -25,7 +25,11 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .refusal import Refusal
 
-FailureClass = Literal["scope", "ambiguity", "budget", "timeout"]
+# 03 §1.5's four, widened by the classes the catalog's failure protocols and the ledger already use [V5a, Q-V22 (a),
+# owner 2026-09-12]: without them no failure of a run whose `dispatched` landed could ever land its end.
+FailureClass = Literal[
+    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"
+]
 Verdict = Literal["pass", "fail", "manual"]
 
 

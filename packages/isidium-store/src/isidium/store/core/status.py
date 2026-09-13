@@ -39,7 +39,9 @@ Row = Literal[
 ]
 Modifier = Literal["pending-ingest", "pending-land", "pending-review", "unverified"]
 IntegrityReason = Literal["tampered", "unjournaled", "rewritten", "unverified", "attribution", "time"]
-FailureClass = Literal["scope", "ambiguity", "budget", "timeout"]
+FailureClass = Literal[
+    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"
+]
 ExecutionState = Literal["complete", "reverted", "parked", "answered", "dispatched", "failed"]
 GuardKind = Literal["has-questions", "held", "held_by", "blocked_by", "deferred_by", "below-threshold"]
 HoldKind = Literal["blocked", "deferred", "watching"]
@@ -52,7 +54,19 @@ INTEGRITY_REASONS: Final[tuple[IntegrityReason, ...]] = (
     "attribution",
     "time",
 )
-FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = ("scope", "ambiguity", "budget", "timeout")
+# 03 §1.5's four and the six V5a widened it by (Q-V22 (a)) — `core.events.FailureClass` is the same closed set.
+FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = (
+    "scope",
+    "ambiguity",
+    "budget",
+    "timeout",
+    "infra",
+    "environment",
+    "acceptance",
+    "gate",
+    "card-drift",
+    "identity",
+)
 EXECUTION_STATES: Final[tuple[ExecutionState, ...]] = (
     "complete",
     "reverted",
