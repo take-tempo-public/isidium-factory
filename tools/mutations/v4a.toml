@@ -146,3 +146,72 @@ file = "packages/isidium-factory/src/isidium/factory/container.py"
 find = '''            _text(rundir / "harness.json", "result"),  # the provider's own sentence
             "\n".join(_lines(rundir / "harness.err")).strip(),'''
 replace = ''''''
+
+# Added 2026-09-13 with Q-V25's pull request: the two findings at V4a-ii's brief — the signed model row never reached
+# the harness, and the watchdog's TERM reached nothing — each property given the mutations that would bring it back.
+
+[[mutation]]
+id = "M17"
+label = "the signed row left off the harness's argv -- every phase runs the harness's default model"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        "--model",
+        spec.model,
+        "--effort",
+        spec.effort,
+    ]'''
+replace = '''    ]'''
+
+[[mutation]]
+id = "M18"
+label = "the image's result copies the asked model instead of reading what ran"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        "model": measured_model(out),'''
+replace = '''        "model": job.policy.agent(job.identity.agent).model,'''
+
+[[mutation]]
+id = "M19"
+label = "the adapter writes the policy's model over the image's answer -- r-2 and r-3's record, restored"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''                "agent": job.identity.agent,
+                "prompt_version": job.prompt_version,'''
+replace = '''                "agent": job.identity.agent,
+                "model": job.policy.agent(job.identity.agent).model,
+                "prompt_version": job.prompt_version,'''
+
+[[mutation]]
+id = "M20"
+label = "the utility model taken for the phase's -- the smallest output wins"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''    return str(max(usage, key='''
+replace = '''    return str(min(usage, key='''
+
+[[mutation]]
+id = "M21"
+label = "PID 1's handler forwards nothing -- the watchdog's TERM reaches no harness"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        if self.child is not None and self.child.poll() is None:
+            self.child.send_signal(signum)'''
+replace = '''        return'''
+
+[[mutation]]
+id = "M22"
+label = "a stop that lands before the spawn is ignored -- the harness starts anyway"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        if forward.stopped is None:'''
+replace = '''        if True:'''
+
+[[mutation]]
+id = "M23"
+label = "the retry reuses the name without freeing it -- the first container still stopping"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''                self._kill(job)
+                self._remove(job)'''
+replace = '''                self._kill(job)'''
+
+[[mutation]]
+id = "M24"
+label = "the cached context dropped from the phase's event"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''                    "cache_read_tokens": result.get("cache_read_tokens", 0),
+                    "cache_write_tokens": result.get("cache_write_tokens", 0),'''
+replace = ''''''

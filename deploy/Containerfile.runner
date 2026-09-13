@@ -77,6 +77,7 @@ ENV ISIDIUM_PROMPTS=/opt/isidium/prompts \
 WORKDIR /work
 USER runner
 
-# `exec`ed as PID 1, so the watchdog's `podman kill --signal TERM` reaches the harness itself and not a shell that
-# would swallow it (K6b's lesson, which cost tenant #0 a finding).
+# The entrypoint checks its inputs and `exec`s `python3 -m isidium.factory.harness` as PID 1, which forwards the
+# watchdog's `podman kill --signal TERM` to the harness it spawned. K6b's lesson, learned a second time (Q-V25): the
+# first version left the shell as PID 1 with the harness a foreground child, and the signal reached nothing.
 ENTRYPOINT ["/usr/local/bin/isidium-runner"]

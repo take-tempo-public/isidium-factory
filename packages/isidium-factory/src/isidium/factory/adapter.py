@@ -195,6 +195,10 @@ class PhaseResult(_Wire):
     effort: Effort
     prompt_version: str = Field(min_length=1)
     tokens: int = Field(default=0, ge=0)
+    # Q-V26 (a) [owner, 2026-09-13]: `tokens` is input + output; the cached context the harness read and wrote rides
+    # beside it, never inside it — `r-3` counted 42,147 against 3,689,226 read from the cache.
+    cache_read_tokens: int = Field(default=0, ge=0)
+    cache_write_tokens: int = Field(default=0, ge=0)
     cost_micro: int = Field(default=0, ge=0)
     duration_ms: int = Field(default=0, ge=0)
     artifacts: tuple[Artifact, ...] = ()

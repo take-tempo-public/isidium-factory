@@ -47,6 +47,10 @@ PODMAN: Final = "podman"
 # more, because a phase that died twice is an environment to fix, not a thing to keep paying a model to re-attempt.
 ATTEMPTS: Final = 2
 
+# How long `podman rm --force` lets a stopped phase's harness finish writing its result before it kills the container.
+# Seconds, not minutes: the harness is stopping, not working, and the retry waits on this.
+STOP_GRACE_S: Final = 10
+
 # The provider's own words for "you are out of window". A limit is `environment`: the run backs off and the picker
 # does not burn its one retry on it (the adapter-auth note, 2026-08-17).
 RATE_LIMIT_MARKERS: Final[tuple[str, ...]] = ("rate limit", "rate_limit", "429", "usage limit")
@@ -113,6 +117,7 @@ class Container:
                 )
             except subprocess.TimeoutExpired:
                 self._kill(job)
+                self._remove(job)
                 last = f"the watchdog fired at {job.policy.budgets.wall_clock_s}s"
                 continue
             except OSError as e:  # podman itself is not there, or cannot start
@@ -161,14 +166,27 @@ class Container:
         return argv
 
     def _kill(self, job: RunJob) -> None:
-        """The watchdog's hand. The image's entrypoint `exec`s its process as PID 1 (K6b's lesson), so a TERM to the
-        container reaches the thing that is actually running."""
+        """The watchdog's hand. The image's PID 1 is `isidium.factory.harness`, which forwards the `TERM` to the
+        harness it spawned — until Q-V25 PID 1 was a shell with no handler, and the signal reached nothing."""
         self._run(
             [self._podman, "kill", "--signal", "TERM", _name(job)],
             capture_output=True,
             text=True,
             check=False,
             timeout=30,
+        )
+
+    def _remove(self, job: RunJob) -> None:
+        """The name, freed before the retry. `--rm` removes a container only once it has exited, and a harness given
+        `TERM` takes a moment to stop and leave its result — so a retry under the same `--name` could meet the first
+        container still there, fail to start, and end the run `failed:infra` while the first kept spending (the finding
+        at Q-V25's build). `rm --force --time` waits that moment, then kills."""
+        self._run(
+            [self._podman, "rm", "--force", "--time", str(STOP_GRACE_S), _name(job)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=STOP_GRACE_S + 30,
         )
 
     def _why(self, proc: subprocess.CompletedProcess[str], rundir: Path) -> str:
@@ -199,13 +217,15 @@ class Container:
         return token
 
     def _result(self, job: RunJob, rundir: Path) -> PhaseResult:
-        """The image's answer, joined to what the factory already knows.
+        """The image's answer, joined to what only this side can know.
 
-        The run id, the phase, the agent kind, the model and the effort come from the **job** — they are what the
-        tenant's signed policy asked for, and a record of what was asked is what makes a divergence visible later.
-        `guard_blocks` is counted from the guard's own log by this side of the mount, because a phase that reported
-        its own denials could report none."""
-        spec = job.policy.agent(job.identity.agent)
+        The run id, the phase, the agent kind and the prompt version are the **job's** — they name which work this is.
+        **The model is the image's answer** — read from what the harness actually ran (`harness.measured_model`) — and
+        is never overwritten here. Until Q-V25 this method wrote the policy's model over it, so `r-2` and `r-3` ran
+        `claude-sonnet-5` under a record that says `claude-opus-5`, and the conformance check comparing the two could
+        not fail. What was asked stays on the record through the run's `config_hash`. `guard_blocks` is counted from
+        the guard's own log by this side of the mount, because a phase that reported its own denials could report
+        none."""
         try:
             raw: Any = json.loads((rundir / "result.json").read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
@@ -219,8 +239,6 @@ class Container:
                 "run_id": job.run_id,
                 "phase": job.phase,
                 "agent": job.identity.agent,
-                "model": spec.model,
-                "effort": spec.effort,
                 "prompt_version": job.prompt_version,
                 "guard_blocks": blocks,
                 "harness": raw.get("harness", HARNESS),

@@ -23,6 +23,7 @@ import datetime as _dt
 import io
 import json
 import re
+import signal
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -38,7 +39,7 @@ from isidium.factory import checkout as checkout_mod
 from isidium.factory import cli as cli_mod
 from isidium.factory import context as context_mod
 from isidium.factory import dispatch as dispatch_mod
-from isidium.factory import guard, render
+from isidium.factory import guard, harness, render
 from isidium.factory import runner as runner_mod
 from isidium.factory.adapter import AdapterCapabilities, PhaseResult, RunJob
 from isidium.factory.container import Container
@@ -196,7 +197,7 @@ class Podman:
     def __call__(self, argv: list[str], **kw: Any) -> subprocess.CompletedProcess[str]:
         self.seen.append(list(argv))
         self.env.append(dict(kw.get("env") or {}))
-        if argv[1] == "kill":
+        if argv[1] in ("kill", "rm"):
             return subprocess.CompletedProcess(argv, 0, "", "")
         first = len([a for a in self.seen if a[1] == "run"]) == 1
         if self.timeout and not (self.once and not first):
@@ -219,8 +220,8 @@ def _harness_result(**over: Any) -> dict[str, Any]:
         "run_id": "ignored — the adapter takes the job's",
         "phase": "build",
         "agent": "builder",
-        "model": "ignored",
-        "effort": "high",
+        "model": "claude-opus-5",  # the image's measured answer; config@6's builder row, unless a test says otherwise
+        "effort": "xhigh",
         "prompt_version": "v1",
         "tokens": 1234,
         "cost_micro": 5678,
@@ -240,6 +241,7 @@ class Fake:
 
     result: dict[str, Any] = field(default_factory=_harness_result)
     writes: tuple[str, ...] = ()
+    ran: str | None = None  # a model other than the one the policy named — what the conformance check must catch
     seen: list[RunJob] = field(default_factory=list)
 
     def capabilities(self) -> AdapterCapabilities:
@@ -270,7 +272,7 @@ class Fake:
                 "run_id": job.run_id,
                 "phase": job.phase,
                 "agent": job.identity.agent,
-                "model": spec.model,
+                "model": self.ran or spec.model,
                 "effort": spec.effort,
             }
         )
@@ -516,13 +518,16 @@ def test_one_spawn_per_phase(disk: Disk) -> None:
     assert len([a for a in pod.seen if a[1] == "run"]) == 1
 
 
-def test_the_adapter_takes_the_signed_model_and_counts_the_guards_denials(disk: Disk) -> None:
-    """What the tenant signed is what the record says was asked for; the denials are counted from the guard's own
-    log by this side of the mount, because a phase could report none."""
-    pod = Podman(blocks=3)
-    res = Container(disk.home, _reg(disk), run=pod).execute(a_job(disk))
+def test_the_record_says_the_model_the_image_ran_and_counts_the_guards_denials(disk: Disk) -> None:
+    """Q-V25: the model on the record is the image's measured answer, never the policy's written over it — the
+    discriminator is an image that ran something other than the signed row, which is exactly what `r-2` and `r-3`
+    did. The denials are counted from the guard's own log by this side of the mount, because a phase could report
+    none."""
     policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
-    assert res.model == policy.agent("builder").model and res.effort == "xhigh"
+    assert policy.agent("builder").model != "claude-sonnet-5", "the discriminator needs a row that is not the image's"
+    pod = Podman(blocks=3, result=_harness_result(model="claude-sonnet-5"))
+    res = Container(disk.home, _reg(disk), run=pod).execute(a_job(disk))
+    assert res.model == "claude-sonnet-5" and res.effort == "xhigh"
     assert res.guard_blocks == 3 and res.tokens == 1234 and res.billing_class == "plan"
     assert res.run_id == disk.run_id
 
@@ -546,6 +551,10 @@ def test_the_watchdog_kills_the_container_and_ends_failed_infra(disk: Disk) -> N
     refuses("adapter.infra", lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk)))
     kills = [a for a in pod.seen if a[1] == "kill"]
     assert kills and kills[0][-1].startswith("isidium-") and "TERM" in kills[0]
+    # Q-V25: the name is freed before the retry, or the second `run --name` meets the first container still stopping.
+    verbs = [a[1] for a in pod.seen]
+    assert verbs == ["run", "kill", "rm", "run", "kill", "rm"], verbs
+    assert all(a[-1] == kills[0][-1] for a in pod.seen if a[1] == "rm")
 
 
 def test_a_rate_limit_is_environment_and_is_not_retried(disk: Disk) -> None:
@@ -731,6 +740,128 @@ def test_an_adapter_that_declares_more_than_it_has_fails_conformance(
     )
     bad = conformance.run(Fake(), job, monkeypatch, tmp_path)
     assert any("write_guard_at_write_time" in b for b in bad), bad
+
+
+def test_an_adapter_that_ran_another_model_fails_conformance(
+    disk: Disk, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Q-V25: the model check could not fail while the container adapter copied the policy's model into its result.
+    Now it reads what ran, and the suite is shown to catch an adapter that ran something the tenant did not sign —
+    through the fake and through the container adapter both."""
+    job = a_job(disk)
+    assert any(
+        "the policy named" in b for b in conformance.run(Fake(ran="claude-sonnet-5"), job, monkeypatch, tmp_path)
+    )
+    pod = Podman(result=_harness_result(model="claude-sonnet-5"))
+    bad = conformance.run(Container(disk.home, _reg(disk), run=pod), job, monkeypatch, tmp_path / "container")
+    assert any("the policy named" in b for b in bad), bad
+
+
+# ------------------------------------------------------------------------------ the harness inside the image (Q-V25)
+
+
+def test_the_harness_argv_carries_the_agents_signed_model_and_effort(disk: Disk) -> None:
+    """The signed `[agents]` row on the harness's own command line — the fact the shell entrypoint never passed. Two
+    agents with different rows, so an argv built from one fixed value cannot pass both."""
+    for agent, model, effort in (("builder", "claude-opus-5", "xhigh"), ("plan-refuter", "claude-sonnet-5", "high")):
+        ident = {"agent": agent, "name": "isdm-fac-lander", "email": "1+x@users.noreply.github.com"}
+        args = harness.argv(a_job(disk, identity=ident), "/run/settings.json")
+        assert args[0] == "claude"
+        assert args[args.index("--model") + 1] == model and args[args.index("--effort") + 1] == effort, args
+        assert args[args.index("--settings") + 1] == "/run/settings.json"
+        assert args[args.index("--max-turns") + 1] == str(a_job(disk).policy.budgets.max_turns)
+
+
+def test_the_result_reads_the_model_that_ran_and_counts_tokens_as_declared(disk: Disk) -> None:
+    """`r-3`'s own harness output, in shape: the phase's model is the one that produced the output, not the utility
+    model beside it and not the row that was asked for; `tokens` is input + output and the cache counts ride beside
+    it (Q-V26 (a)); a harness that ran nothing names no model."""
+    out = {
+        "usage": {
+            "input_tokens": 76,
+            "output_tokens": 42071,
+            "cache_read_input_tokens": 3689226,
+            "cache_creation_input_tokens": 98477,
+        },
+        "modelUsage": {"claude-haiku-4-5-20251001": {"outputTokens": 14}, "claude-sonnet-5": {"outputTokens": 42071}},
+        "total_cost_usd": 1.5678892,
+        "duration_ms": 1009710,
+    }
+    got = harness.report(a_job(disk), out, True, "2.1.269")
+    assert got["model"] == "claude-sonnet-5" and got["effort"] == "xhigh"
+    assert (got["tokens"], got["cache_read_tokens"], got["cache_write_tokens"]) == (42147, 3689226, 98477)
+    assert got["cost_micro"] == 1567889 and got["outcome"] == "ok"
+    assert adapter_mod.result(got).model == "claude-sonnet-5"
+    assert harness.report(a_job(disk), {}, False, "2.1.269")["model"] == harness.UNMEASURED
+
+
+@dataclass
+class Child:
+    """A spawned harness: `wait` delivers `signals` to whatever handler PID 1 installed, as the watchdog would."""
+
+    handlers: dict[int, Any]
+    signals: tuple[int, ...] = ()
+    sent: list[int] = field(default_factory=list)
+    done: bool = False
+
+    def poll(self) -> int | None:
+        return 0 if self.done else None
+
+    def send_signal(self, sig: int) -> None:
+        self.sent.append(sig)
+
+    def wait(self) -> int:
+        for sig in self.signals:
+            self.handlers[sig](sig, None)
+        self.done = True
+        return -int(self.sent[0]) if self.sent else 0
+
+
+def test_pid_1_forwards_the_watchdogs_term_to_the_harness(disk: Disk, tmp_path: Path) -> None:
+    """The watchdog's `TERM` reaches the harness through PID 1's handler, and the stopped phase still leaves a result
+    — `failed:infra`, never `ok`. And a stop that lands before the harness exists starts no harness at all."""
+    prompts = tmp_path / "prompts"
+    (prompts / "builder").mkdir(parents=True)
+    (prompts / "builder" / "v1.md").write_text("# the builder", encoding="utf-8")
+    job = a_job(disk)
+
+    handlers: dict[int, Any] = {}
+    spawned: list[Child] = []
+
+    def spawn(args: list[str], **_kw: Any) -> Child:
+        spawned.append(Child(handlers, signals=(signal.SIGTERM,)))
+        return spawned[-1]
+
+    run1 = tmp_path / "run1"
+    run1.mkdir()
+    code = harness.run(job, run1, prompts, harness_version="2.1.269", spawn=spawn, install=handlers.__setitem__)
+    assert spawned and spawned[0].sent == [signal.SIGTERM], "the TERM never reached the harness"
+    assert code == 1 and json.loads((run1 / "result.json").read_text(encoding="utf-8"))["outcome"] == "failed:infra"
+    assert (run1 / "input.md").read_text(encoding="utf-8").startswith("# the builder")
+
+    early: list[Child] = []
+
+    def spawn_early(args: list[str], **_kw: Any) -> Child:
+        early.append(Child({}))
+        return early[-1]
+
+    def stop_now(sig: int, handler: Any) -> None:
+        handler(sig, None)
+
+    run2 = tmp_path / "run2"
+    run2.mkdir()
+    code = harness.run(job, run2, prompts, harness_version="2.1.269", spawn=spawn_early, install=stop_now)
+    assert early == [] and code == 1, "a stop before the spawn still started the harness"
+
+
+def test_the_phase_event_carries_the_cache_counts(disk: Disk, led: Ledger) -> None:
+    """Q-V26 (a): no column for the cached context — it rides the ledger's own `phase` event."""
+    run_id = fresh_run(disk, led)
+    res = adapter_mod.result({**_harness_result(cache_read_tokens=3689226, cache_write_tokens=98477), "run_id": run_id})
+    led.phase(run_id, "2026-09-13T00:00:00Z", res.row())
+    ev = [e for e in led.events_of(run_id) if e["kind"] == "phase"][-1]
+    assert (ev["data"]["cache_read_tokens"], ev["data"]["cache_write_tokens"]) == (3689226, 98477)
+    assert led.phases_of(run_id)[-1]["tokens"] == 1234
 
 
 # ------------------------------------------------------------------------------------------------------ helpers

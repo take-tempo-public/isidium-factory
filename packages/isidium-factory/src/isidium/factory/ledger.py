@@ -234,6 +234,8 @@ class Ledger:
                     "artifacts": result.get("artifacts", []),
                     "guard_blocks": result.get("guard_blocks", 0),
                     "touched": result.get("touched", []),
+                    "cache_read_tokens": result.get("cache_read_tokens", 0),
+                    "cache_write_tokens": result.get("cache_write_tokens", 0),
                     "harness": result.get("harness"),
                     "harness_version": result.get("harness_version"),
                     "billing_class": result.get("billing_class"),
