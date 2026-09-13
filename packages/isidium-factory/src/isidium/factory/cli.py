@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, Any, Final, NoReturn
 
 import typer
 
@@ -16,6 +16,7 @@ from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 from . import checkout, context, forge, github, lander
+from . import close as close_mod
 from . import dispatch as dispatch_mod
 from . import ledger as ledger_mod
 from . import payload as payload_mod
@@ -158,9 +159,25 @@ def pr_open(
         ctx, drv = _driver(tenant, checkout_path, base, root)
         spec = forge.pr_text(ctx, branch, drv.changed(ctx.base_sha, branch))
         pr = drv.open_pr(spec)
+        _record_pr(ctx, tenant, branch, pr.number)
     except Refusal as r:
         _refuse(r)
     _out({"number": pr.number, "url": pr.url, "head": pr.head})
+
+
+STORY: Final = "story/"
+
+
+def _record_pr(ctx: context.TenantContext, tenant: str, branch: str, number: int) -> None:
+    """A story branch's pull request, on its run's row [V5a] — what `close` reads. A branch that is not a run's, or a
+    deploy home with no ledger, records nothing: `pr-open` is V2's verb and serves branches the line did not make, and
+    opening a ledger would create one."""
+    run_id = branch.removeprefix(STORY)
+    if run_id == branch or not (ctx.home / ledger_mod.LEDGER_FILE).exists():
+        return
+    with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+        if led.run(run_id) is not None:
+            led.set_pr(run_id, number)
 
 
 @app.command("pr-status")
@@ -231,6 +248,28 @@ def run_verb(
         channel = Transport(ctx.client, ctx.home)
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
             row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
+    except Refusal as r:
+        _refuse(r)
+    _out(row)
+
+
+@app.command("close")
+def close_verb(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    run: Annotated[str, typer.Option("--run", help="the run to close, `r-<n>`")],
+    pr: Annotated[int | None, typer.Option("--pr", help="its pull request, when the ledger has none")] = None,
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """Close a run (T-A9) over the chain that ran: its pull request merged, the checkout clean and holding the merge,
+    the gate green on the merge commit, then drift, identity and acceptance — closed, or failed with its class, or
+    abandoned for a withdrawn card; the end landed on the store. A refusal leaves the run in flight."""
+    try:
+        ctx, drv = _driver(tenant, checkout_path, base, root)
+        channel = Transport(ctx.client, ctx.home)
+        with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+            row = close_mod.close(ctx, led, channel.call, drv, run_id=run, pr=pr)
     except Refusal as r:
         _refuse(r)
     _out(row)

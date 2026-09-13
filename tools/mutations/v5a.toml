@@ -1,0 +1,121 @@
+# V5a (2026-09-12) — the run's end, and the store told: the mutations the properties need. Every one is a way the
+# chunk could look finished and not be: a run that still never ends, a report sent twice or never again, a close that
+# believes a claim or skips a condition, an end the store cannot hold. Run one at a time against the file that owns
+# the property — `tests/factory/test_v5a.py` owns all of them.
+
+[[mutation]]
+id = "M1"
+label = "an end does not set ended_at -- the defect V5a exists for, back"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''"UPDATE runs SET outcome = ?, ended_at = ?, head_sha = COALESCE(?, head_sha),"'''
+replace = '''"UPDATE runs SET outcome = ?, ended_at = CASE WHEN ? IS NULL THEN NULL ELSE NULL END, head_sha = COALESCE(?, head_sha),"'''
+
+[[mutation]]
+id = "M2"
+label = "the watermark never advances -- every land re-sends the run's whole history"
+file = "packages/isidium-factory/src/isidium/factory/lander.py"
+find = '''    ledger.landed(run_id, through)
+    return {"sent": len(report.events), **dict(result)}'''
+replace = '''    return {"sent": len(report.events), **dict(result)}'''
+
+[[mutation]]
+id = "M3"
+label = "the watermark advances before the store answers -- a refused land's events are never sent"
+file = "packages/isidium-factory/src/isidium/factory/lander.py"
+find = '''    try:
+        result = call("land", report.model_dump(by_alias=True, exclude_none=True))'''
+replace = '''    ledger.landed(run_id, through)
+    try:
+        result = call("land", report.model_dump(by_alias=True, exclude_none=True))'''
+
+[[mutation]]
+id = "M4"
+label = "every closure lands as the factory's -- the human's is never verified"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''        "closure_kind": "human" if human else "factory",'''
+replace = '''        "closure_kind": "factory",'''
+
+[[mutation]]
+id = "M5"
+label = "the drift check skipped -- a card changed under its run closes"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    if build != row["build_hash"]:'''
+replace = '''    if False:'''
+
+[[mutation]]
+id = "M6"
+label = "a red gate ignored"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    elif gate.verdict is Verdict.RED:'''
+replace = '''    elif False:'''
+
+[[mutation]]
+id = "M7"
+label = "acceptance's passed ignored -- a failing scenario closes"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''        if not verdicts or not res["passed"]:'''
+replace = '''        if not verdicts:'''
+
+[[mutation]]
+id = "M8"
+label = "merged not read -- an open pull request's test merge closes the run"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    if not state.merged or state.merge_commit is None:'''
+replace = '''    if state.merge_commit is None:'''
+
+[[mutation]]
+id = "M9"
+label = "the pick does not land its dispatched -- the board never counts the run"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    land = lander.land_run(ledger, call, run_id)'''
+replace = '''    land = {"sent": 0}'''
+
+[[mutation]]
+id = "M10"
+label = "a phase's failure is not landed -- the store reads dispatched for ever"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''                lander.land_run(ledger, call, run_id)
+            elif head is not None:'''
+replace = '''            elif head is not None:'''
+
+[[mutation]]
+id = "M11"
+label = "a commit the run did not author passes the identity check"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''            bad.append(sha)'''
+replace = '''            pass'''
+
+[[mutation]]
+id = "M12"
+label = "the store's class set loses acceptance -- the end cannot land"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"'''
+replace = '''    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "gate", "card-drift", "identity"'''
+
+# M14 is the defect the trailerless test found, restored whole. Each half alone is an EQUIVALENT mutant, and was
+# measured as one (2026-09-12, survived): with `strip()` back, the two-field record is still foreign by the
+# unparseable rule; with the skip back, no record is ever unparseable once only newlines are stripped. Two defences,
+# so the property is killed only when both go.
+[[mutation]]
+id = "M14"
+label = "the identity parser strips its own separator and skips what it cannot parse -- a trailerless commit passes"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''        record = record.strip("\r\n")
+        if not record:
+            continue
+        fields = record.split("\x1f")
+        if len(fields) != 3:
+            bad.append(fields[0])
+            continue
+        sha, author, runs = fields'''
+replace = '''        fields = record.strip().split("\x1f")
+        if len(fields) < 3:
+            continue
+        sha, author, runs = fields[0], fields[1], fields[2]'''
+
+[[mutation]]
+id = "M13"
+label = "the checkout need not hold the merge -- acceptance runs against code that is not the run's"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    if contains.returncode != 0:'''
+replace = '''    if False:'''

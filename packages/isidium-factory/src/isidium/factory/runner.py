@@ -35,7 +35,7 @@ from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 from . import adapter as adapter_mod
-from . import checkout, guard
+from . import checkout, guard, lander
 from . import payload as payload_mod
 from .context import TenantContext
 from .ledger import Ledger
@@ -126,8 +126,15 @@ def run_phase(
                     surfaces_actual=list(touched),
                     billing_class=res.billing_class,
                 )
+                lander.land_run(ledger, call, run_id)
             elif head is not None:
                 ledger.advance(run_id, head, list(touched), res.billing_class)
+        except Refusal:
+            # [V5a] a phase that ended the run tells the store before the refusal reaches the operator: a failure the
+            # store never heard of reads `dispatched` on the board for ever (Q-V22). A refusal that ended nothing
+            # sends only what an earlier land missed — the watermark decides, not this line.
+            lander.land_run(ledger, call, run_id)
+            raise
         finally:
             checkout.worktree_remove(ctx.checkout, tree)
         after = ledger.run(run_id)
