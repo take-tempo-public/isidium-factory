@@ -57,13 +57,14 @@ def allow_spec(job: RunJob) -> dict[str, Any]:
 def environment(policy: ExecutorPolicy) -> dict[str, str]:
     """The non-secret environment the phase runs under. The model credential is **not** here: it reaches the child
     through the adapter's own environment by name, never through a rendered file (V2's rule for the forge token,
-    applied to this one)."""
+    applied to this one).
+
+    The turn budget and the result's path are not here since Q-V25: `isidium.factory.harness` reads the budget from the
+    job and writes the result beside it, and a second home for either would be a value that could disagree."""
     env = {
         ALLOW_ENV: ALLOW_FILE,
         BLOCKS_ENV: BLOCKS_FILE,
         "ISIDIUM_JOB": JOB_FILE,
-        "ISIDIUM_RESULT": RESULT_FILE,
-        "ISIDIUM_MAX_TURNS": str(policy.budgets.max_turns),
     }
     if policy.budgets.max_tokens is not None:
         env["ISIDIUM_MAX_TOKENS"] = str(policy.budgets.max_tokens)
