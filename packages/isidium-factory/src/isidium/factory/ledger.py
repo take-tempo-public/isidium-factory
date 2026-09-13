@@ -279,7 +279,7 @@ class Ledger:
         detail: Mapping[str, Any] | None = None,
     ) -> None:
         """**The one writer of `ended_at`** [V5a]. Until V5a a run that succeeded was never ended — `advance` moved
-        its head and nothing else — so `wipe = 1` meant one card, ever. Now every end is this: the outcome from the
+        its head and nothing else — so `wip = 1` meant one card, ever. Now every end is this: the outcome from the
         closed set (`ledger.outcome` outside it), a run already ended refused (`ledger.ended`), the caller's store
         events (`complete`, `closed`), the store's own event for the outcome (`failed{class}`, `parked`), and the
         ledger's `ended` with the detail — one transaction, so `report()` carries the end without translating it at
