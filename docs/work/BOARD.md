@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox run 5
+WIP 0/1 · inbox run 1
 
 ## Queue
 
@@ -15,10 +15,6 @@ WIP 0/1 · inbox run 5
 ## Inbox
 
 - s1 · docs · run · the first land is synthetic: say so where the sidecar is read
-- s2 · docs · run · the first land is synthetic: say so where the sidecar is read
-- s3 · docs · run · the first land is synthetic: say so where the sidecar is read
-- s4 · docs · run · the first land is synthetic: say so where the sidecar is read
-- s5 · docs · run · the first land is synthetic: say so where the sidecar is read
 
 ## Open
 
@@ -27,6 +23,7 @@ WIP 0/1 · inbox run 5
 - **4** · L3: accept compiles the acceptance block and runs it through four runners at the owner's terminal · closed (unverified) · software-grade · (derived)
 - **5** · V4a: the execution adapter seam, and the container adapter on the workstation's podman · withdrawn · software-grade · (derived)
 - **6** · The rule-id sweep resolves a module constant, not only a literal · closed · software-grade · (derived)
+- **7** · The fold records an abandoned run when a card with a run in flight is withdrawn or demoted · ready · software-grade · (derived)
 
 ## Blocked
 

@@ -96,6 +96,59 @@
           "run_id": "r-3"
         }
       ]
+    },
+    "0007": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "72cce416474b9b66dc1f001f8e8ff3da9c607f3f",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 1,
+        "refs_resolved": [
+          {
+            "blob": "aa5d40cb7de6849b13f21760c41f006e56d4c827",
+            "path": "packages/isidium-store/src/isidium/store/core/events.py"
+          },
+          {
+            "blob": "6db4abe0ba812ac61a2c51a21c2e12ddeee2eee3",
+            "path": "packages/isidium-store/src/isidium/store/core/status.py"
+          },
+          {
+            "blob": "72bcb8754ddfe962004638b647faee36fe6b1f46",
+            "path": "packages/isidium-store/src/isidium/store/core/board.py"
+          },
+          {
+            "blob": "09d10976e05efbf706b8f08536f132b8f9a9ac1a",
+            "path": "packages/isidium-store/src/isidium/store/core/neighborhood.py"
+          },
+          {
+            "blob": "34777aac7b34f5be03acf2d2ae8a421cd0de183d",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
+          },
+          {
+            "blob": "f3e804148f7e84f181e85fe6b9e14bab3663c8af",
+            "path": "docs/design/03-card-schema.md"
+          },
+          {
+            "blob": "7cda3cf26d1078f994cfc4c3a41fe82dc6d1c881",
+            "path": "tests/store/test_l4.py"
+          },
+          {
+            "blob": "996cde142f86f2c5299f9604c8b1b69e5ae9226c",
+            "path": "tests/store/test_l1.py"
+          },
+          {
+            "blob": "00b647338db290e7a8df70e2530fb9cc218d1168",
+            "path": "tools/mutate.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:8c4776131d954dc3184f98b6963bd928f995e71a627b5e641d0cf8c03864f609",
+        "seq": 1
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -104,10 +157,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:6a68fb12cbf3d8fa0f0f92c72b44a73b497c11d0be582e21de797bdb68a17a80",
-    "seq": 30
+    "h": "sha256:3c7691306deef3ec2b18b4037066218f6744ed3f3cdeb6e8bcf72b489ecdca20",
+    "seq": 38
   },
-  "landed_at": "2026-09-13T21:38:30Z",
-  "ledger_cursor": "e12e40411ed3a991da18549022eba1fa2aaa7d1a",
+  "landed_at": "2026-09-14T22:56:26Z",
+  "ledger_cursor": "72cce416474b9b66dc1f001f8e8ff3da9c607f3f",
   "schema": 2
 }
