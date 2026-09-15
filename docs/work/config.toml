@@ -22,6 +22,9 @@ backends = ["software_key_ack"]
 model = "claude-sonnet-5"
 effort = "xhigh"
 
+[executor]
+max_turns = 100
+
 [ladder]
 leaf = "story"
 
@@ -68,4 +71,5 @@ entries = [
   { seq = 9, at = "2026-09-12T17:33:47Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:683afefb336adc6c0fa43b0bd0ebcee125a0c0417b8b0314cecc7b9347fd1f1b", ref = ["sha256:3587620a0e82f2577b6be6489c551c3017338e537034767dc0229d04b76c44ce"], h = "sha256:9faf2413b2426b17eb41a51fc49b9e20bd87359cba1be94f8f883652dfb76e32", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:emyrbk/C3EF14zWPlZbxg2OU+s2s+VGN2xAc4K6i3dI6jBnm/x6h64yvTxKe19tCDRmOAFu9E7P3QlhTYRgzBw==" },
   { seq = 10, at = "2026-09-14T13:58:30Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["agents"], build = "sha256:5522fcb1299fbeed1273137c6333177169f0afe67889e249fed928a74acf7a04", h = "sha256:5529918314f3ea9754af007f8d9e579d7d8f7f9208d5889f5972201909c0db14", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:zLwgmo4+91WA56xLYnVXxpQgyOxdjMzdd9psXa5ShhbtXlbqPTfDvDtXeqLPVmuJgEJD7Xbavpp2whvM1DQICw==" },
   { seq = 11, at = "2026-09-14T22:56:26Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:5522fcb1299fbeed1273137c6333177169f0afe67889e249fed928a74acf7a04", ref = ["sha256:8c4776131d954dc3184f98b6963bd928f995e71a627b5e641d0cf8c03864f609"], h = "sha256:4659bef875ff75299ebad46bb567c8f4ec4c669f04fcf0858438246f6e7f1727", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:DmywbHwLLS5n12LLHFKwUuU2dzQjwnKGfLIB9KwPlEW6BoC+i+rumlHJ4pVS1Lrx6/xxxDm12JnzkrGI88RIBw==" },
+  { seq = 12, at = "2026-09-15T05:28:29Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["executor"], build = "sha256:70506107818302fc66a593f1155a61b6d1b9e422d7a0be3f08c4a0b06e25e35a", h = "sha256:02675c38b450d55cd0e7f4a86a06f39a27c0c95f6c35d57da97c3df6061c2933", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:jMF5eGq+048VU6/XL4mMfaW4RvkCI8Qg7eiGSvGNJnokfkFa7y8iW6cYV++sHOilemB0ZjU0NpVd2L1XcbtNCw==" },
 ]
