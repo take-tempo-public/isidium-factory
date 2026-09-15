@@ -44,6 +44,9 @@ from .tenant import Registration
 SPAN: Final = "isidium.factory.run.phase"
 TRAILER_RUN: Final = "Factory-Run"
 TRAILER_AGENT: Final = "Factory-Agent"
+# [owner, 2026-09-15] a failed phase's work is committed to its story branch and never pushed; the trailer is how the
+# commit says it is a failure's, and how `push` knows without asking the ledger twice.
+TRAILER_OUTCOME: Final = "Factory-Outcome"
 
 # The agent kind each phase runs as (05 §1's roster). V4a-i runs `build`; the other rows are here because the map is
 # the roster's, not this chunk's, and a phase whose agent is unnamed could not find its model.
@@ -108,9 +111,21 @@ def run_phase(
                 # phase's start, seventeen minutes early (2026-09-14). And what the phase spent is on the record even
                 # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
                 at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                outcome = _outcome_of(r)
+                changed = checkout.touched(work)
                 if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
-                    ledger.phase(run_id, at, {**r.result.row(), "touched": list(checkout.touched(work))})
-                ledger.finish(run_id, at, _outcome_of(r), billing_class=drv.capabilities().billing_class)
+                    ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed)})
+                # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
+                # when its harness crashed, and the worktree was removed with nothing kept.
+                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
+                ledger.finish(
+                    run_id,
+                    at,
+                    outcome,
+                    head_sha=head,
+                    surfaces_actual=list(changed) if changed else None,
+                    billing_class=drv.capabilities().billing_class,
+                )
                 raise
             touched = checkout.touched(work)
             _believe_nothing(res, touched)
@@ -118,9 +133,11 @@ def run_phase(
             at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
             if outside:
                 ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope"})
-                ledger.finish(run_id, at, "failed:scope", surfaces_actual=list(touched))
+                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
+                ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
                 raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
-            head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched)
+            failed = None if res.outcome == "ok" else res.outcome
+            head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
             ledger.phase(run_id, at, {**res.row(), "touched": list(touched)})
             if res.outcome != "ok":
                 ledger.finish(
@@ -217,16 +234,21 @@ def _believe_nothing(res: adapter_mod.PhaseResult, touched: Sequence[str]) -> No
         )
 
 
-def _commit(work: Path, run_id: str, agent: str, name: str, email: str, touched: Sequence[str]) -> str | None:
+def _commit(
+    work: Path, run_id: str, agent: str, name: str, email: str, touched: Sequence[str], outcome: str | None = None
+) -> str | None:
     """T-B5 (4): *"commits by the wrapper: bot identity, … `Factory-Run` trailer — one commit at phase end"*. The
     author is the wrapper's, never the model's, and the trailers say which run and which agent kind did the work.
-    A phase that wrote nothing gets no commit and no head — an empty commit would be a claim of work."""
+    A phase that wrote nothing gets no commit and no head — an empty commit would be a claim of work. A failed
+    phase's commit says so in a `Factory-Outcome` trailer [owner, 2026-09-15]."""
     if not touched:
         return None
     add = subprocess.run(["git", "add", "-A"], cwd=work, capture_output=True, text=True, check=False)
     if add.returncode != 0:
         raise Refusal("factory.git", str(work), add.stderr.strip())
     message = f"{agent}: {run_id}\n\n{TRAILER_RUN}: {run_id}\n{TRAILER_AGENT}: {agent}\n"
+    if outcome is not None:
+        message += f"{TRAILER_OUTCOME}: {outcome}\n"
     env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
     made = subprocess.run(
         ["git", "commit", "-m", message],
@@ -240,6 +262,19 @@ def _commit(work: Path, run_id: str, agent: str, name: str, email: str, touched:
         raise Refusal("factory.git", str(work), made.stderr.strip() or made.stdout.strip())
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=work, capture_output=True, text=True, check=False)
     return head.stdout.strip() or None
+
+
+def _keep_work(
+    work: Path, run_id: str, agent: str, name: str, email: str, touched: Sequence[str], outcome: str
+) -> str | None:
+    """A failed phase's work, committed to its story branch and never pushed [owner, 2026-09-15]. The failure is the
+    run's end and stays the refusal the operator sees: a commit that cannot be made (the tenant's pre-commit hook
+    refusing a governed path a scope failure wrote, say) leaves the head empty on the row rather than replacing the
+    reason the run ended."""
+    try:
+        return _commit(work, run_id, agent, name, email, touched, outcome)
+    except Refusal:
+        return None
 
 
 def _outcome_of(r: Refusal) -> str:

@@ -655,7 +655,14 @@ with evidence; drift ⇒ `failed:card-drift` (work preserved, owner decides
 at batch review); trailer/signature/identity mismatch ⇒ `failed:identity`
 (a bug in the executor, not the story). Failure classes are typed:
 `scope` / `ambiguity` → design queue via T-A4 rule 5; `infra` (runner,
-network, quota) → one retry. **Where the failed commits live** is Open (1).
+network, quota) → one retry. **Where the failed commits live** was Open (1):
+**[owner, 2026-09-15]** a failed phase's work is committed by the wrapper to
+its story branch, under the factory identity with a `Factory-Outcome`
+trailer naming the failure, and **never pushed** (`push` refuses the
+branch of a run that ended failed, `forge.failed-run`); a retried
+attempt's work is kept as a patch beside the run and cleared from the
+tree before the next attempt. Found live on `r-5`: a crashed harness's
+on-scope work across seven surfaces was removed with its worktree.
 
 **Emits.** Per story: acceptance pass count, gate duration, cost, model +
 effort per phase (4.7), declared-vs-actual surface delta, drift flag,

@@ -142,6 +142,27 @@ def worktree_remove(repo: Path, at: Path) -> None:
     )
 
 
+def set_aside(tree: Path, patch: Path) -> bool:
+    """An attempt's work, kept as a patch beside the run and cleared from the tree, so the next attempt starts where the
+    phase started rather than on top of a crashed attempt's half-done edits (found live on `r-5`, 2026-09-15: attempt 2
+    inherited attempt 1's diff and its core file). Tracked and untracked alike — the patch is `git add -A` then the
+    staged binary diff — and ignored files stay, as `git clean` without `-x` leaves them. A clean tree writes nothing.
+    Four spawns when there is something to set aside, one when there is not."""
+    if not touched(tree):
+        return False
+    steps: tuple[list[str], ...] = (["add", "-A"], ["diff", "--cached", "--binary"], ["reset", "-q", "--hard"])
+    for args in steps:
+        r = subprocess.run(["git", *args], cwd=tree, capture_output=True, check=False)
+        if r.returncode != 0:
+            raise Refusal("factory.git", str(tree), r.stderr.decode("utf-8", "replace").strip())
+        if args[0] == "diff":
+            patch.write_bytes(r.stdout)
+    r = subprocess.run(["git", "clean", "-fdq"], cwd=tree, capture_output=True, check=False)
+    if r.returncode != 0:
+        raise Refusal("factory.git", str(tree), r.stderr.decode("utf-8", "replace").strip())
+    return True
+
+
 def touched(tree: Path) -> tuple[str, ...]:
     """What the working tree actually holds against its own HEAD — one `git status --porcelain`, tracked and
     untracked alike, and the belt behind the write guard: *"the ledger recomputes the run's touched set from git and

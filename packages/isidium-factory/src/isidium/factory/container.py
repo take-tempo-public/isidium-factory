@@ -31,7 +31,7 @@ from typing import Any, Final
 
 from isidium.store.core.refusal import Refusal
 
-from . import render
+from . import checkout, render
 from .adapter import AdapterCapabilities, PhaseRefusal, PhaseResult, RunJob, result
 from .tenant import Registration
 
@@ -107,13 +107,14 @@ class Container:
         # An attempt's result is read back when it fails, so a result already in the directory would be read as this
         # phase's. Nothing of value is lost: a run whose phase was executed has ended (`run.ended`), so a directory
         # met again belongs to a phase that never reached the harness.
-        for name in ("harness.json", "harness.err", "result.json"):
+        for name in ("harness.jsonl", "harness.json", "harness.err", "result.json"):
             (rundir / name).unlink(missing_ok=True)
         last = ""
         spent: list[PhaseResult] = []  # what each earlier attempt left, so the phase's record is its whole spend
         for attempt in range(1, ATTEMPTS + 1):
             if attempt > 1:
                 _keep(rundir, attempt - 1)
+                checkout.set_aside(Path(job.worktree), rundir / f"attempt-{attempt - 1}.patch")
             try:
                 proc = self._run(
                     argv,
@@ -275,7 +276,7 @@ def _keep(rundir: Path, attempt: int) -> None:
     """An attempt's own files, kept under its number before the next attempt writes over them. `r-4`'s first attempt
     ran twelve minutes and its `harness.json` was overwritten by the second's — the record lost the attempt whole.
     `blocks.jsonl` stays where it is: the guard appends to it, so it is already the phase's total."""
-    for name in ("harness.json", "harness.err", "result.json"):
+    for name in ("harness.jsonl", "harness.json", "harness.err", "result.json"):
         src = rundir / name
         if src.exists():
             src.replace(rundir / f"attempt-{attempt}.{name}")
