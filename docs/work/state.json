@@ -99,22 +99,22 @@
     },
     "0007": {
       "closures": [],
-      "execution": "failed(infra)",
+      "execution": null,
       "fingerprint": {
-        "commit": "72cce416474b9b66dc1f001f8e8ff3da9c607f3f",
+        "commit": "3e140b2dcafe017fcc75517d12d83aef3efb47b0",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 1,
+        "ratified_seq": 3,
         "refs_resolved": [
           {
-            "blob": "aa5d40cb7de6849b13f21760c41f006e56d4c827",
+            "blob": "e8b746618029116b84702ef95c81a4d6195b857b",
             "path": "packages/isidium-store/src/isidium/store/core/events.py"
           },
           {
-            "blob": "6db4abe0ba812ac61a2c51a21c2e12ddeee2eee3",
+            "blob": "494b93adb2fabab21f2e48c2d8b2845024254910",
             "path": "packages/isidium-store/src/isidium/store/core/status.py"
           },
           {
-            "blob": "72bcb8754ddfe962004638b647faee36fe6b1f46",
+            "blob": "ef2825da1770b1d6f67f21e06c5bde9b8ff12ec1",
             "path": "packages/isidium-store/src/isidium/store/core/board.py"
           },
           {
@@ -126,7 +126,7 @@
             "path": "packages/isidium-store/src/isidium/store/server/store.py"
           },
           {
-            "blob": "f3e804148f7e84f181e85fe6b9e14bab3663c8af",
+            "blob": "c1f440baf7d9038ef58ef3ba515eda0387f68f3e",
             "path": "docs/design/03-card-schema.md"
           },
           {
@@ -145,8 +145,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:8c4776131d954dc3184f98b6963bd928f995e71a627b5e641d0cf8c03864f609",
-        "seq": 1
+        "h": "sha256:a32021179599d4d5a1eca67b7c92318977806ced9ccc075d7277d0a0e52e02ba",
+        "seq": 3
       },
       "runs": []
     }
@@ -157,10 +157,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:470b83012744bb9f7a1d0f8110fade26f5c601a3bb4d6a1c4e78344684dc4ce0",
-    "seq": 41
+    "h": "sha256:e0672a57ddd7a68dff63cbb9dd5ed539036147d1fdbc725f60191c9ff163e2bb",
+    "seq": 45
   },
-  "landed_at": "2026-09-15T04:01:24Z",
-  "ledger_cursor": "e0abc997f8d39e697a57351a852e86f429988eaf",
+  "landed_at": "2026-09-15T05:29:21Z",
+  "ledger_cursor": "3e140b2dcafe017fcc75517d12d83aef3efb47b0",
   "schema": 2
 }
