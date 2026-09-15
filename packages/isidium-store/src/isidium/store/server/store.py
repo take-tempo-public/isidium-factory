@@ -1704,8 +1704,8 @@ class Store:
         wanted = {
             "answered": execution == "parked",
             "reopened": execution == "closed",
-            "withdrawn": execution in ("dispatched", "parked", "answered"),
-            "demoted": execution in ("dispatched", "parked", "answered"),
+            "withdrawn": execution in events_mod.IN_FLIGHT,
+            "demoted": execution in events_mod.IN_FLIGHT,
             "accepted": bool(sc.get("closures")),
         }[act]
         if not wanted:

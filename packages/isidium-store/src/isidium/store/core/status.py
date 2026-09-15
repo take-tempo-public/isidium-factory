@@ -42,7 +42,7 @@ IntegrityReason = Literal["tampered", "unjournaled", "rewritten", "unverified", 
 FailureClass = Literal[
     "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"
 ]
-ExecutionState = Literal["complete", "reverted", "parked", "answered", "dispatched", "failed"]
+ExecutionState = Literal["complete", "reverted", "parked", "answered", "dispatched", "failed", "abandoned"]
 GuardKind = Literal["has-questions", "held", "held_by", "blocked_by", "deferred_by", "below-threshold"]
 HoldKind = Literal["blocked", "deferred", "watching"]
 
@@ -74,6 +74,9 @@ EXECUTION_STATES: Final[tuple[ExecutionState, ...]] = (
     "answered",
     "dispatched",
     "failed",
+    # Card 7, R3: a typed member so a sidecar holding it parses rather than falling to `unknown`, though row 9 never
+    # actually renders it — a withdrawn or demoted card reads row 3 or row 4 first, ahead of the execution rows.
+    "abandoned",
 )
 
 
