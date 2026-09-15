@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import signal
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
 
@@ -39,6 +41,19 @@ UNMEASURED: Final = "unmeasured"
 # `r-4` (2026-09-14): `"subtype": "error_max_turns"`, `"errors": ["Reached maximum number of turns (40)"]`. T-A7 routes
 # `budget` to the design queue, never to a retry — the same turns would be spent again.
 BUDGET_ENDS: Final[frozenset[str]] = frozenset({"error_max_turns"})
+
+# A core dump the harness left in its working directory — the phase's worktree. Measured on `r-5` (2026-09-15): the
+# runner VM's `core_pattern` is `core` with the pid appended, and `core.2` (the harness, PID 2) sat among the card's
+# files. Only the `core.<pid>` form is moved: a repository may hold a file called `core`.
+CORE: Final = re.compile(r"core\.\d+")
+
+# The usage counts the streamed messages carry, summed when the harness dies before its result line.
+USAGE_KEYS: Final[tuple[str, ...]] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+)
 
 # The signals a watchdog or an operator sends to stop a phase. Each is forwarded to the harness, which is the process
 # doing the work; this process then reports what the harness left and exits.
@@ -70,8 +85,12 @@ def argv(job: RunJob, settings: str) -> list[str]:
         settings,
         "--max-turns",
         str(job.policy.budgets.max_turns),
+        # Streamed, not one JSON document at the end: `r-5`'s harness crashed twice and `json` had written nothing, so
+        # thirty minutes of work were recorded as 0 tokens. Each message now carries its usage as it happens, and the
+        # last line is the same result object `json` gave. `--print` streams only with `--verbose` (the CLI's help).
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--permission-mode",
         "default",
         "--model",
@@ -135,6 +154,63 @@ def outcome_of(out: Mapping[str, Any], ok: bool) -> str:
     return "ok" if ok and not out.get("is_error") else "failed:infra"
 
 
+def stream_out(lines: Iterable[str], code: int | None, cores: Sequence[str] = ()) -> dict[str, Any]:
+    """The harness's answer, from its stream. The `result` line when there is one — the object `--output-format json`
+    gave. When the harness died first, what the stream proves instead: the usage of every message it finished
+    (counted once each — a message is streamed once per content block, with the same usage on every line, measured
+    2026-09-15), the models that produced it, and a sentence naming how the process ended. Either way the exit status
+    rides along, and a core dump kept beside the run is named."""
+    result: dict[str, Any] | None = None
+    messages: dict[str, Mapping[str, Any]] = {}
+    for line in lines:
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(d, dict):
+            continue
+        if d.get("type") == "result":
+            result = d
+        elif d.get("type") == "assistant" and isinstance(d.get("message"), dict):
+            m = d["message"]
+            messages[str(m.get("id") or d.get("request_id") or len(messages))] = m
+    if result is not None:
+        out = dict(result)
+    else:
+        usage = {k: sum(int((m.get("usage") or {}).get(k) or 0) for m in messages.values()) for k in USAGE_KEYS}
+        by_model: dict[str, int] = {}
+        for m in messages.values():
+            name = str(m.get("model") or UNMEASURED)
+            by_model[name] = by_model.get(name, 0) + int((m.get("usage") or {}).get("output_tokens") or 0)
+        out = {
+            "is_error": True,
+            "usage": usage,
+            "modelUsage": {k: {"outputTokens": v} for k, v in by_model.items()},
+            "errors": [f"the harness {_ended(code)} and wrote no result"],
+        }
+    if cores:
+        out["errors"] = [*(out.get("errors") or []), "a core dump is kept in the run directory: " + ", ".join(cores)]
+    out["exit_status"] = code
+    return out
+
+
+def _ended(code: int | None) -> str:
+    if code is None:
+        return "was never started (a stop arrived first)"
+    return f"exited on signal {-code}" if code < 0 else f"exited with status {code}"
+
+
+def keep_cores(work: Path, rundir: Path) -> list[str]:
+    """Core dumps moved out of the worktree into the run directory: evidence of the crash, and never a file the phase
+    touched (on `r-5` `core.2` was in the touched set beside the card's surfaces)."""
+    kept: list[str] = []
+    for p in sorted(work.iterdir()):
+        if p.is_file() and CORE.fullmatch(p.name):
+            shutil.move(str(p), str(rundir / p.name))  # across mounts: `/work` and `/run` are two volumes
+            kept.append(p.name)
+    return kept
+
+
 def reason_of(out: Mapping[str, Any]) -> str:
     """The harness's own sentence for why it stopped. It writes the provider's answer to `result` and its own limits to
     `errors[]` — `r-4` stopped with `errors: ["Reached maximum number of turns (40)"]` and no `result`, and the operator
@@ -170,26 +246,31 @@ def run(
     harness_version: str,
     spawn: Spawn = subprocess.Popen,
     install: Callable[[int, Callable[[int, Any], None]], Any] = signal.signal,
+    work: Path | None = None,
 ) -> int:
     """One phase: the harness spawned once with the job on stdin, the signals forwarded while it runs, the result
-    written from its output. Exit 0 for `ok`, 1 otherwise — the adapter reads the run directory either way."""
+    written from its output. Exit 0 for `ok`, 1 otherwise — the adapter reads the run directory either way.
+
+    The raw stream is kept as `harness.jsonl`; `harness.json` is the answer read from it, so what the adapter reads is
+    one object whether the harness finished or died."""
     (rundir / "input.md").write_text(prompt_input(job, prompts), encoding="utf-8")
-    out_path, err_path = rundir / "harness.json", rundir / "harness.err"
+    stream_path, err_path = rundir / "harness.jsonl", rundir / "harness.err"
     forward = Forward()
     for sig in FORWARDED:
         install(sig, forward)
-    code = 1
-    with (rundir / "input.md").open("rb") as stdin, out_path.open("wb") as stdout, err_path.open("wb") as stderr:
+    code: int | None = None
+    with (rundir / "input.md").open("rb") as stdin, stream_path.open("wb") as stdout, err_path.open("wb") as stderr:
         if forward.stopped is None:
             child = spawn(argv(job, str(rundir / "settings.json")), stdin=stdin, stdout=stdout, stderr=stderr)
             forward.child = child
             code = child.wait()
+    cores = keep_cores(work or Path.cwd(), rundir)
     try:
-        out: Any = json.loads(out_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        out = {}
-    if not isinstance(out, dict):
-        out = {}
+        lines = stream_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    out = stream_out(lines, code, cores)
+    (rundir / "harness.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     result = report(job, out, code == 0, harness_version)
     (rundir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     if result["outcome"] == "ok":

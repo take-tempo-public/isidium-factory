@@ -138,6 +138,7 @@ def push(
     push (exit 2, every offending path named)."""
     try:
         ctx, drv = _driver(tenant, checkout_path, base, root)
+        _never_pushed(ctx, tenant, branch)
         if at is not None:
             drv.branch(branch, at)
         ch = drv.push(branch)
@@ -166,6 +167,23 @@ def pr_open(
 
 
 STORY: Final = "story/"
+
+
+def _never_pushed(ctx: context.TenantContext, tenant: str, branch: str) -> None:
+    """[owner, 2026-09-15] a failed run's story branch keeps the failed phase's work and is **never pushed**: the work
+    survives for the next run or a human to start from, and nothing of it reaches the forge as though it were a
+    candidate. Refused before the branch is touched; a branch that is not a run's, or a home with no ledger, passes."""
+    run_id = branch.removeprefix(STORY)
+    if run_id == branch or not (ctx.home / ledger_mod.LEDGER_FILE).exists():
+        return
+    with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+        row = led.run(run_id)
+    if row is not None and str(row["outcome"] or "").startswith(ledger_mod.FAILED):
+        raise Refusal(
+            "forge.failed-run",
+            branch,
+            f"{run_id} ended {row['outcome']}: its branch keeps the failed work and is never pushed",
+        )
 
 
 def _record_pr(ctx: context.TenantContext, tenant: str, branch: str, number: int) -> None:

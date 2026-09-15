@@ -192,6 +192,8 @@ class Podman:
     timeout: bool = False
     once: bool = False
     blocks: int = 0
+    edits: dict[str, str] = field(default_factory=dict)  # what each attempt writes into the worktree before it ends
+    found: list[bool] = field(default_factory=list)  # whether an attempt found the edits already there
     seen: list[list[str]] = field(default_factory=list)
     env: list[dict[str, str]] = field(default_factory=list)
 
@@ -201,6 +203,11 @@ class Podman:
         if argv[1] in ("kill", "rm"):
             return subprocess.CompletedProcess(argv, 0, "", "")
         first = len([a for a in self.seen if a[1] == "run"]) == 1
+        if self.edits:
+            tree = Path(next(a for a in argv if a.endswith(f":{render.WORK}:rw")).rsplit(":", 2)[0])
+            self.found.append(any((tree / rel).exists() for rel in self.edits))
+            for rel, text in self.edits.items():
+                (tree / rel).write_text(text, encoding="utf-8")
         if self.timeout and not (self.once and not first):
             raise subprocess.TimeoutExpired(argv, kw.get("timeout") or 0)
         if self.fail is not None and not (self.once and not first):
@@ -626,6 +633,71 @@ def test_a_retried_phase_keeps_each_attempt_and_the_refusal_carries_the_whole_sp
     assert "the tree was unreachable" in r.detail
 
 
+def test_a_retry_sets_the_first_attempts_work_aside_and_starts_clean(disk: Disk, tmp_path: Path) -> None:
+    """Found live on `r-5` (2026-09-15): attempt 2 started on attempt 1's half-done edits and its core file. The first
+    attempt's work is kept as a patch beside the run — untracked files included — and the second starts on the tree
+    the phase started on."""
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    git(tree, "init", "-q")
+    git(tree, "config", "user.email", "t@example")
+    git(tree, "config", "user.name", "t")
+    (tree / "kept.py").write_text("k = 1\n", encoding="utf-8")
+    git(tree, "add", "-A")
+    git(tree, "commit", "-q", "-m", "base")
+    pod = Podman(fail="the harness crashed", edits={"half-done.py": "x = 1\n"})
+    refuses(
+        "adapter.infra",
+        lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk, run_id="r-aside", worktree=str(tree))),
+    )
+    assert pod.found == [False, False], "the second attempt found the first attempt's edits in the tree"
+    patch = (disk.home / "runs" / "r-aside" / "build" / "attempt-1.patch").read_text(encoding="utf-8")
+    assert "half-done.py" in patch and "x = 1" in patch
+    assert (tree / "kept.py").exists(), "the set-aside took the phase's own base with it"
+
+
+def test_a_crashed_harness_is_told_by_how_it_ended_and_its_streamed_spend_is_kept(disk: Disk, tmp_path: Path) -> None:
+    """`r-5`'s harness crashed twice and `--output-format json` had written nothing: no model, no tokens, and *"said
+    nothing"*. From a stream, a crash still proves what finished — each message's usage once (a message is streamed
+    once per content block, with the same usage on each line) — and the process's own end is named, and a core dump
+    in the worktree is moved beside the run."""
+    msg = {"id": "msg_1", "model": "claude-sonnet-5", "usage": {"input_tokens": 9, "output_tokens": 700}}
+    other = {"id": "msg_2", "model": "claude-sonnet-5", "usage": {"input_tokens": 3, "output_tokens": 300}}
+    lines = [
+        json.dumps({"type": "system", "subtype": "init"}),
+        json.dumps({"type": "assistant", "message": msg}),
+        json.dumps({"type": "assistant", "message": msg}),  # the same message's second content block
+        json.dumps({"type": "assistant", "message": other}),
+        "{truncated by the crash",
+    ]
+    work, rundir = tmp_path / "work", tmp_path / "run"
+    work.mkdir()
+    rundir.mkdir()
+    (work / "core.2").write_bytes(b"\x7fELF")
+    (work / "core").write_text("a repository file called core", encoding="utf-8")
+    cores = harness.keep_cores(work, rundir)
+    assert cores == ["core.2"] and (rundir / "core.2").exists() and not (work / "core.2").exists()
+    assert (work / "core").exists(), "a file merely called core is the repository's"
+    out = harness.stream_out(lines, -11, cores)
+    assert out["usage"]["output_tokens"] == 1000 and out["usage"]["input_tokens"] == 12
+    assert "signal 11" in harness.reason_of(out) and "core.2" in harness.reason_of(out)
+    got = harness.report(a_job(disk), out, False, "2.1.269")
+    assert got["model"] == "claude-sonnet-5" and got["tokens"] == 1012 and got["outcome"] == "failed:infra"
+    assert "status 3" in harness.reason_of(harness.stream_out([], 3))
+
+
+def test_a_finished_stream_answers_with_its_result_line() -> None:
+    """A stream that reached its end answers exactly as `--output-format json` did: the result line, whole."""
+    result = {"type": "result", "subtype": "error_max_turns", "is_error": True, "usage": {"output_tokens": 5}}
+    lines = [
+        json.dumps({"type": "assistant", "message": {"id": "m", "usage": {"output_tokens": 5}}}),
+        json.dumps(result),
+    ]
+    out = harness.stream_out(lines, 1)
+    assert {k: out[k] for k in result} == result and out["exit_status"] == 1
+    assert harness.outcome_of(out, False) == "failed:budget"
+
+
 def test_the_harness_calls_a_turn_limit_budget_and_says_why(disk: Disk) -> None:
     """`r-4`'s own harness output, in shape: `error_max_turns` is `failed:budget` whatever the exit code, any other
     error stays `failed:infra`, and the sentence in `errors[]` is what the runner says — not *"said nothing"*."""
@@ -761,6 +833,39 @@ def test_a_refused_phase_is_on_the_record_and_ends_when_the_adapter_gave_up(disk
     assert phases and (phases[-1]["tokens"], phases[-1]["cost_micro"]) == (26809, 1426187)
 
 
+def test_a_failed_phases_work_is_committed_to_its_branch_and_the_branch_is_never_pushed(
+    disk: Disk, led: Ledger
+) -> None:
+    """[owner, 2026-09-15] `r-5`'s builder had edited all seven surfaces when its harness crashed, and the worktree was
+    removed with nothing kept. The work is committed to the story branch with a trailer naming the failure, the row
+    carries that head — and `push` refuses the branch, so a failure's work never reaches the forge."""
+    run_id = fresh_run(disk, led)
+
+    @dataclass
+    class Crashing(Fake):
+        def execute(self, job: RunJob) -> PhaseResult:
+            (Path(job.worktree) / INSIDE).parent.mkdir(parents=True, exist_ok=True)
+            (Path(job.worktree) / INSIDE).write_text("half-done = True\n", encoding="utf-8")
+            raise adapter_mod.PhaseRefusal("adapter.infra", job.run_id, "the harness crashed")
+
+    refuses(
+        "adapter.infra",
+        lambda: runner_mod.run_phase(
+            disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: Crashing()
+        ),
+    )
+    row = led.run(run_id)
+    assert row is not None and row["head_sha"], "the failed phase's work was not committed"
+    assert row["surfaces_actual"] == [INSIDE]
+    message = git(disk.work, "log", "-1", "--format=%B", f"story/{run_id}")
+    assert "Factory-Outcome: failed:infra" in message and f"Factory-Run: {run_id}" in message
+    assert git(disk.work, "rev-parse", f"story/{run_id}").strip() == row["head_sha"]
+
+    common = ["--tenant", TENANT, "--checkout", str(disk.work), "--root", ROOT]
+    p = CliRunner().invoke(cli_mod.app, ["push", *common, "--branch", f"story/{run_id}"])
+    assert p.exit_code == 2 and "forge.failed-run" in p.output, p.output
+
+
 def test_a_write_outside_the_surfaces_ends_the_run_failed_scope(disk: Disk, led: Ledger) -> None:
     """The belt behind the guard, at the wrapper: a phase whose worktree holds a path the card does not declare is
     `failed:scope` on its own row, and the work is not committed as though it were in scope. The guard denies at
@@ -778,6 +883,8 @@ def test_a_write_outside_the_surfaces_ends_the_run_failed_scope(disk: Disk, led:
     row = led.run(run_id)
     assert row is not None and row["outcome"] == "failed:scope" and row["ended_at"]
     assert row["surfaces_actual"] == ["notes-from-the-builder.md"]
+    assert row["head_sha"], "a scope failure's work is kept on its branch too [owner, 2026-09-15]"
+    assert "Factory-Outcome: failed:scope" in git(disk.work, "log", "-1", "--format=%B", f"story/{run_id}")
     assert led.phases_of(run_id), "the phase is on the record even when it is the phase that failed"
     ev = [e for e in led.events_of(run_id) if e["kind"] == "phase"][-1]
     assert ev["data"]["outcome"] == "failed:scope"
@@ -867,6 +974,8 @@ def test_the_harness_argv_carries_the_agents_signed_model_and_effort(disk: Disk)
         assert args[args.index("--model") + 1] == model and args[args.index("--effort") + 1] == effort, args
         assert args[args.index("--settings") + 1] == "/run/settings.json"
         assert args[args.index("--max-turns") + 1] == str(a_job(disk).policy.budgets.max_turns)
+        # r-5: a streamed answer, so a crash leaves what finished; `--print` streams only with `--verbose`
+        assert args[args.index("--output-format") + 1] == "stream-json" and "--verbose" in args
 
 
 def test_the_result_reads_the_model_that_ran_and_counts_tokens_as_declared(disk: Disk) -> None:
@@ -931,9 +1040,13 @@ def test_pid_1_forwards_the_watchdogs_term_to_the_harness(disk: Disk, tmp_path: 
 
     run1 = tmp_path / "run1"
     run1.mkdir()
-    code = harness.run(job, run1, prompts, harness_version="2.1.269", spawn=spawn, install=handlers.__setitem__)
+    code = harness.run(
+        job, run1, prompts, harness_version="2.1.269", spawn=spawn, install=handlers.__setitem__, work=tmp_path
+    )
     assert spawned and spawned[0].sent == [signal.SIGTERM], "the TERM never reached the harness"
     assert code == 1 and json.loads((run1 / "result.json").read_text(encoding="utf-8"))["outcome"] == "failed:infra"
+    told = json.loads((run1 / "harness.json").read_text(encoding="utf-8"))
+    assert f"signal {int(signal.SIGTERM)}" in harness.reason_of(told), told
     assert (run1 / "input.md").read_text(encoding="utf-8").startswith("# the builder")
 
     early: list[Child] = []
@@ -947,7 +1060,9 @@ def test_pid_1_forwards_the_watchdogs_term_to_the_harness(disk: Disk, tmp_path: 
 
     run2 = tmp_path / "run2"
     run2.mkdir()
-    code = harness.run(job, run2, prompts, harness_version="2.1.269", spawn=spawn_early, install=stop_now)
+    code = harness.run(
+        job, run2, prompts, harness_version="2.1.269", spawn=spawn_early, install=stop_now, work=tmp_path
+    )
     assert early == [] and code == 1, "a stop before the spawn still started the harness"
 
 

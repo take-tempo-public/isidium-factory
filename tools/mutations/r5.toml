@@ -1,0 +1,88 @@
+# r-5's findings (2026-09-15) — the mutations the fix needs. Each is a finding coming back: a crash told as nothing, a
+# crashed harness's spend lost, a streamed message counted twice, a core dump left among the card's files, a retry on
+# the first attempt's leftovers, a failed phase's work destroyed, and a failed run's branch pushed.
+# Owner: `tests/factory/test_v4a.py`.
+
+[[mutation]]
+id = "M1"
+label = "the harness streams nothing -- one JSON document at the end again"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        "stream-json",
+        "--verbose",'''
+replace = '''        "json",'''
+
+[[mutation]]
+id = "M2"
+label = "a crashed harness names no exit -- 'said nothing' back"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''            "errors": [f"the harness {_ended(code)} and wrote no result"],'''
+replace = '''            "errors": [],'''
+
+[[mutation]]
+id = "M3"
+label = "a crashed harness's streamed spend is not summed"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''        usage = {k: sum(int((m.get("usage") or {}).get(k) or 0) for m in messages.values()) for k in USAGE_KEYS}'''
+replace = '''        usage = {k: 0 for k in USAGE_KEYS}'''
+
+[[mutation]]
+id = "M4"
+label = "a message streamed once per content block is counted once per line"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''            messages[str(m.get("id") or d.get("request_id") or len(messages))] = m'''
+replace = '''            messages[str(len(messages))] = m'''
+
+[[mutation]]
+id = "M5"
+label = "a core dump stays in the worktree"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''            shutil.move(str(p), str(rundir / p.name))  # across mounts: `/work` and `/run` are two volumes
+            kept.append(p.name)'''
+replace = '''            kept.append(p.name)'''
+
+[[mutation]]
+id = "M6"
+label = "the retry starts on the first attempt's leftovers"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''                checkout.set_aside(Path(job.worktree), rundir / f"attempt-{attempt - 1}.patch")
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M7"
+label = "the set-aside keeps no patch"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''        if args[0] == "diff":
+            patch.write_bytes(r.stdout)'''
+replace = '''        if args[0] == "diff":
+            pass'''
+
+[[mutation]]
+id = "M8"
+label = "a refused phase's work is not committed -- r-5's lost work back"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)'''
+replace = '''                head = None'''
+
+[[mutation]]
+id = "M9"
+label = "a failed phase's commit does not say it is a failure's"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    if outcome is not None:
+        message += f"{TRAILER_OUTCOME}: {outcome}\n"'''
+replace = ''''''
+
+[[mutation]]
+id = "M10"
+label = "a scope failure's work is not committed"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")'''
+replace = '''                head = None'''
+
+[[mutation]]
+id = "M11"
+label = "a failed run's story branch is pushed"
+file = "packages/isidium-factory/src/isidium/factory/cli.py"
+find = '''        _never_pushed(ctx, tenant, branch)
+'''
+replace = ''''''
