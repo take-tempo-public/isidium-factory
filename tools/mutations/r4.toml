@@ -1,0 +1,112 @@
+# r-4's failure path (2026-09-14) — the mutations the fix needs. Each is one of the five findings coming back: a turn
+# limit called infra, a retry that spends it twice, an attempt overwritten, a refusal that carries no spend, an end
+# stamped with the phase's start, a failure no ratification can clear, and a morning review that never names it.
+# Owners: the adapter and wrapper properties are `tests/factory/test_v4a.py`'s; the fold and queue are
+# `tests/store/test_failed_returns.py`'s.
+
+[[mutation]]
+id = "M1"
+label = "a turn limit is failed:infra again -- r-4's classification back"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''    if out.get("subtype") in BUDGET_ENDS:
+        return "failed:budget"
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M2"
+label = "a budget end is retried -- the adapter spends the turns twice"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            if left and left[0].outcome == "failed:budget":'''
+replace = '''            if False:'''
+
+[[mutation]]
+id = "M3"
+label = "the second attempt overwrites the first's files"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            if attempt > 1:
+                _keep(rundir, attempt - 1)
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M4"
+label = "the refusal carries only the last attempt's spend"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''    return _total(spent[-1], spent[:-1]) if spent else None'''
+replace = '''    return spent[-1] if spent else None'''
+
+[[mutation]]
+id = "M5"
+label = "the refusal carries no spend at all"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''raise PhaseRefusal("adapter.infra", job.run_id, f"{ATTEMPTS} attempts, the last: {last[:400]}", _sum(spent))'''
+replace = '''raise PhaseRefusal("adapter.infra", job.run_id, f"{ATTEMPTS} attempts, the last: {last[:400]}", None)'''
+
+[[mutation]]
+id = "M6"
+label = "the harness's errors[] is not read -- 'said nothing' back"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''    return str(out.get("result") or out.get("error") or listed or "the harness failed and said nothing")'''
+replace = '''    return str(out.get("result") or out.get("error") or "the harness failed and said nothing")'''
+
+[[mutation]]
+id = "M7"
+label = "the operator is not told the harness's errors[] by the adapter"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            _text(rundir / "harness.json", "errors"),  # the harness's own limits — `r-4`'s turn limit sat here unread
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M8"
+label = "a refused phase ends at the phase's start -- r-4's ended_at back"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            try:
+                res = drv.execute(job)
+            except Refusal as r:'''
+replace = '''            at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            try:
+                res = drv.execute(job)
+            except Refusal as r:
+                now = lambda: _dt.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ")  # noqa: E731'''
+
+[[mutation]]
+id = "M9"
+label = "a refused phase writes no phase row"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''                if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:'''
+replace = '''                if False and isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:'''
+
+[[mutation]]
+id = "M10"
+label = "a newer ratification does not clear a failure -- the stranded card back"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''            if key in failed:
+                c["execution"] = None'''
+replace = '''            if False:
+                c["execution"] = None'''
+
+[[mutation]]
+id = "M11"
+label = "any ratification clears the execution, failure or not"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''            if key in failed:
+                c["execution"] = None'''
+replace = '''            if True:
+                c["execution"] = None'''
+
+[[mutation]]
+id = "M12"
+label = "a later dispatch does not supersede the failure"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''            c["execution"] = _EXECUTION[k]
+            failed.discard(key)'''
+replace = '''            c["execution"] = _EXECUTION[k]'''
+
+[[mutation]]
+id = "M13"
+label = "the morning review never names a failed run"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''        sorted(c for c, p in projections.items() if p.label.row == "execution" and p.label.execution == "failed")'''
+replace = '''        sorted(c for c, p in projections.items() if False)'''

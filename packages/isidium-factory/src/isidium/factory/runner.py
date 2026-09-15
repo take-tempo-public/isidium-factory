@@ -101,10 +101,15 @@ def run_phase(
         work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
         try:
             job = _job(ctx, reg, row, call, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work)
-            at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
             try:
                 res = drv.execute(job)
             except Refusal as r:
+                # The end is when the adapter gave up, not when it was handed the job: `r-4`'s `ended_at` read the
+                # phase's start, seventeen minutes early (2026-09-14). And what the phase spent is on the record even
+                # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
+                at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
+                    ledger.phase(run_id, at, {**r.result.row(), "touched": list(checkout.touched(work))})
                 ledger.finish(run_id, at, _outcome_of(r), billing_class=drv.capabilities().billing_class)
                 raise
             touched = checkout.touched(work)

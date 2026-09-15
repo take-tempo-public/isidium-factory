@@ -50,8 +50,10 @@ Phase = Literal["plan", "refute", "judge", "build", "review", "reconcile"]
 # What a phase can end as, at the amplitude V4a-i writes. `ok` is the phase done; `failed:infra` is T-C6's
 # *"Adapter start/timeouts ⇒ `failed:infra`, one retry"*; `failed:scope` is T-B5's *"repeated beyond a tenant
 # threshold"*; `parked` is T-C5's question. The close report's own outcomes (`met`, `disputed`) are V5's — a phase
-# does not close a card.
-Outcome = Literal["ok", "failed:infra", "failed:scope", "parked"]
+# does not close a card. `failed:budget` is T-A7's *"`budget`/`timeout` ⇒ design queue with the telemetry attached"*:
+# a phase that spent its turns ended on the work's own terms, and a second attempt spends them again (found live on
+# `r-4`, 2026-09-14, where a turn limit was called `failed:infra` and retried).
+Outcome = Literal["ok", "failed:infra", "failed:scope", "failed:budget", "parked"]
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
@@ -213,6 +215,22 @@ class PhaseResult(_Wire):
     def row(self) -> dict[str, Any]:
         """The ledger's `phases` row — the model's own dump, so the record and the wire cannot drift apart."""
         return self.model_dump(mode="json")
+
+
+class PhaseRefusal(Refusal):
+    """An adapter's refusal that still carries what the phase spent.
+
+    T-A7's condition (6) is *"telemetry per phase present (4.7 — required, not optional)"*, and a refusal is not an
+    exemption: a phase that ran, spent, and then failed in a way the adapter refuses still cost what it cost. Found
+    live on `r-4` (2026-09-14): two attempts ran for seventeen minutes and the ledger's `phases` held nothing, because
+    the refusal was the only thing that crossed the seam. `result` is the phase's spend across every attempt that
+    left one, or `None` when nothing ran far enough to leave a result."""
+
+    __slots__ = ("result",)
+
+    def __init__(self, rule: str, path: str = "", detail: str = "", result: PhaseResult | None = None) -> None:
+        super().__init__(rule, path, detail)
+        self.result = result
 
 
 @dataclass(frozen=True)

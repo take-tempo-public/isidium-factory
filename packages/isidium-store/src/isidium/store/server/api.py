@@ -234,6 +234,7 @@ class Api:
                 "holds_on_owner": list(q.holds_on_owner),
                 "closures_pending_review": list(q.closures_pending_review),
                 "withdrawals_pending": list(q.withdrawals_pending),
+                "failed_runs": list(q.failed_runs),
                 "blocked_by_those": list(q.blocked_by_those),
                 "dispositions_since_batch": q.dispositions_since_batch,
                 "inbox_counts": dict(q.inbox_counts),
