@@ -8,6 +8,7 @@ WIP 0/1 · inbox run 1
 - holds on the owner: none
 - closures pending review: none
 - withdrawals pending: none
+- failed runs: **7**
 - blocked by any of those: none
 - dispositions since the last batch signature: 0
 - merged, not landed: 0
