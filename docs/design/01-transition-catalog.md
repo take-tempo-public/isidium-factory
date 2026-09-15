@@ -1412,7 +1412,8 @@ un-approved *change*.
 
 **Open.** ~~(1) The design queue is a filtered board view (drafts +
 unratified + parked + disputed), no new store~~ — **[owner-ratified
-2026-08-16]**.
+2026-08-16]**; **+ failed runs [owner, 2026-09-14]** (T-A7's way back:
+a newer signed ratification).
 
 ### 2.11 T-A6 Pick / dispatch: ready → dispatched [proposed 2026-08-16]
 
@@ -1515,7 +1516,14 @@ executor defect, not the story's — routed to the factory's own issue
 list, and the story retried once); `infra` ⇒ one retry; `scope`/`ambiguity`
 ⇒ design queue (T-A4 rule 5); `budget`/`timeout` ⇒ design queue with the
 telemetry attached (the card was under-scoped or the tier under-set —
-data for 7b.4).
+data for 7b.4). **The way back out of the design queue [owner, 2026-09-14]:**
+a signed ratification of the card landed after the failure returns it to
+ready — the card edited and re-ratified, or, when the fix was outside the
+card (a budget raised), demoted and re-ratified unchanged; the failure
+stays in the event file. Until then the queue names the card under
+**failed runs**. Found live on `r-4`: a turn limit was reported
+`failed:infra` and retried, and the landed failure stranded its card
+with no step defined back out.
 
 **Emits.** Outcome distribution; per-phase telemetry (the tuning dataset);
 budget utilization; retry counts.

@@ -32,7 +32,7 @@ from typing import Any, Final
 from isidium.store.core.refusal import Refusal
 
 from . import render
-from .adapter import AdapterCapabilities, PhaseResult, RunJob, result
+from .adapter import AdapterCapabilities, PhaseRefusal, PhaseResult, RunJob, result
 from .tenant import Registration
 
 NAME: Final = "container"
@@ -104,8 +104,16 @@ class Container:
         argv = self._argv(job, rundir)
         env = {**os.environ, "CLAUDE_CODE_OAUTH_TOKEN": token}
 
+        # An attempt's result is read back when it fails, so a result already in the directory would be read as this
+        # phase's. Nothing of value is lost: a run whose phase was executed has ended (`run.ended`), so a directory
+        # met again belongs to a phase that never reached the harness.
+        for name in ("harness.json", "harness.err", "result.json"):
+            (rundir / name).unlink(missing_ok=True)
         last = ""
-        for _ in range(ATTEMPTS):
+        spent: list[PhaseResult] = []  # what each earlier attempt left, so the phase's record is its whole spend
+        for attempt in range(1, ATTEMPTS + 1):
+            if attempt > 1:
+                _keep(rundir, attempt - 1)
             try:
                 proc = self._run(
                     argv,
@@ -118,19 +126,26 @@ class Container:
             except subprocess.TimeoutExpired:
                 self._kill(job)
                 self._remove(job)
+                spent += self._left(job, rundir)
                 last = f"the watchdog fired at {job.policy.budgets.wall_clock_s}s"
                 continue
             except OSError as e:  # podman itself is not there, or cannot start
                 last = str(e)
                 continue
             if proc.returncode == 0:
-                return self._result(job, rundir)
+                return _total(self._result(job, rundir), spent)
+            left = self._left(job, rundir)
+            if left and left[0].outcome == "failed:budget":
+                # T-A7: *"`budget`/`timeout` ⇒ design queue with the telemetry attached"* — never a retry, which would
+                # spend the same turns again. The phase's result goes back to the wrapper like any other end.
+                return _total(left[0], spent)
             detail = self._why(proc, rundir)
             if _environment(detail):
                 why = f"the provider answered about the environment, not the work: {detail[:300]}"
-                raise Refusal("adapter.environment", job.run_id, why)
+                raise PhaseRefusal("adapter.environment", job.run_id, why, _sum(spent + left))
+            spent += left
             last = detail or f"exit {proc.returncode}"
-        raise Refusal("adapter.infra", job.run_id, f"{ATTEMPTS} attempts, the last: {last[:400]}")
+        raise PhaseRefusal("adapter.infra", job.run_id, f"{ATTEMPTS} attempts, the last: {last[:400]}", _sum(spent))
 
     # ---------------------------------------------------------------------------------------------- the mechanics
 
@@ -202,6 +217,7 @@ class Container:
             (proc.stderr or "").strip(),
             (proc.stdout or "").strip(),
             _text(rundir / "harness.json", "result"),  # the provider's own sentence
+            _text(rundir / "harness.json", "errors"),  # the harness's own limits — `r-4`'s turn limit sat here unread
             "\n".join(_lines(rundir / "harness.err")).strip(),
         ]
         return " | ".join(dict.fromkeys(p for p in parts if p))
@@ -215,6 +231,14 @@ class Container:
         if not token:
             raise Refusal("adapter.no-token", str(path), "the credential file is empty")
         return token
+
+    def _left(self, job: RunJob, rundir: Path) -> list[PhaseResult]:
+        """What a failed attempt left behind, if it got far enough to leave a readable result — or nothing. A diagnosis
+        must never fail on its own reading, so an unreadable result is simply no result."""
+        try:
+            return [self._result(job, rundir)]
+        except Refusal:
+            return []
 
     def _result(self, job: RunJob, rundir: Path) -> PhaseResult:
         """The image's answer, joined to what only this side can know.
@@ -247,6 +271,29 @@ class Container:
         )
 
 
+def _keep(rundir: Path, attempt: int) -> None:
+    """An attempt's own files, kept under its number before the next attempt writes over them. `r-4`'s first attempt
+    ran twelve minutes and its `harness.json` was overwritten by the second's — the record lost the attempt whole.
+    `blocks.jsonl` stays where it is: the guard appends to it, so it is already the phase's total."""
+    for name in ("harness.json", "harness.err", "result.json"):
+        src = rundir / name
+        if src.exists():
+            src.replace(rundir / f"attempt-{attempt}.{name}")
+
+
+def _total(last: PhaseResult, earlier: Sequence[PhaseResult]) -> PhaseResult:
+    """The phase's spend is every attempt's: the last attempt's answer, with the earlier attempts' tokens, cache
+    counts, cost and time added to it."""
+    if not earlier:
+        return last
+    keys = ("tokens", "cache_read_tokens", "cache_write_tokens", "cost_micro", "duration_ms")
+    return last.model_copy(update={k: getattr(last, k) + sum(getattr(r, k) for r in earlier) for k in keys})
+
+
+def _sum(spent: Sequence[PhaseResult]) -> PhaseResult | None:
+    return _total(spent[-1], spent[:-1]) if spent else None
+
+
 def _name(job: RunJob) -> str:
     """One container name per run and phase, so the watchdog can find the thing it has to kill."""
     return f"isidium-{job.run_id}-{job.phase}"
@@ -270,6 +317,8 @@ def _text(path: Path, key: str) -> str:
         value = json.loads(path.read_text(encoding="utf-8")).get(key)
     except (OSError, ValueError, AttributeError):
         return ""
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value if v).strip()
     return str(value).strip() if value else ""
 
 

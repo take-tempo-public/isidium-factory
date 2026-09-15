@@ -72,6 +72,7 @@ def queue_lines(q: Queue) -> list[str]:
         ("holds on the owner", q.holds_on_owner),
         ("closures pending review", q.closures_pending_review),
         ("withdrawals pending", q.withdrawals_pending),
+        ("failed runs", q.failed_runs),
         ("blocked by any of those", q.blocked_by_those),
     ]
     for name, qids in rows:

@@ -496,6 +496,9 @@ class Queue:
     holds_on_owner: tuple[int, ...]
     closures_pending_review: tuple[int, ...]
     withdrawals_pending: tuple[int, ...]
+    # [owner, 2026-09-14] a failed run waits on the owner — T-A7's design queue — and a signed ratification landed
+    # after it is the way back; until then the card is not dispatchable, so the morning review names it.
+    failed_runs: tuple[int, ...]
     blocked_by_those: tuple[int, ...]
     dispositions_since_batch: int
     inbox_counts: Mapping[str, int]
@@ -527,7 +530,10 @@ def queue(
     wp = tuple(
         sorted(c for c, p in projections.items() if p.label.row == "withdrawn" and p.label.modifier == "pending-review")
     )
-    those = set(oq) | set(ho) | set(cpr) | set(wp)
+    fr = tuple(
+        sorted(c for c, p in projections.items() if p.label.row == "execution" and p.label.execution == "failed")
+    )
+    those = set(oq) | set(ho) | set(cpr) | set(wp) | set(fr)
     blocked = tuple(
         sorted(
             c for c, d in inp.cards.items() if c not in those and any(x in those for x in d.head.get("depends_on", []))
@@ -543,4 +549,4 @@ def queue(
     for r in inbox:
         if r.get("type") == "intake" and r["id"] in open_ids:
             counts[str(r.get("source"))] = counts.get(str(r.get("source")), 0) + 1
-    return Queue(oq, ho, cpr, wp, blocked, disp, counts, merged_not_landed)
+    return Queue(oq, ho, cpr, wp, fr, blocked, disp, counts, merged_not_landed)

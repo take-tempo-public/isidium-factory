@@ -35,6 +35,11 @@ HARNESS: Final = "claude-code"
 # is not a model name, so a result carrying it can never pass for the row the policy signed.
 UNMEASURED: Final = "unmeasured"
 
+# The harness's own name for an end on a budget the policy set, as the outcome the record gives it. Measured live on
+# `r-4` (2026-09-14): `"subtype": "error_max_turns"`, `"errors": ["Reached maximum number of turns (40)"]`. T-A7 routes
+# `budget` to the design queue, never to a retry — the same turns would be spent again.
+BUDGET_ENDS: Final[frozenset[str]] = frozenset({"error_max_turns"})
+
 # The signals a watchdog or an operator sends to stop a phase. Each is forwarded to the harness, which is the process
 # doing the work; this process then reports what the harness left and exits.
 FORWARDED: Final[tuple[signal.Signals, ...]] = (signal.SIGTERM, signal.SIGINT)
@@ -115,11 +120,28 @@ def report(job: RunJob, out: Mapping[str, Any], ok: bool, harness_version: str) 
         "cache_write_tokens": int(usage.get("cache_creation_input_tokens") or 0),
         "cost_micro": round(float(out.get("total_cost_usd") or 0.0) * 1_000_000),
         "duration_ms": int(out.get("duration_ms") or 0),
-        "outcome": "ok" if ok and not out.get("is_error") else "failed:infra",
+        "outcome": outcome_of(out, ok),
         "harness": HARNESS,
         "harness_version": harness_version,
         "billing_class": "plan",
     }
+
+
+def outcome_of(out: Mapping[str, Any], ok: bool) -> str:
+    """How the phase ended, in the record's closed set. A budget end is `failed:budget` whatever the exit code; any
+    other error, or a non-zero exit, is `failed:infra` — T-A7's one class the adapter retries."""
+    if out.get("subtype") in BUDGET_ENDS:
+        return "failed:budget"
+    return "ok" if ok and not out.get("is_error") else "failed:infra"
+
+
+def reason_of(out: Mapping[str, Any]) -> str:
+    """The harness's own sentence for why it stopped. It writes the provider's answer to `result` and its own limits to
+    `errors[]` — `r-4` stopped with `errors: ["Reached maximum number of turns (40)"]` and no `result`, and the operator
+    was told *"the harness failed and said nothing"* while the sentence sat in the file."""
+    errors = out.get("errors")
+    listed = "; ".join(str(e) for e in errors if e) if isinstance(errors, list) else ""
+    return str(out.get("result") or out.get("error") or listed or "the harness failed and said nothing")
 
 
 class Forward:
@@ -175,7 +197,7 @@ def run(
     # The provider's own sentence goes to stderr as well as into the run directory. Found live 2026-09-12: the harness
     # writes its errors inside the container, so podman relayed an empty stream and the adapter could only say "exit 1"
     # about a run whose reason ("401 Invalid bearer token") was sitting in a file. Say it where the operator looks.
-    why = out.get("result") or out.get("error") or "the harness failed and said nothing"
+    why = reason_of(out)
     status = out.get("api_error_status")
     print(f"isidium-runner: {why}" + (f" (status {status})" if status else ""), file=sys.stderr)
     return 1

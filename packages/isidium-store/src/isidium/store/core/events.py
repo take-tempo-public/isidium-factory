@@ -287,14 +287,19 @@ def fold(
     run and its `suggestion-overflow`. Both are recomputed at every land, never accumulated: a repaired commit drops
     out at the next land. Still pure — the same inputs give the same bytes."""
     cards: dict[str, dict[str, Any]] = {}
+    # The cards whose current execution is a failure, kept as a fact of this pass rather than read back out of the
+    # `failed(class)` string the sidecar holds (C-2: nothing parses a rendered value apart).
+    failed: set[str] = set()
     for e in events:
         key = f"{int(e['card']):04d}"
         c = cards.setdefault(key, _new_card())
         k = str(e["kind"])
         if k in _EXECUTION:
             c["execution"] = _EXECUTION[k]
+            failed.discard(key)
         elif k == "failed":
             c["execution"] = f"failed({e['class']})"
+            failed.add(key)
         if k == "complete":
             c["runs"].append(
                 {
@@ -330,6 +335,13 @@ def fold(
                     }
                 )
         elif k == "ratified":
+            # A ratification landed after a failure is the owner's way back to ready [owner, 2026-09-14]: T-A7 routes
+            # a failed run to the design queue and defined no step back out, so a landed failure stranded its card
+            # (card 7, `r-4`). The owner's answer is a signed act that already exists — the card edited and
+            # re-ratified, or demoted and re-ratified unchanged — and the failure stays in the event file.
+            if key in failed:
+                c["execution"] = None
+                failed.discard(key)
             # The fingerprint's birth [V3, F-c]: a re-ratification replaces it whole.
             c["fingerprint"] = {
                 "ratified_seq": int(e["seq"]),

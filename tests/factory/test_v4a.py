@@ -187,6 +187,7 @@ class Podman:
 
     result: dict[str, Any] | None = None
     harness: dict[str, Any] | None = None
+    left: dict[str, Any] | None = None  # a harness that ran, spent, and ended in failure: its result stays behind
     fail: str | None = None
     timeout: bool = False
     once: bool = False
@@ -205,6 +206,11 @@ class Podman:
         if self.fail is not None and not (self.once and not first):
             return subprocess.CompletedProcess(argv, 1, "", self.fail)
         rundir = Path(next(a for a in argv if a.endswith(f":{render.RUN}:rw")).rsplit(":", 2)[0])
+        if self.left is not None:
+            (rundir / "result.json").write_text(json.dumps(self.left), encoding="utf-8")
+            if self.harness is not None:
+                (rundir / "harness.json").write_text(json.dumps(self.harness), encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 1, "", "")
         if self.harness is not None:  # what the image leaves behind when the harness itself failed
             (rundir / "harness.json").write_text(json.dumps(self.harness), encoding="utf-8")
             return subprocess.CompletedProcess(argv, 1, "", "")
@@ -591,6 +597,52 @@ def test_the_refusal_carries_what_the_container_left_behind(disk: Disk) -> None:
     assert r.detail != "2 attempts, the last: exit 1"
 
 
+def test_a_turn_limit_is_budget_and_is_not_retried(disk: Disk) -> None:
+    """Found live on `r-4` (2026-09-14): the builder spent its forty turns, the harness said `error_max_turns`, and the
+    adapter called it `failed:infra` and spent the turns a second time. T-A7: *"`infra` ⇒ one retry; …
+    `budget`/`timeout` ⇒ design queue with the telemetry attached"* — so the phase's result goes back, once."""
+    pod = Podman(left=_harness_result(outcome="failed:budget", tokens=26809))
+    res = Container(disk.home, _reg(disk), run=pod).execute(a_job(disk, run_id="r-budget"))
+    assert len([a for a in pod.seen if a[1] == "run"]) == 1, "a turn limit was retried"
+    assert res.outcome == "failed:budget" and res.tokens == 26809
+
+
+def test_a_retried_phase_keeps_each_attempt_and_the_refusal_carries_the_whole_spend(disk: Disk) -> None:
+    """The other half of `r-4`: attempt 1 ran twelve minutes, attempt 2 overwrote its files, and the refusal carried
+    nothing — the ledger's `phases` held no row for seventeen minutes of spend. Each attempt is kept under its number,
+    the refusal carries both attempts' spend, and the harness's own `errors[]` is part of what the operator is told."""
+    pod = Podman(
+        left=_harness_result(outcome="failed:infra", tokens=100, cost_micro=7, duration_ms=5),
+        harness={"is_error": True, "errors": ["the tree was unreachable"]},
+    )
+    r = refuses(
+        "adapter.infra", lambda: Container(disk.home, _reg(disk), run=pod).execute(a_job(disk, run_id="r-twice"))
+    )
+    assert len([a for a in pod.seen if a[1] == "run"]) == 2
+    assert isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None
+    assert (r.result.tokens, r.result.cost_micro, r.result.duration_ms) == (200, 14, 10)
+    rundir = disk.home / "runs" / "r-twice" / "build"
+    assert (rundir / "attempt-1.result.json").exists() and (rundir / "attempt-1.harness.json").exists()
+    assert "the tree was unreachable" in r.detail
+
+
+def test_the_harness_calls_a_turn_limit_budget_and_says_why(disk: Disk) -> None:
+    """`r-4`'s own harness output, in shape: `error_max_turns` is `failed:budget` whatever the exit code, any other
+    error stays `failed:infra`, and the sentence in `errors[]` is what the runner says — not *"said nothing"*."""
+    out = {
+        "is_error": True,
+        "subtype": "error_max_turns",
+        "terminal_reason": "max_turns",
+        "errors": ["Reached maximum number of turns (40)"],
+        "modelUsage": {"claude-sonnet-5": {"outputTokens": 26729}},
+    }
+    assert harness.report(a_job(disk), out, False, "2.1.269")["outcome"] == "failed:budget"
+    other = {"is_error": True, "subtype": "error_during_execution"}
+    assert harness.report(a_job(disk), other, False, "2.1.269")["outcome"] == "failed:infra"
+    assert harness.reason_of(out) == "Reached maximum number of turns (40)"
+    assert harness.reason_of({}) == "the harness failed and said nothing"
+
+
 def test_a_tenant_with_no_image_is_refused_rather_than_given_one(disk: Disk) -> None:
     reg = Registration(None, 1, "container", 1000, None)
     pod = Podman()
@@ -662,6 +714,51 @@ def test_the_outcome_lands_on_the_dispatched_row(disk: Disk, led: Ledger) -> Non
             disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: Fake()
         ),
     )
+
+
+def test_a_budget_end_ends_the_run_failed_budget_with_its_phase(disk: Disk, led: Ledger) -> None:
+    """A budget end reaches the ledger as itself: its own outcome, its phase row, and an end."""
+    run_id = fresh_run(disk, led)
+    spent = Fake(result=_harness_result(outcome="failed:budget"))
+    row = runner_mod.run_phase(
+        disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: spent
+    )
+    assert row["outcome"] == "failed:budget" and row["ended_at"] and row["phases"]
+
+
+def test_a_refused_phase_is_on_the_record_and_ends_when_the_adapter_gave_up(disk: Disk, led: Ledger) -> None:
+    """`r-4`'s record, both defects: its `ended_at` was the phase's start (seventeen minutes early) and its `phases`
+    held nothing. The clock moves while the adapter works, so an end read before the phase cannot pass."""
+    run_id = fresh_run(disk, led)
+    start = _dt.datetime(2026, 9, 14, 22, 59, 21, tzinfo=_dt.UTC)
+    clock = [start]
+    spent = adapter_mod.result(
+        {**_harness_result(outcome="failed:infra", tokens=26809, cost_micro=1426187), "run_id": run_id}
+    )
+
+    @dataclass
+    class Refusing(Fake):
+        def execute(self, job: RunJob) -> PhaseResult:
+            clock[0] = _dt.datetime(2026, 9, 14, 23, 16, 22, tzinfo=_dt.UTC)
+            raise adapter_mod.PhaseRefusal("adapter.infra", job.run_id, "2 attempts", spent)
+
+    refuses(
+        "adapter.infra",
+        lambda: runner_mod.run_phase(
+            disk.ctx,
+            _reg(disk),
+            led,
+            disk.call,
+            run_id=run_id,
+            phase="build",
+            factory=lambda h, r: Refusing(),
+            now=lambda: clock[0],
+        ),
+    )
+    row = led.run(run_id)
+    assert row is not None and row["outcome"] == "failed:infra" and row["ended_at"] == "2026-09-14T23:16:22Z"
+    phases = led.phases_of(run_id)
+    assert phases and (phases[-1]["tokens"], phases[-1]["cost_micro"]) == (26809, 1426187)
 
 
 def test_a_write_outside_the_surfaces_ends_the_run_failed_scope(disk: Disk, led: Ledger) -> None:
