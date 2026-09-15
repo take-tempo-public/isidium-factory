@@ -145,6 +145,17 @@ def test_nothing_in_flight_nothing_abandoned() -> None:
     assert card["execution"] == "complete" and len(card["runs"]) == 1, "K1: a finished run is not abandoned"
 
 
+def test_a_run_in_flight_with_no_dispatched_line_is_abandoned_without_a_run_id() -> None:
+    """Found reviewing `r-6`'s work (2026-09-15): the fold read the card's last `dispatched` run id without a guard, so
+    an event file holding a card in flight with no `dispatched` line for it — a `parked` reported alone — raised inside
+    the fold, and every land after it would fail on the same file. The run is still abandoned; the entry carries the
+    id only when the file names one (canon has no null: an unknown id is an absent key)."""
+    evs = [_ev(1, 7, "parked", run_id="r-9"), _ev(2, 7, "withdrawn", seq=2)]
+    card = events_mod.fold(evs, "c", "2026-09-15T00:00:00Z", {"seq": 1, "h": "j"}, {})["cards"]["0007"]
+    assert card["execution"] == "abandoned"
+    assert card["runs"] == [{"outcome": "abandoned", "ended_at": "2026-09-15T00:00:02Z"}]
+
+
 # ---- R5: the in-flight set has one home ------------------------------------------------------------------------------
 
 

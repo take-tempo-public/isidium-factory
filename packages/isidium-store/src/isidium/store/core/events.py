@@ -313,8 +313,13 @@ def fold(
         elif k in ("withdrawn", "demoted") and c["execution"] in IN_FLIGHT:
             # Card 7, R1/R2: a withdrawal or demotion observed on a run in flight abandons it — never on a run
             # already `complete` (K1) or on a card with nothing in flight (R4, where neither branch above nor this
-            # one matches and the card is left untouched).
-            c["runs"].append({"run_id": dispatched_run[key], "outcome": "abandoned", "ended_at": e["at"]})
+            # one matches and the card is left untouched). The run id rides only when the file names one: a card in
+            # flight with no `dispatched` line (a `parked` reported alone) must not raise inside the fold, where every
+            # later land would meet the same file — and canon has no null, so an unknown id is an absent key.
+            run_id = dispatched_run.get(key)
+            c["runs"].append(
+                {**({"run_id": run_id} if run_id is not None else {}), "outcome": "abandoned", "ended_at": e["at"]}
+            )
             c["execution"] = "abandoned"
         if k == "complete":
             c["runs"].append(
