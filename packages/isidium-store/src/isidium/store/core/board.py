@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .events import IN_FLIGHT as IN_FLIGHT  # re-exported: card 7 R5's one home, checked by identity in its tests
 from .grammar import Document
 from .status import Projection, Queue
 
@@ -92,10 +93,13 @@ def render(
     wip_ceiling: int,
     archive_line: str | None = None,
 ) -> str:
+    # `complete` is added on top of the shared `IN_FLIGHT` set here (card 7, K1): a finished run still counts
+    # toward WIP until its batch merges, but the set that a withdrawal or demotion may abandon stops at `answered`
+    # — abandoning a run that already finished would overwrite its real outcome.
     in_flight = sum(
         1
         for p in projections.values()
-        if p.label.row == "execution" and p.label.execution in ("dispatched", "parked", "answered", "complete")
+        if p.label.row == "execution" and (p.label.execution in IN_FLIGHT or p.label.execution == "complete")
     )
     out = [
         "# Board",

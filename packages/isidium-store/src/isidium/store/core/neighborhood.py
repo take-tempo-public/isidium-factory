@@ -33,6 +33,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Final, Literal
 
 from . import canon, status
+from .events import IN_FLIGHT as IN_FLIGHT  # re-exported: card 7 R5's one home, checked by identity in its tests
 from .grammar import Document
 
 Bucket = Literal["planned", "in-flight", "built", "held"]
@@ -125,7 +126,7 @@ def bucket_of(pr: status.Projection) -> Bucket:
     lab = pr.label
     if lab.row == "disputed" or any(g.kind in ("held", "held_by") for g in pr.guards):
         return "held"
-    if lab.row == "execution" and lab.execution in ("dispatched", "parked", "answered"):
+    if lab.row == "execution" and lab.execution in IN_FLIGHT:
         return "in-flight"
     if lab.row == "closed":
         return "in-flight" if lab.modifier is not None else "built"

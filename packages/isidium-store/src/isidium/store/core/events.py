@@ -199,6 +199,13 @@ _EXECUTION: Final[Mapping[str, str]] = {
     "reopened": "reopened",
 }
 
+# The in-flight set, declared once (03 §6, card 7 R5): every site that asks whether a run is in flight — this
+# fold, the land's act events (`Store._act_events`), the board's WIP count and the neighborhood block — reads this
+# constant rather than its own copy of the tuple. `complete` is deliberately not a member: a run that already
+# finished is not what a withdrawal or demotion abandons (card 7, K1) — the board and the neighborhood add
+# `complete` on top of this set where their own broader notion of "still live" needs it.
+IN_FLIGHT: Final[frozenset[str]] = frozenset({"dispatched", "parked", "answered"})
+
 _ADAPTER: Final[TypeAdapter[Event]] = TypeAdapter(Event)
 
 
@@ -290,6 +297,7 @@ def fold(
     # The cards whose current execution is a failure, kept as a fact of this pass rather than read back out of the
     # `failed(class)` string the sidecar holds (C-2: nothing parses a rendered value apart).
     failed: set[str] = set()
+    dispatched_run: dict[str, str] = {}  # card key → its last `dispatched` event's run_id (card 7 R2)
     for e in events:
         key = f"{int(e['card']):04d}"
         c = cards.setdefault(key, _new_card())
@@ -297,9 +305,22 @@ def fold(
         if k in _EXECUTION:
             c["execution"] = _EXECUTION[k]
             failed.discard(key)
+            if k == "dispatched":
+                dispatched_run[key] = e["run_id"]
         elif k == "failed":
             c["execution"] = f"failed({e['class']})"
             failed.add(key)
+        elif k in ("withdrawn", "demoted") and c["execution"] in IN_FLIGHT:
+            # Card 7, R1/R2: a withdrawal or demotion observed on a run in flight abandons it — never on a run
+            # already `complete` (K1) or on a card with nothing in flight (R4, where neither branch above nor this
+            # one matches and the card is left untouched). The run id rides only when the file names one: a card in
+            # flight with no `dispatched` line (a `parked` reported alone) must not raise inside the fold, where every
+            # later land would meet the same file — and canon has no null, so an unknown id is an absent key.
+            run_id = dispatched_run.get(key)
+            c["runs"].append(
+                {**({"run_id": run_id} if run_id is not None else {}), "outcome": "abandoned", "ended_at": e["at"]}
+            )
+            c["execution"] = "abandoned"
         if k == "complete":
             c["runs"].append(
                 {
@@ -339,7 +360,11 @@ def fold(
             # a failed run to the design queue and defined no step back out, so a landed failure stranded its card
             # (card 7, `r-4`). The owner's answer is a signed act that already exists — the card edited and
             # re-ratified, or demoted and re-ratified unchanged — and the failure stays in the event file.
-            if key in failed:
+            #
+            # The same is true of an abandoned run (card 7, R3): a re-ratification after a withdrawal or demotion
+            # abandoned the run in flight reads `ratified`/`ready`, not `execution(abandoned)` — the abandoned run
+            # stays in the event file, only the sidecar's current field clears.
+            if key in failed or c["execution"] == "abandoned":
                 c["execution"] = None
                 failed.discard(key)
             # The fingerprint's birth [V3, F-c]: a re-ratification replaces it whole.
