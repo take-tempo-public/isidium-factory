@@ -153,14 +153,14 @@
   },
   "ingest": {
     "overflow": 0,
-    "run_id": "r-6"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:afc7035fcfd08ef37d120547d9ac11a6584d174690717e5fb46629de0f58f8d3",
-    "seq": 53
+    "h": "sha256:d5691eca3ef6cf9a16bd76dad970bd29b9bfefcdb762b2fe11dc416338c482d5",
+    "seq": 54
   },
-  "landed_at": "2026-09-15T19:31:04Z",
-  "ledger_cursor": "f1099782d8441852c71d9286c5d42c4a12063b32",
+  "landed_at": "2026-09-16T23:51:55Z",
+  "ledger_cursor": "df92844ef3e2370a21115040fd53e2ccef2bf891",
   "schema": 2
 }
