@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -115,6 +115,14 @@ kind = "test-marker"
 title = "the in-flight set has one home"
 rule = "R5"
 observable = { test = "tests/store/test_fold_abandons.py::test_the_in_flight_set_has_one_home" }
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass", S5 = "pass", S6 = "pass", S7 = "pass", S8 = "pass" }
+evidence = ["sha256:327fb4f707f5fffdbd11db72ca7c0314f99c7cf0165cfb2f81d308192ffe7118"]
+retracted = false
 ```
 
 ## Scope
@@ -130,5 +138,6 @@ history = [
   { seq = 3, at = "2026-09-15T05:29:21Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:a32021179599d4d5a1eca67b7c92318977806ced9ccc075d7277d0a0e52e02ba", batch = 13 },
   { seq = 4, at = "2026-09-15T19:25:40Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:bb3d97c2195aa9c27dcd4f514f910fd3522120ddc4691fcd4f2a0407b13ae5e3" },
   { seq = 5, at = "2026-09-15T19:30:19Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:d77f238b603fe6149cbbb88bc3b14d4d0d2e45cfa61a7d0b59d1ee127945916d", batch = 14 },
+  { seq = 6, at = "2026-09-17T01:17:24Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c1:sha256:9bcd36ebad99e5fb4d7cb7295754ec286540ba1d055b7b188ee8d1e28539a2c3", h = "sha256:c742763cc309196d560b1f126128d828f5bd42a712d781e1d772fa0f281fd2a9", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:3JruYWHPwRRbVeh9jaDtZpQs7k3/MIfxNTG0HS46KNdhGskMXObQZlZSDdZ7pzYSjGgilv4TUEZDmiuI7M+NCQ==" },
 ]
 ```
