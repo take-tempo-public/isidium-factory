@@ -323,6 +323,60 @@ def test_accept_reads_the_store_runs_the_checkout_and_closes_met(tmp_path: Path,
     assert hz.st.projection_of(cid).label.render() == "closed (pending-ingest)"
 
 
+def test_a_second_close_of_the_same_acceptance_is_refused_before_anything_runs(tmp_path: Path) -> None:
+    """[owner, 2026-09-17] found live on card 7: `accept --close` run again on a closed card wrote a **second,
+    unsigned** closure (the signature predicate has no `closed → closed` rule), and the projection reads the newest
+    `closed` entry — so the card fell from `closed (unverified)` to `closed (pending-ingest)`. The same acceptance at
+    the same build refuses, before a scenario runs, and the card keeps the one closure it had."""
+    hz = fresh()
+    work = checkout(tmp_path, hz)
+    cid = card_with(hz, "green", scenarios("test-marker"))
+    accept_mod.accept(channel(hz, PLANNER), work, ROOT, cid, close=True)
+    e = refuses("accept.closed", lambda: accept_mod.accept(channel(hz, PLANNER), work, ROOT, cid, close=True))
+    assert "c1" in e.detail
+    doc = hz.st.docs[hz.st.path_of(cid) or ""]
+    assert len(doc.head["closures"]) == 1 and doc.history[-1]["act"] == "closed"
+
+
+def test_the_close_refuses_this_acceptance_only_and_never_a_retracted_closure(tmp_path: Path) -> None:
+    """The refusal's two edges, each its own discriminator: a card closed on **another** acceptance (its block or its
+    build moved since) is not work this door has done, and a **retracted** closure is a claim withdrawn — both must
+    reach the write. The door is handed a card whose closure is doctored and a `write` that answers with a sentinel,
+    so what is under test is which of the three cases refuses and which gets through."""
+    hz = fresh()
+    work = checkout(tmp_path, hz)
+    cid = card_with(hz, "green", scenarios("test-marker"))
+    mine = str(accept_mod.accept(channel(hz, PLANNER), work, ROOT, cid)["manifest_hash"])
+
+    def door(evidence: str, retracted: bool) -> accept_mod.Call:
+        real = channel(hz, PLANNER)
+
+        def call(name: str, args: Any) -> Any:
+            if name == "write":
+                raise Refusal("stub.write", str(cid), "the door reached its write")
+            got = real(name, args)
+            head = dict(got["head"])
+            head["status"] = "closed"
+            head["closures"] = [
+                {
+                    "id": "c1",
+                    "kind": "human",
+                    "outcome": "met",
+                    "verdicts": {"S1": "pass"},
+                    "evidence": [evidence],
+                    "retracted": retracted,
+                }
+            ]
+            return {**got, "head": head, "label": "closed (pending-ingest)"}
+
+        return call
+
+    another = "sha256:" + "0" * 64
+    refuses("stub.write", lambda: accept_mod.accept(door(another, False), work, ROOT, cid, close=True))
+    refuses("stub.write", lambda: accept_mod.accept(door(mine, True), work, ROOT, cid, close=True))
+    refuses("accept.closed", lambda: accept_mod.accept(door(mine, False), work, ROOT, cid, close=True))
+
+
 def test_a_failing_verdict_refuses_to_close_unless_deviated(tmp_path: Path) -> None:
     hz = fresh()
     work = checkout(tmp_path, hz)
