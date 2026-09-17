@@ -145,8 +145,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:d77f238b603fe6149cbbb88bc3b14d4d0d2e45cfa61a7d0b59d1ee127945916d",
-        "seq": 5
+        "h": "sha256:c742763cc309196d560b1f126128d828f5bd42a712d781e1d772fa0f281fd2a9",
+        "seq": 6
       },
       "runs": []
     }
@@ -157,10 +157,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:d5691eca3ef6cf9a16bd76dad970bd29b9bfefcdb762b2fe11dc416338c482d5",
-    "seq": 54
+    "h": "sha256:2ca6dd2224a069a3213248d515c10e07c06d730c95ab42dce621baaab0f91412",
+    "seq": 56
   },
-  "landed_at": "2026-09-16T23:51:55Z",
-  "ledger_cursor": "df92844ef3e2370a21115040fd53e2ccef2bf891",
+  "landed_at": "2026-09-17T01:17:24Z",
+  "ledger_cursor": "6e2fd9ff53291d41f38e59c99a62e5b30a6c66c7",
   "schema": 2
 }
