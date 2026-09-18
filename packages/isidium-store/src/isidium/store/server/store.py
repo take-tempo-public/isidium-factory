@@ -1407,6 +1407,21 @@ class Store:
                 raise Refusal("land.sidecar-unreadable", p, str(self.unreadable[p]))
             self._grant_on(p, caller)
         rep = events_mod.parse_report(report)
+        # [owner, 2026-09-17] a report lands once. Found live: the same synthetic report landed five times and left
+        # five identical suggestions in the inbox (s1–s5) — the factory's ledger watermark guards its own path, and
+        # this is the store's own door. An **empty** report is exempt: it lands nothing, and a maintenance land that
+        # only moves the cursor is not work already done.
+        seen = [str(h) for h in ((self.state.get("ingest") or {}).get("landed") or [])]
+        # The key is the report's **content**, never its `run_id`: one run lands several reports by design — its
+        # `dispatched` at the pick and its end at the finish — each carrying only what the ledger's watermark had not
+        # sent. Keying on the run id refused the second of those (measured against V5a's own tests, 2026-09-17).
+        digest = canon.sha256_hex(canon.canonical_json(rep.model_dump(by_alias=True, exclude_none=True)).encode())
+        if digest in seen and (rep.events or rep.suggestions):
+            raise Refusal(
+                "land.report-landed",
+                rep.run_id,
+                "this report has already landed; the same report lands once, and an empty report may land again",
+            )
         pending = self.merges_pending()
         last = self.state.get("ledger_cursor")  # absent on a first land, and on a planted or garbled sidecar
         landed_reasons: Mapping[str, Mapping[str, Sequence[str]]] = self.state.get("integrity", {})
@@ -1468,7 +1483,13 @@ class Store:
             {"seq": jseq, "h": jh},
             heads,
             integrity=integrity,
-            ingest={"run_id": rep.run_id, "overflow": overflow},
+            # `landed` is the hash of every report this tenant has landed, in the order they landed — what
+            # `land.report-landed` reads. `run_id` stays the last land's, as L4 wrote it.
+            ingest={
+                "run_id": rep.run_id,
+                "overflow": overflow,
+                "landed": seen if digest in seen else [*seen, digest],
+            },
         )
         files: dict[str, bytes] = {
             "state.json": (json.dumps(state, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),

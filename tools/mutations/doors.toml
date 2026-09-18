@@ -1,0 +1,54 @@
+# The two doors' idempotence (2026-09-17) — a door handed work it has already done refuses. Each mutation is the
+# defect coming back: a second close accepted, a close refused on the wrong evidence, a retracted closure blocking, the
+# same report landed twice, an empty report refused with it, the landed hashes not kept, or the land keyed on the run
+# id (which refuses a run's own later report — measured against V5a's tests, 2026-09-17).
+# Owners: `tests/store/test_l3.py` (accept) and `tests/store/test_l4.py` (land).
+
+[[mutation]]
+id = "M1"
+label = "a second close is accepted again -- card 7's unsigned duplicate back"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''        if done is not None and manifest.hash in (done.get("evidence") or []):'''
+replace = '''        if False:'''
+
+[[mutation]]
+id = "M2"
+label = "the close refuses on any closure, whatever acceptance it cites"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''        if done is not None and manifest.hash in (done.get("evidence") or []):'''
+replace = '''        if done is not None:'''
+
+[[mutation]]
+id = "M3"
+label = "a retracted closure still blocks the close"
+file = "packages/isidium-store/src/isidium/store/client/accept.py"
+find = '''        done = next((c for c in reversed(card["head"].get("closures") or []) if not c.get("retracted")), None)'''
+replace = '''        done = next((c for c in reversed(card["head"].get("closures") or [])), None)'''
+
+[[mutation]]
+id = "M4"
+label = "the same report lands twice -- the duplicate suggestions back"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if digest in seen and (rep.events or rep.suggestions):'''
+replace = '''        if False:'''
+
+[[mutation]]
+id = "M5"
+label = "an empty report is refused too -- a maintenance land blocked"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        if digest in seen and (rep.events or rep.suggestions):'''
+replace = '''        if digest in seen:'''
+
+[[mutation]]
+id = "M6"
+label = "the landed hashes are not kept -- only the last land is remembered"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''                "landed": seen if digest in seen else [*seen, digest],'''
+replace = '''                "landed": [digest],'''
+
+[[mutation]]
+id = "M7"
+label = "the land is keyed on the run id -- a run's own later report refused"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        digest = canon.sha256_hex(canon.canonical_json(rep.model_dump(by_alias=True, exclude_none=True)).encode())'''
+replace = '''        digest = canon.sha256_hex(canon.canonical_json(rep.run_id).encode())'''

@@ -14,6 +14,7 @@ import pytest
 
 from isidium.store.core import events as events_mod
 from isidium.store.core.grammar import parse_jsonl
+from isidium.store.core.refusal import Refusal
 from isidium.store.server import reconcile
 from isidium.store.server.gitrepo import CommitChange, coauthors_of
 from isidium.store.server.store import Store
@@ -86,7 +87,8 @@ def test_a_suggestion_over_the_inbox_bound_lands_as_overflow() -> None:
         {"run_id": "r-1", "events": [{"kind": "dispatched", "card": a, "run_id": "r-1"}], "suggestions": suggestions},
         LANDER,
     )
-    assert r["overflow"] == 2 and st.state["ingest"] == {"run_id": "r-1", "overflow": 2}
+    ingest = st.state["ingest"]
+    assert (ingest["run_id"], ingest["overflow"]) == ("r-1", 2) and len(ingest["landed"]) == 1
     assert len(r["intake"]) == cap
 
 
@@ -203,6 +205,7 @@ def test_a_commit_older_than_the_landed_head_is_not_rewritten_when_the_range_wal
     assert r["empty"] is False, "a new head is an input of the empty diff: the ratification lands its head"
     assert st.state["cards"][f"{a:04d}"]["history_head"]["seq"] == 2 and st.state["integrity"] == {}
     assert st.land({"run_id": "r-1b", "events": []}, LANDER)["empty"] is True, "and the same heads again are empty"
+    assert len(st.state["ingest"]["landed"]) == 2, "each land that wrote left its report's hash; the empty one none"
     r = st.land({"run_id": "r-2", "events": [{"kind": "question", "card": a, "text": "again"}]}, LANDER)
     assert r["cursor"] != cursor, "the clean range advanced the cursor [Q-W10 (a)]"
     # the same range walked again from the first cursor, as every land did before Q-W10: not a rewrite
@@ -330,6 +333,38 @@ def test_a_withdrawal_of_a_dispatched_card_is_the_ledgers_own_transition_once() 
     again = st.land({"run_id": "r-2", "events": []}, LANDER)
     assert again["empty"] is True and len(st.events) == 5, "the same range emits nothing twice"
     assert "closed" not in Store.ACT_EVENTS, "a human closure is never emitted (row 5 reads verified=false as disputed)"
+
+
+def test_the_same_report_lands_once_and_a_later_one_for_the_same_run_still_lands() -> None:
+    """[owner, 2026-09-17] the same report lands once. Found live on tenant #0: the same synthetic report landed five
+    times and left five identical suggestions in the inbox. The key is the report's **content**: one run lands several
+    reports by design — its `dispatched` at the pick, its end at the finish — each carrying only what the ledger's
+    watermark had not sent, so a run id cannot be the key. An empty report is exempt: it lands nothing."""
+    hz = fresh()
+    st = hz.st
+    a = ratified(hz, "a")
+    report: dict[str, Any] = {
+        "run_id": "r-1",
+        "events": [{"kind": "dispatched", "card": a, "run_id": "r-1"}],
+        "suggestions": [{"kind": "docs", "title": "t", "body": "b"}],
+    }
+    st.land(report, LANDER)
+    assert len(st.inbox) == 1 and len(st.state["ingest"]["landed"]) == 1
+    with pytest.raises(Refusal) as ei:
+        st.land(copy.deepcopy(report), LANDER)
+    assert ei.value.rule == "land.report-landed" and ei.value.path == "r-1", str(ei.value)
+    assert len(st.inbox) == 1, "nothing was written by the refused land"
+    later = {"run_id": "r-1", "events": [{"kind": "failed", "card": a, "class": "infra", "run_id": "r-1"}]}
+    assert st.land(later, LANDER)["empty"] is False, "the same run's later report is not the same report"
+    assert st.state["cards"][f"{a:04d}"]["execution"] == "failed(infra)"
+    assert st.land({"run_id": "r-1", "events": []}, LANDER)["empty"] is True, "an empty report may land again"
+    # And again when it writes: an empty report whose land still has a new head to carry records its own hash, and the
+    # next identical one must not be refused by it — a maintenance land is never work already done.
+    ratified(hz, "b")
+    empty: dict[str, Any] = {"run_id": "r-2", "events": []}
+    assert st.land(empty, LANDER)["empty"] is False, "a new head is a diff: the empty report's land writes"
+    ratified(hz, "c")
+    assert st.land(copy.deepcopy(empty), LANDER)["empty"] is False, "the same empty report lands again"
 
 
 # ---- the fold, alone -------------------------------------------------------------------------------------------------

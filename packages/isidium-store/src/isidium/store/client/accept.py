@@ -80,6 +80,19 @@ def accept(
     manifest = manifest_mod.compile_acceptance(
         card["head"].get("acceptance") or {}, eff["runners"], runners_mod.RUNNERS
     )
+    if close and row == "closed":
+        # [owner, 2026-09-17] a door handed work it has already done refuses. Found live: `accept 7 --close` run a
+        # second time wrote a second closure — and an **unsigned** one, because the signature predicate has no rule
+        # for `closed → closed` — so the card fell from `closed (unverified)` to `closed (pending-ingest)`. The
+        # manifest hash is the test: the same acceptance block at the same build already closed this card. Compiled
+        # above and compared here, so nothing runs; a card whose acceptance or build moved is not this case.
+        done = next((c for c in reversed(card["head"].get("closures") or []) if not c.get("retracted")), None)
+        if done is not None and manifest.hash in (done.get("evidence") or []):
+            raise Refusal(
+                "accept.closed",
+                str(card_id),
+                f"{done['id']} already closed this card on this acceptance ({manifest.hash}); nothing was run",
+            )
     required = bool(eff["ratification"]["verdicts_required"])
     verdicts: list[runners_mod.Verdict] = []
     for entry in manifest.entries:
