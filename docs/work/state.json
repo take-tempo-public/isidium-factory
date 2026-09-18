@@ -152,15 +152,18 @@
     }
   },
   "ingest": {
+    "landed": [
+      "88c3a2b0a16f2a26553a1b9a595273d502a23e7613779d63cb28d26e54a1f8db"
+    ],
     "overflow": 0,
     "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:46fe6e738820ba2aff907022032e48d61f9be1b4920bdf44400a5d9f1b86ef17",
-    "seq": 58
+    "h": "sha256:79a3ec9c1c03838cb2ad1e4afd8d3f8307cc246f57e052b314bf5fac532e01d9",
+    "seq": 59
   },
-  "landed_at": "2026-09-17T01:20:43Z",
-  "ledger_cursor": "0b2ef0f71ac3ae02925318abe526470d2830eed9",
+  "landed_at": "2026-09-18T17:17:13Z",
+  "ledger_cursor": "5efc9628beaba438346f787e4570e7f0f9a11a8b",
   "schema": 2
 }
