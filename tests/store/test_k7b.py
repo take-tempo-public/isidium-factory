@@ -366,6 +366,40 @@ def test_the_batch_fetch_negotiates_nothing_so_a_bitmapped_origin_still_sends_th
     refuses("git.outside-footprint", lambda: repo.blob(code))
 
 
+def test_a_restarted_store_reads_the_card_it_last_signed(tmp_path: Path) -> None:
+    """Found live on card 7 (2026-09-18), on a store recreated minutes earlier. `ratify` reads the card **as last
+    signed** to show what changed since; the journal's `signed` row names that blob; and a clone made after an
+    unsigned write had never seen it — so the read was refused `git.outside-footprint`, on a card with nothing
+    wrong with it, and only on cards whose last signed version is not their current one.
+
+    The discriminator is the pairing the deployment actually has: **the same journal, a fresh clone** — the journal
+    lives in the named volume, the clone inside the container. A governed path's earlier version is governed-path
+    content, so the journal vouches what it already knows and the clone hydrates it like any other; the footprint
+    is unchanged, which the code blob at the end still proves."""
+    work = _governed_tenant(tmp_path, 1)
+    journal = tmp_path / "signed.sqlite"
+    first = store_on_disk(work, journal, root=ROOT)
+    cid = next(iter(first.cards()))
+    path = first.path_of(cid) or ""
+    first.ratify([cid], OWNER)
+    first.write_set(cid, ['priority="P3"'], PLANNER)  # unsigned: HEAD moves past the blob the journal signed
+    assert isinstance(first.repo, GitCli)
+    rec = first.journal.signed_get(path)
+    assert rec is not None and rec[0] != first.repo.oid_of(ROOT + path), (
+        "the signed version must differ from HEAD's, or a fresh clone would already hold it"
+    )
+    first.repo.close()
+
+    again = store_on_disk(work, journal, root=ROOT)  # the recreate: same journal, a clone that never saw that blob
+    out = again.ratify([cid], OWNER, dry_run=True)
+    # The display is computable only by reading the last signed document — the read that was refused live.
+    assert "priority" in out["display"][0][3]["tending"], out["display"]
+    assert isinstance(again.repo, GitCli)
+    code = again.repo.oid_of("client/cards/validator.py")
+    assert code is not None
+    refuses("git.outside-footprint", lambda: again.repo.blob(code))
+
+
 def test_prefetch_refuses_an_object_it_did_not_vouch(tmp_path: Path) -> None:
     """The batch door keeps `blob()`'s gate: an oid resolved from outside the root is refused before any git runs,
     and nothing else in the batch is fetched on its account."""

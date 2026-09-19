@@ -113,6 +113,10 @@ class Repo(Protocol):
     # per object at the first `blob()`. Every oid must have been resolved from a path inside the root (the same
     # gate `blob()` keeps); returns how many were actually fetched, 0 on a warm clone and on the double.
     def prefetch(self, oids: Iterable[str]) -> int: ...
+    # [owner, 2026-09-18] the caller vouches an oid it knows sits at a governed path. `touched()` already vouches
+    # that way from a tree; the journal's `signed` row names the path and the blob together and could not say so.
+    # Without it a restarted store cannot read its own last signed card — what `ratify` compares against.
+    def vouch(self, oids: Iterable[str]) -> None: ...
     def paths(self) -> list[str]: ...
 
 
@@ -261,6 +265,9 @@ class MemGit:
     def prefetch(self, oids: Iterable[str]) -> int:
         """The double holds every blob it ever wrote; there is nothing to fetch and no remote to fetch from."""
         return 0
+
+    def vouch(self, oids: Iterable[str]) -> None:
+        """Nothing to vouch: the double has no footprint to enforce and no promisor to ask."""
 
 
 # ---- git via subprocess ----------------------------------------------------------------------------------------
@@ -625,6 +632,17 @@ class GitCli:
             check=False,
             env=self._fetch_env,
         )
+
+    def vouch(self, oids: Iterable[str]) -> None:
+        """Vouch for objects the caller knows sit at a governed path [owner, 2026-09-18].
+
+        `_tree()` and `touched()` vouch from a tree, because that is where they learn the path. The journal's
+        `signed` row holds the same fact — path and blob in one row — and had no way to say it, so a card whose
+        last signed version is not its current one was refused `git.outside-footprint` when `ratify` read it
+        (found live on card 7, on a store recreated minutes earlier). This says it; `blob()` then hydrates the
+        object like any other governed content, and nothing here widens what *may* be held: the caller's claim is
+        the same one the tree walk makes, from the other witness."""
+        self._vouched.update(o for o in oids if o)
 
     def prefetch(self, oids: Iterable[str]) -> int:
         """Hold these objects locally, in **one** round trip [K7b, F7]. Returns how many were fetched.
