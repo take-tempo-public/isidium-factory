@@ -1,0 +1,18 @@
+# A governed path's historical blob is governed-path content (2026-09-18, owner's (i)). The mutations are the two
+# halves of the defect coming back: the journal's signed row not saying what it knows, and the clone not recording
+# what it was told. Owner: `tests/store/test_k7b.py` (the only place a real `GitCli` runs under the footprint).
+
+[[mutation]]
+id = "M1"
+label = "the journal's signed row does not vouch its blob -- card 7's refusal back"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = '''        self.repo.vouch([rec[0]])
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M2"
+label = "vouching records nothing -- the claim is made and dropped"
+file = "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+find = '''        self._vouched.update(o for o in oids if o)'''
+replace = '''        return None'''
