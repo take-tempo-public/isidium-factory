@@ -145,25 +145,26 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:3b028fddb00c93295f3c37f4873ed93eeba9decf770e0e703cedc76b5e9e2c3d",
-        "seq": 7
+        "h": "sha256:a3a64950856da9bdb21c46c1b58ecff322e1f21876a4ba4b48beed938213db69",
+        "seq": 8
       },
       "runs": []
     }
   },
   "ingest": {
     "landed": [
-      "88c3a2b0a16f2a26553a1b9a595273d502a23e7613779d63cb28d26e54a1f8db"
+      "88c3a2b0a16f2a26553a1b9a595273d502a23e7613779d63cb28d26e54a1f8db",
+      "355d33a5fba061ab67e084efa32bad639df79586ef84e04d31aa27d5da496c70"
     ],
     "overflow": 0,
-    "run_id": "r-0"
+    "run_id": "r-v3-land-1"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:36dcb18a9b97e7c4795f09a345e86333a6a9c94f9caa49fcfe5529ba41cce52e",
-    "seq": 60
+    "h": "sha256:44e3a2cb3350014e2c33130a2b95ad02d181f666200fcda72f4449665609dd46",
+    "seq": 62
   },
-  "landed_at": "2026-09-19T21:10:52Z",
-  "ledger_cursor": "fd00900d2381eed8aca4d1b61f0c22188c702122",
+  "landed_at": "2026-09-19T23:21:27Z",
+  "ledger_cursor": "977b9e17e97d6038e38005644c2693c2b4c1c300",
   "schema": 2
 }
