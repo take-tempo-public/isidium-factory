@@ -1873,6 +1873,13 @@ class Store:
         rec = self.journal.signed_get(path)
         if rec is None:
             return None
+        # The journal's `signed` row names the path and the blob together, so this blob is a governed path's own
+        # content — inside the footprint by its rule, not an exception to it. The clone vouches what a tree walk
+        # showed it at HEAD, which is narrower: a card whose last signed version is not its current one — any card
+        # with an unsigned write after it — was refused `git.outside-footprint` on a store that had not seen that
+        # version. Found live on card 7 (2026-09-18) after a recreate; `touched()` vouches from a tree for this
+        # same reason, and this is the site where the journal knows it.
+        self.repo.vouch([rec[0]])
         doc = parse_markdown(self.repo.blob(rec[0]).decode("utf-8"), self.doc_schema("card@1"))
         self.signed_doc[path] = doc
         return doc
