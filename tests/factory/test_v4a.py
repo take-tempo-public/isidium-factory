@@ -766,6 +766,38 @@ def test_a_phase_lands_on_the_row_it_was_dispatched_under(disk: Disk, led: Ledge
     assert not (disk.home / "worktrees" / run_id).exists(), "the worktree per run is taken down again"
 
 
+def test_the_prompt_version_is_per_agent_and_unnamed_agents_take_the_floor(disk: Disk, led: Ledger) -> None:
+    """7bd.11's `prompts/<agent>/<version>.md`, selected per agent kind [owner, 2026-09-19]: the builder's job
+    carries its own `v2`, and an agent the map does not name carries the floor.
+
+    **Two phases in one test is the discriminator.** Asserting the builder alone would pass on a selector that
+    ignored the agent it was handed and answered `v2` to everything — which is exactly the shape the one shared
+    constant had, one version for every agent kind."""
+    fake = Fake()
+    build = fresh_run(disk, led)
+    runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=build, phase="build", factory=lambda h, r: fake)
+    review = fresh_run(disk, led)
+    runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=review, phase="review", factory=lambda h, r: fake)
+    assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v2", "reviewer": "v1"}
+
+
+def test_every_prompt_version_the_map_names_is_a_file_the_image_carries() -> None:
+    """The ground the map stands on rather than a signed policy row [owner, 2026-09-19]: the selector and the prompt
+    files ship in one image from one pull request (`Containerfile.runner`), so a version named in code can never be
+    one the image lacks. `harness.prompt_input` reads that file directly — a missing one raises inside the
+    container, mid-phase, and lands as `failed:infra`. So the check belongs here, where a pull request sees it.
+
+    **Scoped to the map on purpose.** The floor `v1` is asserted only where a prompt exists today: the other roster
+    kinds (`plan-author`, `plan-refuter`, `judge`, `reviewer`) have no prompt file at all and would take a floor
+    that is not there. That gap is V4a-ii's to close, and it is declared here rather than tested away."""
+    prompts = Path(__file__).resolve().parents[2] / "prompts"
+    for agent, version in runner_mod.PROMPT_VERSIONS.items():
+        assert (prompts / agent / f"{version}.md").is_file(), f"{agent}/{version}.md is not in the image"
+    v1, v2 = prompts / "builder/v1.md", prompts / "builder/v2.md"
+    assert v1.is_file() and v2.read_bytes() != v1.read_bytes(), "a new version is a new file, never an edit (7bd.11)"
+    assert b"\r" not in v2.read_bytes(), "the prompts are LF: they are read in a Linux container"
+
+
 def test_the_outcome_lands_on_the_dispatched_row(disk: Disk, led: Ledger) -> None:
     """Card 5's S2, the half that matters: *"what happened after the row is on the row"*.
 
