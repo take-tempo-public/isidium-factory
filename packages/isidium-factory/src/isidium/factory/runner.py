@@ -63,7 +63,26 @@ AGENT_OF: Final[Mapping[str, str]] = {
 # A card that declares its own test file gets it through `surfaces` as well; this is the floor, not the ceiling.
 TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
 
+# The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md`, where a change is a pull
+# request and a new version is a new file. `PROMPT_VERSION` is the floor: an agent with no row below runs `v1`.
+#
+# **This is code, not signed policy, and that is the choice, not the omission** [owner, 2026-09-19]. The selector and
+# the prompt files ship in one image from one pull request (`Containerfile.runner`: *"an image is one harness and one
+# prompt set, and the ledger records both"*), so a version named here can never be one the image lacks. The
+# alternative — a signed `prompt_version` beside `model` and `effort` in `[agents]` — would put all three of the
+# things that decide what an agent does under one signature, but a signed row can name a version the running image
+# does not carry, and `harness.prompt_input` reads that file directly: the failure would surface inside the
+# container, mid-phase, as `failed:infra`. Making it safe needs a check that an image's prompt set covers the
+# versions its policy names, and that check does not exist. Whether to build it and move this map into `config@7`
+# is OPEN, not deferred-and-decided; the asymmetry it leaves (model and effort signed, the prompt not) is declared
+# here rather than resolved.
 PROMPT_VERSION: Final = "v1"
+PROMPT_VERSIONS: Final[Mapping[str, str]] = {
+    # v2 names the project gate and the turn budget, which v1 did not: `r-6` finished card 7's work and then spent
+    # its remaining turns re-running `mypy`, `ruff` and the whole suite in the background, polling with `sleep 90`,
+    # and ended `failed:budget` at 101 turns with the work complete and unpushed.
+    "builder": "v2",
+}
 
 Call = Callable[[str, Mapping[str, Any]], Mapping[str, Any]]
 Now = Callable[[], _dt.datetime]
@@ -212,7 +231,7 @@ def _job(
             "allowed_writes": surfaces + TEST_PATHS,
             "policy": policy,
             "identity": {"agent": agent, "name": ctx.identity.name, "email": ctx.identity.email},
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": PROMPT_VERSIONS.get(agent, PROMPT_VERSION),
         }
     )
 

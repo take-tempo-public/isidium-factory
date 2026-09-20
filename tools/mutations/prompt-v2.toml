@@ -1,0 +1,26 @@
+# The builder's prompt v2 and its per-agent selector (2026-09-19). Three properties: the version is chosen per agent
+# and not once for all of them; the choice reads the agent it was handed rather than one fixed row; and a version the
+# map names is a file the image actually carries -- the check that is here instead of in the container, where the
+# same mistake would raise mid-phase and land as `failed:infra`.
+# Owner: `tests/factory/test_v4a.py`.
+
+[[mutation]]
+id = "M1"
+label = "one version for every agent kind -- the shared constant back"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            "prompt_version": PROMPT_VERSIONS.get(agent, PROMPT_VERSION),'''
+replace = '''            "prompt_version": PROMPT_VERSION,'''
+
+[[mutation]]
+id = "M2"
+label = "the selector ignores the agent it was handed and answers the builder's version to all of them"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            "prompt_version": PROMPT_VERSIONS.get(agent, PROMPT_VERSION),'''
+replace = '''            "prompt_version": PROMPT_VERSIONS.get("builder", PROMPT_VERSION),'''
+
+[[mutation]]
+id = "M3"
+label = "the map names a version the image does not carry"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    "builder": "v2",'''
+replace = '''    "builder": "v3",'''
