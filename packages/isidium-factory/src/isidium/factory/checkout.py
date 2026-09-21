@@ -163,6 +163,41 @@ def set_aside(tree: Path, patch: Path) -> bool:
     return True
 
 
+def carry_over(tree: Path, base: str, head: str) -> tuple[str, ...]:
+    """A failed run's work, carried onto this run's own branch [Q-V31 (c), owner 2026-09-20].
+
+    **Why a patch and not a branch.** The failed run's branch is rooted where *that* run started, which is behind
+    `main` by however much has merged since. Cutting the new run's branch there would have handed the agent the card
+    as it reads today while it edited a tree from before — two versions of the repository in one run, and a diff
+    against the wrong thing. Replaying the diff onto a branch cut at the current base keeps the tree and the payload
+    on one version, which is the whole reason this shape was chosen over the cheaper one.
+
+    **Three-way, because a resume that only applied to an untouched `main` would rarely apply at all.** `--3way`
+    lets git resolve context that moved, from the blobs the patch names — they are in this repository, the failed
+    run's commits being here too. What it cannot resolve it leaves as unmerged paths, and a carried conflict is a
+    **clean** failure rather than conflict markers committed as though they were work: the tree is reset and
+    `run.merge` is raised, which the wrapper records as `failed:merge`.
+
+    Returns what was carried. An empty diff carries nothing and is not an error — a failed run may have committed no
+    work at all, as `r-4` and `r-5` did not.
+    """
+    diff = subprocess.run(["git", "diff", "--binary", base, head], cwd=tree, capture_output=True, check=False)
+    if diff.returncode != 0:
+        raise Refusal("factory.git", str(tree), diff.stderr.decode("utf-8", "replace").strip())
+    if not diff.stdout.strip():
+        return ()
+    applied = subprocess.run(
+        ["git", "apply", "--3way", "--binary", "-"], cwd=tree, input=diff.stdout, capture_output=True, check=False
+    )
+    unmerged = subprocess.run(["git", "ls-files", "-u"], cwd=tree, capture_output=True, text=True, check=False)
+    if applied.returncode != 0 or unmerged.stdout.strip():
+        for args in (["reset", "-q", "--hard"], ["clean", "-fdq"]):
+            subprocess.run(["git", *args], cwd=tree, capture_output=True, check=False)
+        why = applied.stderr.decode("utf-8", "replace").strip() or "conflicting paths git could not resolve"
+        raise Refusal("run.merge", f"{base[:8]}..{head[:8]}", f"the carried work does not apply here: {why}")
+    return touched(tree)
+
+
 def touched(tree: Path) -> tuple[str, ...]:
     """What the working tree actually holds against its own HEAD — one `git status --porcelain`, tracked and
     untracked alike, and the belt behind the write guard: *"the ledger recomputes the run's touched set from git and

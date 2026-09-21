@@ -24,6 +24,7 @@ import io
 import json
 import re
 import signal
+import sqlite3
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -40,6 +41,7 @@ from isidium.factory import cli as cli_mod
 from isidium.factory import context as context_mod
 from isidium.factory import dispatch as dispatch_mod
 from isidium.factory import guard, harness, render
+from isidium.factory import ledger as ledger_mod
 from isidium.factory import runner as runner_mod
 from isidium.factory.adapter import AdapterCapabilities, PhaseResult, RunJob
 from isidium.factory.container import Container
@@ -778,7 +780,7 @@ def test_the_prompt_version_is_per_agent_and_unnamed_agents_take_the_floor(disk:
     runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=build, phase="build", factory=lambda h, r: fake)
     review = fresh_run(disk, led)
     runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=review, phase="review", factory=lambda h, r: fake)
-    assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v2", "reviewer": "v1"}
+    assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v3", "reviewer": "v1"}
 
 
 def test_every_prompt_version_the_map_names_is_a_file_the_image_carries() -> None:
@@ -793,9 +795,225 @@ def test_every_prompt_version_the_map_names_is_a_file_the_image_carries() -> Non
     prompts = Path(__file__).resolve().parents[2] / "prompts"
     for agent, version in runner_mod.PROMPT_VERSIONS.items():
         assert (prompts / agent / f"{version}.md").is_file(), f"{agent}/{version}.md is not in the image"
-    v1, v2 = prompts / "builder/v1.md", prompts / "builder/v2.md"
-    assert v1.is_file() and v2.read_bytes() != v1.read_bytes(), "a new version is a new file, never an edit (7bd.11)"
-    assert b"\r" not in v2.read_bytes(), "the prompts are LF: they are read in a Linux container"
+    kept = [(prompts / "builder" / f"{v}.md").read_bytes() for v in ("v1", "v2", "v3")]
+    assert len({*kept}) == len(kept), "a new version is a new file, never an edit (7bd.11)"
+    assert not any(b"\r" in b for b in kept), "the prompts are LF: they are read in a Linux container"
+
+
+def _failed_with_work(disk: Disk, led: Ledger) -> str:
+    """A failed run that committed work to its story branch — the thing a carry carries [owner, 2026-09-15]."""
+    run_id = fresh_run(disk, led)
+    spent = Fake(result=_harness_result(outcome="failed:budget"), writes=(INSIDE,))
+    Path(disk.work / INSIDE).parent.mkdir(parents=True, exist_ok=True)
+    runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: spent)
+    row = led.run(run_id)
+    assert row is not None and row["outcome"] == "failed:budget" and row["head_sha"], "nothing to carry otherwise"
+    return run_id
+
+
+def _carrying_run(disk: Disk, led: Ledger, source: str) -> str:
+    """A dispatched run that carries `source`, written the way `dispatch --carry-from` writes one."""
+    was = led.run(disk.run_id)
+    assert was is not None
+    run_id = led.dispatch(
+        NewRun(
+            card=disk.card,
+            lane="standard",
+            build_hash=str(was["build_hash"]),
+            base_sha=str(was["base_sha"]),
+            adapter="container",
+            dispatched_at="2026-09-20T00:00:00Z",
+            payload_hash=str(was["payload_hash"]),
+            config_hash=str(was["config_hash"]),
+            identity=str(was["identity"]),
+            carried_from=source,
+        )
+    )
+    git(disk.work, "branch", f"story/{run_id}", str(was["base_sha"]))
+    return run_id
+
+
+def test_a_carried_run_replays_the_work_commits_it_apart_and_tells_the_agent(disk: Disk, led: Ledger) -> None:
+    """Q-V31 (c) + Q-V33 (c), owner 2026-09-20: the failed run's diff is replayed onto a branch cut at the current
+    base, committed on its own before the phase starts, and named to the agent on the JOB.
+
+    **The load-bearing assertion is `surfaces_actual`.** Carried work left uncommitted would be indistinguishable
+    from this run's own: `touched` is recomputed from `git status` in the worktree, so the inherited files would be
+    judged against this card's surfaces and claimed as this run's change set. Its own commit is what makes the
+    record say who did what — so a phase that itself writes nothing must come back with nothing claimed, even
+    though its tree was full when it started.
+
+    **And the block is on the job, not in the payload** — the second half of the ruling, asserted here because the
+    payload's hash is what proves the substrate did not move, and it must not start depending on the ledger."""
+    source = _failed_with_work(disk, led)
+    src = led.run(source)
+    assert src is not None
+    run_id = _carrying_run(disk, led, source)
+
+    seen_tree: list[str] = []
+    idle = Fake()
+    original = Fake.execute
+
+    def watch(self: Fake, job: RunJob) -> PhaseResult:
+        seen_tree.append((Path(job.worktree) / INSIDE).read_text(encoding="utf-8"))
+        return original(self, job)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Fake, "execute", watch)
+        row = runner_mod.run_phase(
+            disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: idle
+        )
+
+    assert seen_tree and "written past the guard" in seen_tree[0], "the carried work is there before the agent runs"
+    job = idle.seen[0]
+    assert job.carried is not None
+    assert (job.carried.run_id, job.carried.outcome, job.carried.head_sha) == (source, "failed:budget", src["head_sha"])
+    assert job.carried.files == (INSIDE,)
+    assert "carried" not in job.payload, "the payload stays a pure function of the card at a commit (Q-V33 (c))"
+    assert row["surfaces_actual"] is None, "a phase that wrote nothing claims nothing, carried tree or not"
+    log = git(disk.work, "log", "--format=%s%x1f%b%x1e", f"{row['base_sha']}..story/{run_id}")
+    carried_commits = [c for c in log.split("\x1e") if "Factory-Carried" in c]
+    assert len(carried_commits) == 1 and source in carried_commits[0], "one commit, and it says whose work it was"
+
+
+def test_carried_work_that_does_not_apply_leaves_the_tree_clean(disk: Disk, led: Ledger, tmp_path: Path) -> None:
+    """The conflict half of Q-V31 (c), on `carry_over` itself: what git cannot resolve is a **clean** failure, not
+    conflict markers left in the tree for the agent to commit as though they were work."""
+    source = _failed_with_work(disk, led)
+    src = led.run(source)
+    assert src is not None
+    git(disk.work, "branch", "conflicting", str(src["base_sha"]))
+    tree = tmp_path / "conflicting"
+    checkout_mod.worktree(disk.work, "conflicting", tree)
+    (tree / INSIDE).write_text("a wholly different line here\n", encoding="utf-8")
+    git(tree, "commit", "-am", "a conflicting edit to the same file")
+    try:
+        refuses("run.merge", lambda: checkout_mod.carry_over(tree, str(src["base_sha"]), str(src["head_sha"])))
+        assert checkout_mod.touched(tree) == (), "the tree is reset, not left half-applied"
+    finally:
+        checkout_mod.worktree_remove(disk.work, tree)
+
+
+def test_a_carry_that_refuses_ends_the_run_failed_merge(disk: Disk, led: Ledger) -> None:
+    """The wiring: a refused carry ends the run with the catalog's own name for a conflict, rather than leaving it
+    in flight. **A refusal that ends nothing holds the WIP cap for ever** — the defect V5a was built to close — and
+    `failed:merge` rather than `failed:infra` is `r-4`'s lesson: a class that does not say what happened bought one
+    retry for nothing."""
+    assert runner_mod._outcome_of(Refusal("run.merge", "a..b", "no")) == "failed:merge"
+    source = _failed_with_work(disk, led)
+    run_id = _carrying_run(disk, led, source)
+
+    def wont(*_a: Any, **_k: Any) -> tuple[str, ...]:
+        raise Refusal("run.merge", "a..b", "the carried work does not apply here")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(checkout_mod, "carry_over", wont)
+        refuses(
+            "run.merge",
+            lambda: runner_mod.run_phase(
+                disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, r: Fake()
+            ),
+        )
+    row = led.run(run_id)
+    assert row is not None and row["outcome"] == "failed:merge" and row["ended_at"], "the run ends, it does not hang"
+
+
+def test_a_ledger_whose_version_and_table_disagree_migrates_anyway(tmp_path: Path) -> None:
+    """The finding CI refused this change for, pinned. **A file's recorded version and its actual table can
+    disagree**, and a migration that believes the number over the table adds a column that is already there and dies
+    `duplicate column name`. Not hypothetical: V5a's own migration test builds its "schema 1" file out of the
+    current DDL, so the moment schema 3 added a column, that file had it. Reading `table_info` and adding only what
+    is missing costs one query and makes the migration idempotent, which it should be anyway."""
+    path = tmp_path / "disagrees.sqlite"
+    db = sqlite3.connect(str(path), isolation_level=None)
+    db.execute(ledger_mod._DDL[0])
+    db.execute(ledger_mod._DDL[1])  # the CURRENT table — every added column already present
+    db.executemany("INSERT INTO meta VALUES (?, ?)", [("schema", "1"), ("tenant", TENANT), ("next_run", "1")])
+    db.close()
+    led = Ledger(path, TENANT)  # the assertion is that this does not raise
+    try:
+        assert led._meta("schema") == str(ledger_mod.SCHEMA), "the version is corrected to match the shape"
+    finally:
+        led.close()
+
+
+def test_carry_from_refuses_the_runs_it_must_not_carry(disk: Disk, tmp_path: Path) -> None:
+    """`--carry-from`'s four refusals, in the order `_pick` asks them — all ahead of the ready-view, so the operator
+    is told which run is wrong before a pick is priced. Their own ledger and a stubbed store call, because what is
+    under test is the validation and not the pick.
+
+    **The last assertion is the point of Q-V32 (a):** a source that passes every carry check still meets the
+    ordinary door. Nothing here lets a card be dispatched that is not ready."""
+    led = Ledger(tmp_path / "carry.sqlite", TENANT)
+
+    def a_run(outcome: str, head: str | None, card: int) -> str:
+        rid = led.dispatch(
+            NewRun(
+                card=card,
+                lane="standard",
+                build_hash="sha256:b",
+                base_sha="0" * 40,
+                adapter="container",
+                dispatched_at="2026-09-20T00:00:00Z",
+                payload_hash="sha256:p",
+                config_hash="sha256:c",
+                identity=LOGIN,
+            )
+        )
+        led.finish(rid, "2026-09-20T00:01:00Z", outcome, head_sha=head)
+        return rid
+
+    try:
+        done = a_run("closed", "deadbeef", disk.card)
+        empty = a_run("failed:budget", None, disk.card)
+        elsewhere = a_run("failed:budget", "deadbeef", disk.card + 1)
+
+        def dry(carry: str, card: int | None = None) -> Any:
+            return dispatch_mod.pick(
+                disk.ctx,
+                led,
+                lambda n, a: {"ready": []},
+                Branch(disk.work),
+                card=card,
+                carry_from=carry,
+                dry_run=True,
+            )
+
+        refuses("dispatch.carry-unknown", lambda: dry("r-404"))
+        refuses("dispatch.carry-outcome", lambda: dry(done))
+        refuses("dispatch.carry-empty", lambda: dry(empty))
+        refuses("dispatch.carry-card", lambda: dry(elsewhere, card=disk.card))
+        refuses("dispatch.not-ready", lambda: dry(elsewhere))
+    finally:
+        led.close()
+
+
+def test_the_ledger_migrates_a_schema_2_file_to_3(disk: Disk, tmp_path: Path) -> None:
+    """The migration reads a RANGE, not `== "1"`. It used to test equality against the only older version there
+    was, which was true exactly once: tenant #0's ledger is schema 2 today, so the same shape would have left
+    `carried_from` unadded and every read of it an `OperationalError` on the live tenant."""
+    path = tmp_path / "old.sqlite"
+    db = sqlite3.connect(str(path), isolation_level=None)
+    db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    db.execute(
+        "CREATE TABLE runs (run_id TEXT PRIMARY KEY, card INTEGER NOT NULL, batch TEXT, outcome TEXT NOT NULL,"
+        " lane TEXT NOT NULL, build_hash TEXT NOT NULL, base_sha TEXT NOT NULL, head_sha TEXT,"
+        " story_branch TEXT NOT NULL, adapter TEXT NOT NULL, billing_class TEXT, dispatched_at TEXT NOT NULL,"
+        " ended_at TEXT, payload_hash TEXT NOT NULL, config_hash TEXT NOT NULL, context TEXT NOT NULL,"
+        " score TEXT NOT NULL, refs_resolved TEXT NOT NULL, surfaces_actual TEXT, price_table TEXT,"
+        " identity TEXT NOT NULL, pr INTEGER, landed_through INTEGER)"
+    )
+    db.execute("INSERT INTO meta VALUES ('schema', '2')")
+    db.execute("INSERT INTO meta VALUES ('tenant', ?)", (TENANT,))
+    db.execute("INSERT INTO meta VALUES ('next_run', '1')")
+    db.close()
+    led = Ledger(path, TENANT)
+    try:
+        cols = {str(r[1]) for r in led.db.execute("PRAGMA table_info(runs)")}
+        assert "carried_from" in cols, "a schema-2 ledger gains schema 3's column"
+        assert led._meta("schema") == str(ledger_mod.SCHEMA)
+    finally:
+        led.close()
 
 
 def test_the_outcome_lands_on_the_dispatched_row(disk: Disk, led: Ledger) -> None:

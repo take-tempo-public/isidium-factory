@@ -35,7 +35,18 @@ from isidium.store.core.refusal import Refusal
 LEDGER_FILE: Final = "ledger.sqlite"
 # Schema 2 [V5a]: `runs.pr` (the pull request `close` reads) and `runs.landed_through` (the watermark: the last event
 # `seq` of the run the store has been sent).
-SCHEMA: Final = 2
+# Schema 3 [2026-09-20]: `runs.carried_from` — the failed run whose work this one carries (Q-V31 (c)).
+#
+# **`carried_from`, not `resumes`** [Q-V34, owner 2026-09-20]. `resume` is already taken: `score.vector.resume` is a
+# card-level ordering boost meaning *"this card has partly-done work — finish before starting"*. The owner ruled
+# that the new thing takes its own name and the ordering term is left alone, so nothing in the ratified schema and
+# none of the records already written has to move. The particular word is the briefer's, within that ruling, and
+# says what happens: a failed run's work is carried onto this run's branch.
+SCHEMA: Final = 3
+# Every column `runs` gained after schema 1, and what to declare it as. One list, read by the migration and by
+# nothing else: a column added to `_DDL` below and forgotten here would exist on a fresh ledger and never appear on
+# an upgraded one, which is the drift this pairs against.
+ADDED_COLUMNS: Final[Mapping[str, str]] = {"pr": "INTEGER", "landed_through": "INTEGER", "carried_from": "TEXT"}
 SPAN: Final = "isidium.factory.ledger.write"
 DISPATCHED: Final = "dispatched"
 # The ledger's own transitions, beside `interrupt`: neither is a store event kind, so `report()`
@@ -61,7 +72,7 @@ _DDL: Final = (
         adapter TEXT NOT NULL, billing_class TEXT, dispatched_at TEXT NOT NULL, ended_at TEXT,
         payload_hash TEXT NOT NULL, config_hash TEXT NOT NULL, context TEXT NOT NULL, score TEXT NOT NULL,
         refs_resolved TEXT NOT NULL, surfaces_actual TEXT, price_table TEXT, identity TEXT NOT NULL,
-        pr INTEGER, landed_through INTEGER)""",
+        pr INTEGER, landed_through INTEGER, carried_from TEXT)""",
     """CREATE TABLE IF NOT EXISTS phases (
         run_id TEXT NOT NULL REFERENCES runs(run_id), phase TEXT NOT NULL, agent TEXT, model TEXT, effort TEXT,
         prompt_version TEXT, tokens INTEGER, cost_micro INTEGER, duration_ms INTEGER)""",
@@ -92,6 +103,7 @@ class NewRun:
     context: Mapping[str, Any] = field(default_factory=dict)
     score: Mapping[str, Any] = field(default_factory=dict)
     refs_resolved: tuple[Mapping[str, str], ...] = ()
+    carried_from: str | None = None  # the failed run whose work this one carries (Q-V31 (c))
 
 
 class Ledger:
@@ -114,13 +126,24 @@ class Ledger:
         if held != tenant:
             self.db.close()
             raise Refusal("ledger.tenant", str(path), f"this ledger is {held!r}'s, not {tenant!r}'s")
-        if self._meta("schema") == "1":
-            # Eager, at open [V5a]: every verb reads the two columns, and tenant #0's ledger is schema 1 with three runs
-            # in it. Two `ADD COLUMN`s (no table rebuild, the rows untouched) and the version, in one transaction —
-            # after the tenant check, so another tenant's file is refused before it is changed.
+        if int(self._meta("schema") or SCHEMA) < SCHEMA:
+            # Eager, at open [V5a]: every verb reads these columns, and a live tenant's ledger is a version behind
+            # with its runs in it. `ADD COLUMN` only (no table rebuild, the rows untouched), and the version, in one
+            # transaction — after the tenant check, so another tenant's file is refused before it is changed.
+            #
+            # **The version says WHETHER to migrate; the table says WHAT is missing** [2026-09-20]. Two findings put
+            # it this way round. (1) It read `if self._meta("schema") == "1"` — an equality against the only older
+            # version there was, true exactly once; tenant #0's ledger is schema 2, so that shape would have left
+            # `carried_from` unadded and every read of it an `OperationalError` on the live tenant. (2) Its
+            # replacement asked the version which columns to add, and CI refused it: a file's recorded version and
+            # its actual shape **can disagree** — V5a's own test builds a "schema 1" table out of the current DDL —
+            # and a migration that believes the number over the table adds a column that is already there. Reading
+            # `table_info` costs one query and makes this idempotent, which a migration should be anyway.
+            have = {str(r[1]) for r in self.db.execute("PRAGMA table_info(runs)")}
             with self.transaction():
-                self.db.execute("ALTER TABLE runs ADD COLUMN pr INTEGER")
-                self.db.execute("ALTER TABLE runs ADD COLUMN landed_through INTEGER")
+                for column, decl in ADDED_COLUMNS.items():  # names from this module, never from input
+                    if column not in have:
+                        self.db.execute(f"ALTER TABLE runs ADD COLUMN {column} {decl}")
                 self.db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod
@@ -161,8 +184,8 @@ class Ledger:
                     run_id = f"r-{n}"
                     self.db.execute(
                         "INSERT INTO runs (run_id, card, outcome, lane, build_hash, base_sha, story_branch, adapter,"
-                        " dispatched_at, payload_hash, config_hash, context, score, refs_resolved, identity)"
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        " dispatched_at, payload_hash, config_hash, context, score, refs_resolved, identity,"
+                        " carried_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             run_id,
                             run.card,
@@ -179,6 +202,7 @@ class Ledger:
                             _dump(run.score),
                             _dump([dict(r) for r in run.refs_resolved]),
                             run.identity,
+                            run.carried_from,
                         ),
                     )
                     self._event(run_id, run.dispatched_at, DISPATCHED, {"card": run.card})

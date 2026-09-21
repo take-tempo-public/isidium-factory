@@ -37,7 +37,7 @@ from isidium.store.core.refusal import Refusal
 from . import checkout, lander, ordering
 from . import payload as payload_mod
 from .context import TenantContext
-from .ledger import Ledger, NewRun
+from .ledger import FAILED, Ledger, NewRun
 from .tenant import require
 
 SPAN: Final = "isidium.factory.dispatch.pick"
@@ -61,13 +61,14 @@ def pick(
     forge: Brancher,
     *,
     card: int | None = None,
+    carry_from: str | None = None,
     dry_run: bool = False,
     now: Callable[[], _dt.datetime] = _now,
 ) -> dict[str, Any]:
     """One pick on one tenant; the run row back (or, dry, what it would be)."""
     with telemetry.span(SPAN, **{"isidium.tenant": ctx.tenant, "isidium.dry_run": dry_run}) as sp:
         try:
-            out = _pick(ctx, ledger, call, forge, card, dry_run, now, sp)
+            out = _pick(ctx, ledger, call, forge, card, carry_from, dry_run, now, sp)
         except Refusal as r:
             telemetry.record_refusal_on(sp, r.rule)
             raise
@@ -81,6 +82,7 @@ def _pick(
     call: Call,
     forge: Brancher,
     card: int | None,
+    carry_from: str | None,
     dry_run: bool,
     now: Callable[[], _dt.datetime],
     sp: Any,
@@ -94,6 +96,26 @@ def _pick(
     if len(flying) >= reg.wip:
         names = ", ".join(f"{r['run_id']} (card {r['card']})" for r in flying)
         raise Refusal("dispatch.wip", names, f"{len(flying)} in flight, the cap is {reg.wip}")
+    # (b2) [Q-V31 (c), owner 2026-09-20] the run whose work this one carries, checked before anything is spent on the
+    # pick — and its card IS the card, so the operator names one thing and not two.
+    #
+    # **Nothing here relaxes the ready-view, deliberately.** Q-V32 (a) ruled a resume comes through the ordinary
+    # door: the card must be ready, which after a landed failure is still the owner's demotion and unchanged
+    # re-ratification. So this decides only WHICH card and WHERE the tree starts, and a card that has not been put
+    # back answers `dispatch.not-ready` at (c) below, by the path every other dispatch takes.
+    if carry_from is not None:
+        source = ledger.run(carry_from)
+        if source is None:
+            raise Refusal("dispatch.carry-unknown", carry_from, "no such run in this ledger")
+        if not str(source["outcome"]).startswith(FAILED):
+            raise Refusal(
+                "dispatch.carry-outcome", carry_from, f"ended {source['outcome']}: only a failed run's work is carried"
+            )
+        if not source["head_sha"]:
+            raise Refusal("dispatch.carry-empty", carry_from, "committed no work; there is nothing to carry")
+        if card is not None and card != int(source["card"]):
+            raise Refusal("dispatch.carry-card", carry_from, f"is card {source['card']}, not the {card} asked for")
+        card = int(source["card"])
     # (c) the ordering over the ready-view, from the cards' heads at base_sha — two spawns however many
     if card is not None and card not in ready:
         raise Refusal("dispatch.not-ready", str(card), "not in the ready-view; `--card` picks from it, never past it")
@@ -157,9 +179,17 @@ def _pick(
         context=p.context,
         score=chosen.score(p.config_hash),
         refs_resolved=tuple(p.refs_resolved),
+        carried_from=carry_from,
     )
     if dry_run:
-        return {"dry_run": True, "card": run.card, "rank": chosen.rank, "base_sha": run.base_sha, **p.record()}
+        return {
+            "dry_run": True,
+            "card": run.card,
+            "rank": chosen.rank,
+            "base_sha": run.base_sha,
+            "carried_from": carry_from,
+            **p.record(),
+        }
     # (g) the record first, then the branch
     run_id = ledger.dispatch(run)
     sp.set_attribute("isidium.run_id", run_id)

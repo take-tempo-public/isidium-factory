@@ -232,17 +232,24 @@ def dispatch_verb(
     tenant: TENANT,
     checkout_path: CHECKOUT,
     card: Annotated[int | None, typer.Option("--card", help="pick this card — only if it is in the ready-view")] = None,
+    carry_from: Annotated[
+        str | None,
+        typer.Option("--carry-from", help="carry a failed run's work onto this one, `r-<n>`; its card is the card"),
+    ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="answer the pick, write nothing")] = False,
     base: BASE = "main",
     root: ROOT = None,
 ) -> None:
     """Pick the head of the tenant's ready-view (T-A6): the ledger row written first, then `story/<run-id>` at the
-    synced head. Prints the run row; `--dry-run` prints what it would be and writes nothing."""
+    synced head. Prints the run row; `--dry-run` prints what it would be and writes nothing.
+
+    `--carry-from r-<n>` resumes a failed run: the branch is still cut at the synced head, and that run's diff is
+    replayed onto it when the phase starts. The card must be ready as it must for any other dispatch."""
     try:
         ctx, drv = _driver(tenant, checkout_path, base, root)
         channel = Transport(ctx.client, ctx.home)
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
-            row = dispatch_mod.pick(ctx, led, channel.call, drv, card=card, dry_run=dry_run)
+            row = dispatch_mod.pick(ctx, led, channel.call, drv, card=card, carry_from=carry_from, dry_run=dry_run)
     except Refusal as r:
         _refuse(r)
     _out(row)
