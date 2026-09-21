@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox run 1
+WIP 1/1 · inbox run 1
 
 ## Queue
 
@@ -26,7 +26,7 @@ WIP 0/1 · inbox run 1
 - **6** · The rule-id sweep resolves a module constant, not only a literal · closed · software-grade · (derived)
 - **7** · The fold records an abandoned run when a card with a run in flight is withdrawn or demoted · failed(merge) · software-grade · (derived)
 - **8** · The sidecar's first entry says it is synthetic where the sidecar is read · closed · software-grade · (derived)
-- **9** · The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree · ready · software-grade · (derived)
+- **9** · The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree · dispatched · software-grade · (derived)
 
 ## Blocked
 
