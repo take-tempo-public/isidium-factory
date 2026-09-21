@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -155,5 +155,6 @@ history = [
   { seq = 7, at = "2026-09-17T01:20:43Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c2:sha256:4293b0c574931c1a9af0b76b18c7759ced58b9c446dcebbae7ccc2a54b31590c", h = "sha256:3b028fddb00c93295f3c37f4873ed93eeba9decf770e0e703cedc76b5e9e2c3d" },
   { seq = 8, at = "2026-09-19T23:21:27Z", by = "amodal1@users.noreply.github.com", act = "accepted", fields = [], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c2:sha256:4293b0c574931c1a9af0b76b18c7759ced58b9c446dcebbae7ccc2a54b31590c", h = "sha256:a3a64950856da9bdb21c46c1b58ecff322e1f21876a4ba4b48beed938213db69", batch = 15 },
   { seq = 9, at = "2026-09-21T21:40:31Z", by = "amodal1@users.noreply.github.com", act = "reopened", fields = ["reopens", "status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:5ac33796c52f02e29abfa6dda1b336441b081a1344fa70a1e95a40cb65b9ee3b", batch = 16 },
+  { seq = 10, at = "2026-09-21T21:44:44Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:f0c5e5c111373862120eb870121f000ff0c43d9a39dbd6a61c1374db06f52010" },
 ]
 ```
