@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "closed"
+status = "ratified"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -131,6 +131,11 @@ outcome = "met"
 verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass", S5 = "pass", S6 = "pass", S7 = "pass", S8 = "pass" }
 evidence = ["sha256:327fb4f707f5fffdbd11db72ca7c0314f99c7cf0165cfb2f81d308192ffe7118"]
 retracted = false
+
+[[reopens]]
+id = "ro1"
+closure_id = "c2"
+reason = "Closed over a failed run with no run-verified evidence; reopened to put the card back in play."
 ```
 
 ## Scope
@@ -149,5 +154,6 @@ history = [
   { seq = 6, at = "2026-09-17T01:17:24Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c1:sha256:9bcd36ebad99e5fb4d7cb7295754ec286540ba1d055b7b188ee8d1e28539a2c3", h = "sha256:c742763cc309196d560b1f126128d828f5bd42a712d781e1d772fa0f281fd2a9", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:3JruYWHPwRRbVeh9jaDtZpQs7k3/MIfxNTG0HS46KNdhGskMXObQZlZSDdZ7pzYSjGgilv4TUEZDmiuI7M+NCQ==" },
   { seq = 7, at = "2026-09-17T01:20:43Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c2:sha256:4293b0c574931c1a9af0b76b18c7759ced58b9c446dcebbae7ccc2a54b31590c", h = "sha256:3b028fddb00c93295f3c37f4873ed93eeba9decf770e0e703cedc76b5e9e2c3d" },
   { seq = 8, at = "2026-09-19T23:21:27Z", by = "amodal1@users.noreply.github.com", act = "accepted", fields = [], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", ref = "c2:sha256:4293b0c574931c1a9af0b76b18c7759ced58b9c446dcebbae7ccc2a54b31590c", h = "sha256:a3a64950856da9bdb21c46c1b58ecff322e1f21876a4ba4b48beed938213db69", batch = 15 },
+  { seq = 9, at = "2026-09-21T21:40:31Z", by = "amodal1@users.noreply.github.com", act = "reopened", fields = ["reopens", "status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:5ac33796c52f02e29abfa6dda1b336441b081a1344fa70a1e95a40cb65b9ee3b", batch = 16 },
 ]
 ```
