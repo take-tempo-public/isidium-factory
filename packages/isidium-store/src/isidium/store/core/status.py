@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, get_args
 
 from . import canon, chain
 from .derive import replay_status
@@ -40,7 +40,18 @@ Row = Literal[
 Modifier = Literal["pending-ingest", "pending-land", "pending-review", "unverified"]
 IntegrityReason = Literal["tampered", "unjournaled", "rewritten", "unverified", "attribution", "time"]
 FailureClass = Literal[
-    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"
+    "scope",
+    "ambiguity",
+    "budget",
+    "timeout",
+    "infra",
+    "environment",
+    "acceptance",
+    "gate",
+    "card-drift",
+    "identity",
+    "merge",
+    "malformed-plan",
 ]
 ExecutionState = Literal["complete", "reverted", "parked", "answered", "dispatched", "failed", "abandoned"]
 GuardKind = Literal["has-questions", "held", "held_by", "blocked_by", "deferred_by", "below-threshold"]
@@ -54,19 +65,14 @@ INTEGRITY_REASONS: Final[tuple[IntegrityReason, ...]] = (
     "attribution",
     "time",
 )
-# 03 §1.5's four and the six V5a widened it by (Q-V22 (a)) — `core.events.FailureClass` is the same closed set.
-FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = (
-    "scope",
-    "ambiguity",
-    "budget",
-    "timeout",
-    "infra",
-    "environment",
-    "acceptance",
-    "gate",
-    "card-drift",
-    "identity",
-)
+# 03 §1.5's four, the six V5a widened it by (Q-V22 (a)), and `merge` + `malformed-plan` [owner, 2026-09-20].
+#
+# **Derived from the Literal rather than written twice** [2026-09-20]: this tuple and the type above were two
+# hand-maintained copies of one set, and widening them was the second time both had to be edited in step. It is now
+# one edit. The remaining copy is `core.events.FailureClass`, which is deliberately not imported here — `events`
+# pulls pydantic, `status` does not today, and this module is on paths where that import cost is not wanted. The
+# two are pinned equal by a test instead, so the drift is a red bar rather than a silent disagreement.
+FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = get_args(FailureClass)
 EXECUTION_STATES: Final[tuple[ExecutionState, ...]] = (
     "complete",
     "reverted",

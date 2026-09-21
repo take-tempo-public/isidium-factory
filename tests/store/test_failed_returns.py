@@ -16,9 +16,13 @@ What each test discriminates:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args
+
+import pytest
 
 from isidium.store.core import events as events_mod
+from isidium.store.core import status as status_mod
+from isidium.store.core.refusal import Refusal
 
 from .conftest import LANDER, OWNER, Harness, fresh
 
@@ -47,6 +51,31 @@ def test_a_ratification_after_a_failure_clears_it_and_nothing_else_does() -> Non
     assert _execution([_ev(1, 7, "dispatched", run_id="r-4"), again], 7) == "dispatched", "no failure, nothing cleared"
     superseded = [*failed, _ev(3, 7, "dispatched", run_id="r-5"), _ev(4, 7, "ratified", seq=4, commit="c4")]
     assert _execution(superseded, 7) == "dispatched", "a failure a later run superseded is not cleared twice"
+
+
+def test_the_failure_classes_are_one_closed_set_and_merge_is_in_it() -> None:
+    """The class set widened by `merge` and `malformed-plan` [owner, 2026-09-20], and pinned as ONE set.
+
+    **The discriminator is `parse_event`, not the fold.** `fold` reads `e["class"]` straight out of a mapping and
+    would render `failed(merge)` for any string at all, widened or not — so a fold assertion would pass on the
+    unwidened set and prove nothing. What the widening actually changes is the door: the class is a `Literal` on the
+    `Failed` model, so an event carrying a class outside the set is refused `event.shape` before it can land.
+
+    **And the two copies are pinned equal here** rather than trusted to a comment. `core.events.FailureClass` and
+    `core.status.FailureClass` are one closed set written twice, deliberately — `status` does not import `events`,
+    which would pull pydantic onto paths that do not want it — so nothing but this assertion stops them drifting.
+    `status.FAILURE_CLASSES` is derived from its own `Literal`, so that third copy cannot drift at all.
+    """
+    assert get_args(events_mod.FailureClass) == get_args(status_mod.FailureClass), "one set, written twice"
+    assert get_args(status_mod.FailureClass) == status_mod.FAILURE_CLASSES, "the tuple is derived, not retyped"
+    assert {"merge", "malformed-plan"} <= set(status_mod.FAILURE_CLASSES)
+
+    for cls in ("merge", "malformed-plan"):
+        ev = events_mod.parse_event({"card": 7, "kind": "failed", "class": cls, "run_id": "r-7"})
+        assert isinstance(ev, events_mod.Failed) and ev.class_ == cls
+    with pytest.raises(Refusal) as ei:
+        events_mod.parse_event({"card": 7, "kind": "failed", "class": "conflict", "run_id": "r-7"})
+    assert ei.value.rule == "event.shape", "a class outside the set is refused at the door"
 
 
 def test_a_failed_card_waits_in_the_queue_and_a_newer_ratification_makes_it_ready() -> None:
