@@ -145,8 +145,54 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:a3a64950856da9bdb21c46c1b58ecff322e1f21876a4ba4b48beed938213db69",
-        "seq": 8
+        "h": "sha256:5ac33796c52f02e29abfa6dda1b336441b081a1344fa70a1e95a40cb65b9ee3b",
+        "seq": 9
+      },
+      "runs": []
+    },
+    "0008": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "d1cc9695ac37177017b4de5136787dd0186b4dd4",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 1,
+        "refs_resolved": [
+          {
+            "blob": "497550ef6a52b75f1e85ad9a9a249e9eb070ba03",
+            "path": "deploy/README.md"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:121cb19ebaa6e0bd70a9ed89eb39876b0ea89e491a5a945c31b3bf7342e398ba",
+        "seq": 1
+      },
+      "runs": []
+    },
+    "0009": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "d1cc9695ac37177017b4de5136787dd0186b4dd4",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 1,
+        "refs_resolved": [
+          {
+            "blob": "db2a64a9096d2d3ce54b6bef11b3cb1662f5ef53",
+            "path": "packages/isidium-store/src/isidium/store/core/status.py"
+          },
+          {
+            "blob": "77ae386f8fb1413e4d4c40952c458f9fb4d49e02",
+            "path": "packages/isidium-store/src/isidium/store/core/board.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:0b8b6df03108703aeba500a520c8c2eb0e7d97fb2fded58641854551633e88c3",
+        "seq": 1
       },
       "runs": []
     }
@@ -161,10 +207,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:f2ed668a572dd1fbbd0d6f10720d961343fa7b7c3924e969a0abe62a59c783e5",
-    "seq": 66
+    "h": "sha256:007c88bc2d36f778718cafec87a3fd8b3d71accba7c8af3f61eb57257a9dd05b",
+    "seq": 68
   },
-  "landed_at": "2026-09-21T20:34:42Z",
-  "ledger_cursor": "19590f6502744a60223b87fff45a7d4535e392df",
+  "landed_at": "2026-09-21T21:40:31Z",
+  "ledger_cursor": "d1cc9695ac37177017b4de5136787dd0186b4dd4",
   "schema": 2
 }
