@@ -161,10 +161,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:04822b866758b3567f4458a17d2f78662d123dee310b4210929b836bb7326dc1",
-    "seq": 65
+    "h": "sha256:f2ed668a572dd1fbbd0d6f10720d961343fa7b7c3924e969a0abe62a59c783e5",
+    "seq": 66
   },
-  "landed_at": "2026-09-21T19:40:38Z",
-  "ledger_cursor": "833dd016878483cd07c40e061476aa9f5f71ae88",
+  "landed_at": "2026-09-21T20:34:42Z",
+  "ledger_cursor": "19590f6502744a60223b87fff45a7d4535e392df",
   "schema": 2
 }
