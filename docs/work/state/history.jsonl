@@ -23,3 +23,5 @@
 {"at":"2026-09-21T21:46:52Z","card":7,"id":"e23","kind":"dispatched","run_id":"r-7"}
 {"at":"2026-09-21T21:47:36Z","card":7,"class":"merge","id":"e24","kind":"failed","run_id":"r-7"}
 {"at":"2026-09-21T21:49:00Z","card":8,"id":"e25","kind":"dispatched","run_id":"r-8"}
+{"at":"2026-09-21T23:52:30Z","build_hash":"sha256:3064ef768788b9f4b5ac963e3f27d4e77008d1b92f80541c7df8515c075c8867","card":8,"cost_micro":468272,"duration_ms":125161,"id":"e26","kind":"complete","run_id":"r-8"}
+{"at":"2026-09-21T23:52:30Z","build_hash":"sha256:3064ef768788b9f4b5ac963e3f27d4e77008d1b92f80541c7df8515c075c8867","card":8,"closure_id":"f-r-8","closure_kind":"factory","evidence":["sha256:a98ee32bba8fbf095584eef66a6fb119ab3adccd2039ba87a45d38fc6906ff4b","4d35d5ebfd20bddc90d49c248532aa1f81b2b9d1"],"id":"e27","kind":"closed","verdicts":{"S1":"pass"},"verified":true}

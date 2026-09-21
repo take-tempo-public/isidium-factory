@@ -151,8 +151,24 @@
       "runs": []
     },
     "0008": {
-      "closures": [],
-      "execution": "dispatched",
+      "closures": [
+        {
+          "at": "2026-09-21T23:52:30Z",
+          "closure_id": "f-r-8",
+          "evidence": [
+            "sha256:a98ee32bba8fbf095584eef66a6fb119ab3adccd2039ba87a45d38fc6906ff4b",
+            "4d35d5ebfd20bddc90d49c248532aa1f81b2b9d1"
+          ],
+          "kind": "factory",
+          "outcome": "met",
+          "verdicts": {
+            "S1": "pass"
+          },
+          "verified": true,
+          "verified_against": "sha256:3064ef768788b9f4b5ac963e3f27d4e77008d1b92f80541c7df8515c075c8867"
+        }
+      ],
+      "execution": "closed",
       "fingerprint": {
         "commit": "d1cc9695ac37177017b4de5136787dd0186b4dd4",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -169,7 +185,16 @@
         "h": "sha256:121cb19ebaa6e0bd70a9ed89eb39876b0ea89e491a5a945c31b3bf7342e398ba",
         "seq": 1
       },
-      "runs": []
+      "runs": [
+        {
+          "batch": null,
+          "build_hash": "sha256:3064ef768788b9f4b5ac963e3f27d4e77008d1b92f80541c7df8515c075c8867",
+          "cost_micro": 468272,
+          "duration_ms": 125161,
+          "outcome": "complete",
+          "run_id": "r-8"
+        }
+      ]
     },
     "0009": {
       "closures": [],
@@ -203,17 +228,18 @@
       "355d33a5fba061ab67e084efa32bad639df79586ef84e04d31aa27d5da496c70",
       "d95f7cae40b3084228c6a79386128fc9c2227edb122a194d8f3817630e09ed30",
       "12efd5762bce10d22748a01cf28be37caabe4ae87624d9ccf7ec2bcc58d62bce",
-      "920a210dd989fcf6d4685e6b1978fc80a1755ec98538390a99c45a3e3be23032"
+      "920a210dd989fcf6d4685e6b1978fc80a1755ec98538390a99c45a3e3be23032",
+      "9e60a0f3a72d3035a1234a921d565b95d6023cd919c043e585ec8160fa22b46b"
     ],
     "overflow": 0,
     "run_id": "r-8"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:41f73abd374444b314eb5efd8c2ab96b63b2e8675ffd2134426ac0f4a6a17b4c",
-    "seq": 74
+    "h": "sha256:c9f67fbac1a24bf762bfc421cc129d48f7515f49f91dd419bbcf0dcf030cdcc5",
+    "seq": 75
   },
-  "landed_at": "2026-09-21T21:47:39Z",
-  "ledger_cursor": "f728192b51f1d00e6bb7417d18d8d110864f799f",
+  "landed_at": "2026-09-21T23:50:14Z",
+  "ledger_cursor": "4d35d5ebfd20bddc90d49c248532aa1f81b2b9d1",
   "schema": 2
 }
