@@ -1,0 +1,33 @@
+# The four read-only agents' prompts (2026-09-21) — the gap V4a-ii would have hit on its first plan phase.
+#
+# One property is mechanical and is mutated here: every agent a phase can resolve to has a prompt file the image
+# carries, whether its version comes from the map or from the floor. Both mutations break it from the CODE side —
+# a new phase whose agent has no prompt, and a mapped version that is not a file. A mutation aimed at the test
+# would prove the test file is covered, not that the property is.
+#
+# **What is NOT mutation-testable here, declared rather than dressed up:** the prompts' content. Four documents are
+# content, checked by review and by the first run that uses them — and no phase has used them, because the plan and
+# review gates are V4a-ii's. That is the same footing `prompts/builder/v1.md` stood on when V4a-i wrote it.
+# Owner: `tests/factory/test_v4a.py`.
+
+[[mutation]]
+id = "M1"
+label = "a phase whose agent has no prompt at all -- the gap this closes, put back"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    "review": "reviewer",
+    "reconcile": "reviewer",
+}'''
+replace = '''    "review": "reviewer",
+    "reconcile": "reviewer",
+    "spike": "spiker",
+}'''
+
+[[mutation]]
+id = "M2"
+label = "the map names a version a floor agent does not have"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    "builder": "v3",
+}'''
+replace = '''    "builder": "v3",
+    "judge": "v2",
+}'''

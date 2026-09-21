@@ -783,21 +783,28 @@ def test_the_prompt_version_is_per_agent_and_unnamed_agents_take_the_floor(disk:
     assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v3", "reviewer": "v1"}
 
 
-def test_every_prompt_version_the_map_names_is_a_file_the_image_carries() -> None:
+def test_every_agent_the_wrapper_can_run_has_the_prompt_it_would_ask_for() -> None:
     """The ground the map stands on rather than a signed policy row [owner, 2026-09-19]: the selector and the prompt
     files ship in one image from one pull request (`Containerfile.runner`), so a version named in code can never be
     one the image lacks. `harness.prompt_input` reads that file directly — a missing one raises inside the
     container, mid-phase, and lands as `failed:infra`. So the check belongs here, where a pull request sees it.
 
-    **Scoped to the map on purpose.** The floor `v1` is asserted only where a prompt exists today: the other roster
-    kinds (`plan-author`, `plan-refuter`, `judge`, `reviewer`) have no prompt file at all and would take a floor
-    that is not there. That gap is V4a-ii's to close, and it is declared here rather than tested away."""
+    **Widened 2026-09-21 from the map to every agent `AGENT_OF` can name.** It used to check only the versions the
+    map spells out and declared the rest a gap: `plan-author`, `plan-refuter`, `judge` and `reviewer` had no prompt
+    file at all, so each would have taken a floor that was not there and raised on the first plan or review phase —
+    which is V4a-ii, the next chunk. The four prompts exist now, so the gap closes and the check becomes the one
+    that would have caught it: **resolve every phase's agent the way `_job` does, and require the file.**"""
     prompts = Path(__file__).resolve().parents[2] / "prompts"
-    for agent, version in runner_mod.PROMPT_VERSIONS.items():
-        assert (prompts / agent / f"{version}.md").is_file(), f"{agent}/{version}.md is not in the image"
+    versions = runner_mod.PROMPT_VERSIONS
+    wanted = {a: versions.get(a, runner_mod.PROMPT_VERSION) for a in runner_mod.AGENT_OF.values()}
+    assert set(wanted) == {"plan-author", "plan-refuter", "judge", "builder", "reviewer"}, "every phase's agent"
+    asked = {**wanted, **versions}
+    missing = [f"{a}/{v}.md" for a, v in asked.items() if not (prompts / a / f"{v}.md").is_file()]
+    assert not missing, f"the image would not carry {missing}"
     kept = [(prompts / "builder" / f"{v}.md").read_bytes() for v in ("v1", "v2", "v3")]
     assert len({*kept}) == len(kept), "a new version is a new file, never an edit (7bd.11)"
-    assert not any(b"\r" in b for b in kept), "the prompts are LF: they are read in a Linux container"
+    every = [p.read_bytes() for p in sorted(prompts.rglob("*.md"))]
+    assert not any(b"\r" in b for b in every), "the prompts are LF: they are read in a Linux container"
 
 
 def _failed_with_work(disk: Disk, led: Ledger) -> str:
