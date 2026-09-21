@@ -780,6 +780,8 @@ in one call:
 - `show queue --text` before: *"merged, not landed: n/a (in-project)"* — no sidecar. After: *"merged, not landed: 0"*,
   and the board's header *"inbox run 1"*: the counts moved, which was the criterion.
 
+**`e1` is this tenant's first sidecar entry, and it is not a run:** the report that produced it was landed by hand through `isidium factory land` as L2's own done-criterion, with no executor invoked and no ledger row behind it — a reader who opens the sidecar and starts at `e1` should read it as a hand-landed record, not as something that happened on the line.
+
 **Found live, fixed in the same pull request:** `landed_at` landed as `2026-09-09T10:32:09-07:00` — git's answer for
 the cursor commit's time carries the author's offset, and every other time in the file is UTC `Z`. The store now
 writes the cursor's time in its own form; the first sidecar on `main` carries the offset form until the next land
