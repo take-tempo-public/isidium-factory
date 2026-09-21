@@ -1,0 +1,36 @@
+# The failure-class widening (2026-09-20): `merge` for a resume's patch that will not apply (Q-V31 (c)) and
+# `malformed-plan` (Q-V29 (a)) riding the same edit. Three properties: the class is real at the door that validates
+# it; the two hand-written copies of the set are pinned equal; and the tuple is derived from its own Literal rather
+# than retyped a third time.
+# Owner: `tests/store/test_failed_returns.py`.
+
+[[mutation]]
+id = "M1"
+label = "the door does not know `merge` -- a resume's conflict could never land"
+file = "packages/isidium-store/src/isidium/store/core/events.py"
+find = '''    "identity",
+    "merge",
+    "malformed-plan",
+]'''
+replace = '''    "identity",
+    "malformed-plan",
+]'''
+
+[[mutation]]
+id = "M2"
+label = "the two copies of the set drift -- status keeps the old one"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''    "identity",
+    "merge",
+    "malformed-plan",
+]'''
+replace = '''    "identity",
+    "malformed-plan",
+]'''
+
+[[mutation]]
+id = "M3"
+label = "the tuple is a third copy again, and drops one"
+file = "packages/isidium-store/src/isidium/store/core/status.py"
+find = '''FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = get_args(FailureClass)'''
+replace = '''FAILURE_CLASSES: Final[tuple[FailureClass, ...]] = get_args(FailureClass)[:-1]'''

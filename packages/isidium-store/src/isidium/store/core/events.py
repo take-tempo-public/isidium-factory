@@ -27,8 +27,28 @@ from .refusal import Refusal
 
 # 03 §1.5's four, widened by the classes the catalog's failure protocols and the ledger already use [V5a, Q-V22 (a),
 # owner 2026-09-12]: without them no failure of a run whose `dispatched` landed could ever land its end.
+#
+# Widened by two more [owner, 2026-09-20]. **`merge`** — Q-V31 (c) ruled that a resume replays the failed run's diff
+# as a patch onto a fresh branch at the current base, and a patch that will not apply had no name. The catalog
+# already named exactly this outcome — *"conflict ⇒ `failed:merge`, deterministic"* — for the merge at close, and
+# one name covers both, because both are the same fact: the work no longer applies to the base it must apply to.
+# Reusing `environment` was offered and refused on `r-4`'s precedent — a turn limit reported as `failed:infra` was
+# retried once for nothing, and a class that does not say what happened costs exactly that.
+# **`malformed-plan`** — Q-V29 (a), ruled 2026-09-13 and not yet built. It rides this widening rather than its own
+# because the two would otherwise cost two store images and two recreates for one edit to one tuple.
 FailureClass = Literal[
-    "scope", "ambiguity", "budget", "timeout", "infra", "environment", "acceptance", "gate", "card-drift", "identity"
+    "scope",
+    "ambiguity",
+    "budget",
+    "timeout",
+    "infra",
+    "environment",
+    "acceptance",
+    "gate",
+    "card-drift",
+    "identity",
+    "merge",
+    "malformed-plan",
 ]
 Verdict = Literal["pass", "fail", "manual"]
 
