@@ -99,38 +99,38 @@
     },
     "0007": {
       "closures": [],
-      "execution": "failed(budget)",
+      "execution": null,
       "fingerprint": {
-        "commit": "280b314a3767151a8f2181d181bd19bf57d78b4f",
+        "commit": "b00c2dd7d42d3d3723612658eae106568caf476c",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 5,
+        "ratified_seq": 11,
         "refs_resolved": [
           {
-            "blob": "e8b746618029116b84702ef95c81a4d6195b857b",
+            "blob": "c7d1e7b2711a83c51b5f394d3170e61eed8c176d",
             "path": "packages/isidium-store/src/isidium/store/core/events.py"
           },
           {
-            "blob": "494b93adb2fabab21f2e48c2d8b2845024254910",
+            "blob": "db2a64a9096d2d3ce54b6bef11b3cb1662f5ef53",
             "path": "packages/isidium-store/src/isidium/store/core/status.py"
           },
           {
-            "blob": "ef2825da1770b1d6f67f21e06c5bde9b8ff12ec1",
+            "blob": "77ae386f8fb1413e4d4c40952c458f9fb4d49e02",
             "path": "packages/isidium-store/src/isidium/store/core/board.py"
           },
           {
-            "blob": "09d10976e05efbf706b8f08536f132b8f9a9ac1a",
+            "blob": "b1bc87c554774737e7d26d8d867bc1bc92892e60",
             "path": "packages/isidium-store/src/isidium/store/core/neighborhood.py"
           },
           {
-            "blob": "34777aac7b34f5be03acf2d2ae8a421cd0de183d",
+            "blob": "30f9b60a0983b97b5bfdc2cb4cd597a7927af545",
             "path": "packages/isidium-store/src/isidium/store/server/store.py"
           },
           {
-            "blob": "c1f440baf7d9038ef58ef3ba515eda0387f68f3e",
+            "blob": "74ea01d18dff7f52255887c00f56546f2e463521",
             "path": "docs/design/03-card-schema.md"
           },
           {
-            "blob": "7cda3cf26d1078f994cfc4c3a41fe82dc6d1c881",
+            "blob": "5e3cbcf36bb1cc465e8b90a4ae0777c095cb976b",
             "path": "tests/store/test_l4.py"
           },
           {
@@ -145,8 +145,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:5ac33796c52f02e29abfa6dda1b336441b081a1344fa70a1e95a40cb65b9ee3b",
-        "seq": 9
+        "h": "sha256:6f521e25f854f93bf16c30501f64bbcd34ad9e2ec3ac6c597c0ff008a544f7fc",
+        "seq": 11
       },
       "runs": []
     },
@@ -207,10 +207,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:007c88bc2d36f778718cafec87a3fd8b3d71accba7c8af3f61eb57257a9dd05b",
-    "seq": 68
+    "h": "sha256:03d36deae1b376222f195007c02d63ec98aca4cbda8295e727e84969caa223bd",
+    "seq": 71
   },
-  "landed_at": "2026-09-21T21:40:31Z",
-  "ledger_cursor": "d1cc9695ac37177017b4de5136787dd0186b4dd4",
+  "landed_at": "2026-09-21T21:45:25Z",
+  "ledger_cursor": "b00c2dd7d42d3d3723612658eae106568caf476c",
   "schema": 2
 }
