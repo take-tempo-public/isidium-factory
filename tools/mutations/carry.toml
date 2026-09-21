@@ -48,8 +48,16 @@ replace = '''                raise'''
 id = "M6"
 label = "the migration tests equality against one version again -- schema 2 never reaches 3"
 file = "packages/isidium-factory/src/isidium/factory/ledger.py"
-find = '''        if held_schema < SCHEMA:'''
-replace = '''        if held_schema == 1:'''
+find = '''        if int(self._meta("schema") or SCHEMA) < SCHEMA:'''
+replace = '''        if self._meta("schema") == "1":'''
+
+[[mutation]]
+id = "M9"
+label = "the migration believes the version over the table, and adds a column that is already there"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''                    if column not in have:
+                        self.db.execute(f"ALTER TABLE runs ADD COLUMN {column} {decl}")'''
+replace = '''                    self.db.execute(f"ALTER TABLE runs ADD COLUMN {column} {decl}")'''
 
 [[mutation]]
 id = "M7"

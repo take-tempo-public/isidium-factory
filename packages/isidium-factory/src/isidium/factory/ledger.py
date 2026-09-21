@@ -43,6 +43,10 @@ LEDGER_FILE: Final = "ledger.sqlite"
 # none of the records already written has to move. The particular word is the briefer's, within that ruling, and
 # says what happens: a failed run's work is carried onto this run's branch.
 SCHEMA: Final = 3
+# Every column `runs` gained after schema 1, and what to declare it as. One list, read by the migration and by
+# nothing else: a column added to `_DDL` below and forgotten here would exist on a fresh ledger and never appear on
+# an upgraded one, which is the drift this pairs against.
+ADDED_COLUMNS: Final[Mapping[str, str]] = {"pr": "INTEGER", "landed_through": "INTEGER", "carried_from": "TEXT"}
 SPAN: Final = "isidium.factory.ledger.write"
 DISPATCHED: Final = "dispatched"
 # The ledger's own transitions, beside `interrupt`: neither is a store event kind, so `report()`
@@ -122,23 +126,24 @@ class Ledger:
         if held != tenant:
             self.db.close()
             raise Refusal("ledger.tenant", str(path), f"this ledger is {held!r}'s, not {tenant!r}'s")
-        held_schema = int(self._meta("schema") or SCHEMA)
-        if held_schema < SCHEMA:
+        if int(self._meta("schema") or SCHEMA) < SCHEMA:
             # Eager, at open [V5a]: every verb reads these columns, and a live tenant's ledger is a version behind
             # with its runs in it. `ADD COLUMN` only (no table rebuild, the rows untouched), and the version, in one
             # transaction — after the tenant check, so another tenant's file is refused before it is changed.
             #
-            # **Stepwise, and each step is tested against the version below it, not against 1** [2026-09-20]. This
-            # read `if self._meta("schema") == "1"` while 2 was the only newer version, which was true exactly once:
-            # tenant #0's ledger is schema 2 today, so the same shape would have left schema 3's column unadded and
-            # every read of it an `OperationalError` on the live tenant. The bug was in what the condition assumed,
-            # not in what it did, which is why it is written as a range now.
+            # **The version says WHETHER to migrate; the table says WHAT is missing** [2026-09-20]. Two findings put
+            # it this way round. (1) It read `if self._meta("schema") == "1"` — an equality against the only older
+            # version there was, true exactly once; tenant #0's ledger is schema 2, so that shape would have left
+            # `carried_from` unadded and every read of it an `OperationalError` on the live tenant. (2) Its
+            # replacement asked the version which columns to add, and CI refused it: a file's recorded version and
+            # its actual shape **can disagree** — V5a's own test builds a "schema 1" table out of the current DDL —
+            # and a migration that believes the number over the table adds a column that is already there. Reading
+            # `table_info` costs one query and makes this idempotent, which a migration should be anyway.
+            have = {str(r[1]) for r in self.db.execute("PRAGMA table_info(runs)")}
             with self.transaction():
-                if held_schema < 2:
-                    self.db.execute("ALTER TABLE runs ADD COLUMN pr INTEGER")
-                    self.db.execute("ALTER TABLE runs ADD COLUMN landed_through INTEGER")
-                if held_schema < 3:
-                    self.db.execute("ALTER TABLE runs ADD COLUMN carried_from TEXT")
+                for column, decl in ADDED_COLUMNS.items():  # names from this module, never from input
+                    if column not in have:
+                        self.db.execute(f"ALTER TABLE runs ADD COLUMN {column} {decl}")
                 self.db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod

@@ -918,6 +918,25 @@ def test_a_carry_that_refuses_ends_the_run_failed_merge(disk: Disk, led: Ledger)
     assert row is not None and row["outcome"] == "failed:merge" and row["ended_at"], "the run ends, it does not hang"
 
 
+def test_a_ledger_whose_version_and_table_disagree_migrates_anyway(tmp_path: Path) -> None:
+    """The finding CI refused this change for, pinned. **A file's recorded version and its actual table can
+    disagree**, and a migration that believes the number over the table adds a column that is already there and dies
+    `duplicate column name`. Not hypothetical: V5a's own migration test builds its "schema 1" file out of the
+    current DDL, so the moment schema 3 added a column, that file had it. Reading `table_info` and adding only what
+    is missing costs one query and makes the migration idempotent, which it should be anyway."""
+    path = tmp_path / "disagrees.sqlite"
+    db = sqlite3.connect(str(path), isolation_level=None)
+    db.execute(ledger_mod._DDL[0])
+    db.execute(ledger_mod._DDL[1])  # the CURRENT table — every added column already present
+    db.executemany("INSERT INTO meta VALUES (?, ?)", [("schema", "1"), ("tenant", TENANT), ("next_run", "1")])
+    db.close()
+    led = Ledger(path, TENANT)  # the assertion is that this does not raise
+    try:
+        assert led._meta("schema") == str(ledger_mod.SCHEMA), "the version is corrected to match the shape"
+    finally:
+        led.close()
+
+
 def test_carry_from_refuses_the_runs_it_must_not_carry(disk: Disk, tmp_path: Path) -> None:
     """`--carry-from`'s four refusals, in the order `_pick` asks them — all ahead of the ready-view, so the operator
     is told which run is wrong before a pick is priced. Their own ledger and a stubbed store call, because what is

@@ -396,10 +396,19 @@ def test_the_watermark_sends_each_event_once_and_a_refused_land_sends_it_again(f
     assert lander.land_run(fresh, store, rid)["sent"] == 1 and sent[-1] == ["failed"], "the refused land's event, next"
 
 
-def test_a_schema_1_ledger_gains_its_two_columns_at_open_and_keeps_its_rows(tmp_path: Path) -> None:
+def test_a_schema_1_ledger_gains_every_later_column_at_open_and_keeps_its_rows(tmp_path: Path) -> None:
+    """**The old table is built by REMOVING every later column from the current DDL** [widened 2026-09-20]. It used
+    to strip schema 2's two by name, which silently stopped being the V3 table the moment schema 3 added a third:
+    the "schema 1" file then already had `carried_from`, and the migration tried to add it again. Deriving the old
+    shape from `ADDED_COLUMNS` means the next column cannot repeat that — this test gets it for free, and the
+    assertion below pins that the removal actually removed something."""
     path = tmp_path / ledger_mod.LEDGER_FILE
-    old = ledger_mod._DDL[1].replace(",\n        pr INTEGER, landed_through INTEGER", "")
-    assert old != ledger_mod._DDL[1], "the V3 table, as tenant #0's ledger holds it"
+    old = ledger_mod._DDL[1]
+    for column, decl in ledger_mod.ADDED_COLUMNS.items():
+        old = old.replace(f", {column} {decl}", "").replace(f",\n        {column} {decl}", "")
+    # On the full declaration, not the bare name: `pr` is a substring of `price_table`, which is schema 1's.
+    left = [f"{c} {d}" for c, d in ledger_mod.ADDED_COLUMNS.items() if f"{c} {d}" in old]
+    assert not left, f"the V3 table, as tenant #0's ledger held it — still carrying {left}"
     with closing(sqlite3.connect(path)) as db:
         db.execute(ledger_mod._DDL[0])
         db.execute(old)
@@ -415,8 +424,9 @@ def test_a_schema_1_ledger_gains_its_two_columns_at_open_and_keeps_its_rows(tmp_
     ledger = Ledger(path, TENANT)
     try:
         row = ledger.run("r-1")
-        assert row is not None and row["card"] == 5 and row["pr"] is None and row["landed_through"] is None
-        assert ledger._meta("schema") == str(ledger_mod.SCHEMA) == "2"
+        assert row is not None and row["card"] == 5
+        assert all(row[c] is None for c in ledger_mod.ADDED_COLUMNS), "every added column is there, and empty"
+        assert ledger._meta("schema") == str(ledger_mod.SCHEMA) == "3"
         ledger.set_pr("r-1", 57)
         again = ledger.run("r-1")
         assert again is not None and again["pr"] == 57
