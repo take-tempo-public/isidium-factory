@@ -47,6 +47,10 @@ TRAILER_AGENT: Final = "Factory-Agent"
 # [owner, 2026-09-15] a failed phase's work is committed to its story branch and never pushed; the trailer is how the
 # commit says it is a failure's, and how `push` knows without asking the ledger twice.
 TRAILER_OUTCOME: Final = "Factory-Outcome"
+# [Q-V31 (c), owner 2026-09-20] the commit that carries a failed run's work onto this run's branch says whose work it
+# was. Without it the carried commit is indistinguishable from the phase's own, and `close`'s identity walk -- which
+# reads every commit in `base..head` for a `Factory-Run` trailer -- would have no way to tell them apart either.
+TRAILER_CARRIED: Final = "Factory-Carried"
 
 # The agent kind each phase runs as (05 §1's roster). V4a-i runs `build`; the other rows are here because the map is
 # the roster's, not this chunk's, and a phase whose agent is unnamed could not find its model.
@@ -78,10 +82,13 @@ TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
 # here rather than resolved.
 PROMPT_VERSION: Final = "v1"
 PROMPT_VERSIONS: Final[Mapping[str, str]] = {
-    # v2 names the project gate and the turn budget, which v1 did not: `r-6` finished card 7's work and then spent
+    # v2 named the project gate and the turn budget, which v1 did not: `r-6` finished card 7's work and then spent
     # its remaining turns re-running `mypy`, `ruff` and the whole suite in the background, polling with `sleep 90`,
-    # and ended `failed:budget` at 101 turns with the work complete and unpushed.
-    "builder": "v2",
+    # and ended `failed:budget` at 101 turns with the work complete and unpushed. **v3** adds what to do with a
+    # previous attempt's work already in the tree, which a carried run now puts there (Q-V31 (c)): verify it rather
+    # than trust it, and rather than redo it. Told nothing, a builder handed a half-done tree does one or the other,
+    # and both cost more than reading it — the same shape of gap v2 was written to close.
+    "builder": "v3",
 }
 
 Call = Callable[[str, Mapping[str, Any]], Mapping[str, Any]]
@@ -122,7 +129,18 @@ def run_phase(
         tree = ctx.home / "worktrees" / run_id
         work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
         try:
-            job = _job(ctx, reg, row, call, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work)
+            try:
+                carried = _carry(ledger, row, work, run_id, agent, ctx)
+            except Refusal as r:
+                # **Its own handler, not the adapter's below.** That one writes a phase row and keeps the phase's
+                # work; a carry that refused ran no phase and left a tree it had already reset, so there is neither.
+                # What the two share is the rule underneath: a run that cannot go on must END. A refusal that leaves
+                # one in flight holds the WIP cap for ever — the defect V5a was built to close.
+                ledger.finish(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), _outcome_of(r))
+                raise
+            job = _job(
+                ctx, reg, row, call, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work, carried=carried
+            )
             try:
                 res = drv.execute(job)
             except Refusal as r:
@@ -194,6 +212,7 @@ def _job(
     agent: str,
     policy: adapter_mod.ExecutorPolicy,
     work: Path,
+    carried: adapter_mod.Carried | None = None,
 ) -> adapter_mod.RunJob:
     """The payload, re-assembled at the run's own `base_sha` — and checked against the hash the ledger wrote at
     dispatch. Same inputs, same hash (T-B3 (4)); a different one means the substrate moved under a dispatched run,
@@ -232,6 +251,7 @@ def _job(
             "policy": policy,
             "identity": {"agent": agent, "name": ctx.identity.name, "email": ctx.identity.email},
             "prompt_version": PROMPT_VERSIONS.get(agent, PROMPT_VERSION),
+            "carried": carried,
         }
     )
 
@@ -262,12 +282,18 @@ def _commit(
     phase's commit says so in a `Factory-Outcome` trailer [owner, 2026-09-15]."""
     if not touched:
         return None
-    add = subprocess.run(["git", "add", "-A"], cwd=work, capture_output=True, text=True, check=False)
-    if add.returncode != 0:
-        raise Refusal("factory.git", str(work), add.stderr.strip())
     message = f"{agent}: {run_id}\n\n{TRAILER_RUN}: {run_id}\n{TRAILER_AGENT}: {agent}\n"
     if outcome is not None:
         message += f"{TRAILER_OUTCOME}: {outcome}\n"
+    return _commit_message(work, message, name, email)
+
+
+def _commit_message(work: Path, message: str, name: str, email: str) -> str | None:
+    """Everything in the tree, committed under the given identity — the mechanics `_commit` and the carry share, so
+    that a carried commit is made exactly the way a phase's is and the two cannot drift in how they author."""
+    add = subprocess.run(["git", "add", "-A"], cwd=work, capture_output=True, text=True, check=False)
+    if add.returncode != 0:
+        raise Refusal("factory.git", str(work), add.stderr.strip())
     env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
     made = subprocess.run(
         ["git", "commit", "-m", message],
@@ -296,8 +322,51 @@ def _keep_work(
         return None
 
 
+def _carry(
+    ledger: Ledger,
+    row: Mapping[str, Any],
+    work: Path,
+    run_id: str,
+    agent: str,
+    ctx: TenantContext,
+) -> adapter_mod.Carried | None:
+    """A resumed run's inherited work, replayed into the worktree and committed on its own [Q-V31 (c), owner
+    2026-09-20]. A run that carries nothing does nothing here and spends no spawn.
+
+    **Committed separately, and that is what makes the record honest.** The touched set is recomputed from
+    `git status` in this worktree, so work left uncommitted would read as this run's: its files would be judged
+    against *this* card's surfaces (a re-ratification may have narrowed them, and the phase would fail scope for
+    work it did not do), and `surfaces_actual` would claim them. Its own commit, under the run's identity with a
+    trailer naming where it came from, leaves the tree clean before the agent starts — so everything after it is
+    genuinely this run's.
+    """
+    carried_from = row.get("carried_from")
+    if not carried_from:
+        return None
+    source = ledger.run(str(carried_from))
+    if source is None:  # the pick checked this; the ledger is the same file, so it is a corruption, not a user error
+        raise Refusal("run.carry-unknown", str(carried_from), "the run this one carries is not in this ledger")
+    files = checkout.carry_over(work, str(source["base_sha"]), str(source["head_sha"]))
+    if files:
+        message = (
+            f"{agent}: {run_id} carries {carried_from}\n\n"
+            f"{TRAILER_RUN}: {run_id}\n{TRAILER_AGENT}: {agent}\n{TRAILER_CARRIED}: {carried_from}\n"
+        )
+        _commit_message(work, message, ctx.identity.name, ctx.identity.email)
+    return adapter_mod.Carried(
+        run_id=str(carried_from),
+        outcome=str(source["outcome"]),
+        head_sha=str(source["head_sha"]),
+        files=tuple(files),
+    )
+
+
 def _outcome_of(r: Refusal) -> str:
     """An adapter's refusal, as the run record's outcome. T-C6's failure protocol names `failed:infra` for a start
     or a timeout; an environment answer (a provider limit) is `failed:environment`, the class the picker backs off
-    on rather than retries."""
+    on rather than retries; and carried work that will not apply is `failed:merge` — the catalog's own name for a
+    conflict, deterministic and diagnosable, which is why it is not folded into `infra` (`r-4`'s lesson: a class
+    that does not say what happened bought one retry for nothing)."""
+    if r.rule.endswith(".merge"):
+        return "failed:merge"
     return "failed:environment" if r.rule.endswith(".environment") else "failed:infra"

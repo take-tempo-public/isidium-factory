@@ -35,7 +35,14 @@ from isidium.store.core.refusal import Refusal
 LEDGER_FILE: Final = "ledger.sqlite"
 # Schema 2 [V5a]: `runs.pr` (the pull request `close` reads) and `runs.landed_through` (the watermark: the last event
 # `seq` of the run the store has been sent).
-SCHEMA: Final = 2
+# Schema 3 [2026-09-20]: `runs.carried_from` — the failed run whose work this one carries (Q-V31 (c)).
+#
+# **`carried_from`, not `resumes`** [Q-V34, owner 2026-09-20]. `resume` is already taken: `score.vector.resume` is a
+# card-level ordering boost meaning *"this card has partly-done work — finish before starting"*. The owner ruled
+# that the new thing takes its own name and the ordering term is left alone, so nothing in the ratified schema and
+# none of the records already written has to move. The particular word is the briefer's, within that ruling, and
+# says what happens: a failed run's work is carried onto this run's branch.
+SCHEMA: Final = 3
 SPAN: Final = "isidium.factory.ledger.write"
 DISPATCHED: Final = "dispatched"
 # The ledger's own transitions, beside `interrupt`: neither is a store event kind, so `report()`
@@ -61,7 +68,7 @@ _DDL: Final = (
         adapter TEXT NOT NULL, billing_class TEXT, dispatched_at TEXT NOT NULL, ended_at TEXT,
         payload_hash TEXT NOT NULL, config_hash TEXT NOT NULL, context TEXT NOT NULL, score TEXT NOT NULL,
         refs_resolved TEXT NOT NULL, surfaces_actual TEXT, price_table TEXT, identity TEXT NOT NULL,
-        pr INTEGER, landed_through INTEGER)""",
+        pr INTEGER, landed_through INTEGER, carried_from TEXT)""",
     """CREATE TABLE IF NOT EXISTS phases (
         run_id TEXT NOT NULL REFERENCES runs(run_id), phase TEXT NOT NULL, agent TEXT, model TEXT, effort TEXT,
         prompt_version TEXT, tokens INTEGER, cost_micro INTEGER, duration_ms INTEGER)""",
@@ -92,6 +99,7 @@ class NewRun:
     context: Mapping[str, Any] = field(default_factory=dict)
     score: Mapping[str, Any] = field(default_factory=dict)
     refs_resolved: tuple[Mapping[str, str], ...] = ()
+    carried_from: str | None = None  # the failed run whose work this one carries (Q-V31 (c))
 
 
 class Ledger:
@@ -114,13 +122,23 @@ class Ledger:
         if held != tenant:
             self.db.close()
             raise Refusal("ledger.tenant", str(path), f"this ledger is {held!r}'s, not {tenant!r}'s")
-        if self._meta("schema") == "1":
-            # Eager, at open [V5a]: every verb reads the two columns, and tenant #0's ledger is schema 1 with three runs
-            # in it. Two `ADD COLUMN`s (no table rebuild, the rows untouched) and the version, in one transaction —
-            # after the tenant check, so another tenant's file is refused before it is changed.
+        held_schema = int(self._meta("schema") or SCHEMA)
+        if held_schema < SCHEMA:
+            # Eager, at open [V5a]: every verb reads these columns, and a live tenant's ledger is a version behind
+            # with its runs in it. `ADD COLUMN` only (no table rebuild, the rows untouched), and the version, in one
+            # transaction — after the tenant check, so another tenant's file is refused before it is changed.
+            #
+            # **Stepwise, and each step is tested against the version below it, not against 1** [2026-09-20]. This
+            # read `if self._meta("schema") == "1"` while 2 was the only newer version, which was true exactly once:
+            # tenant #0's ledger is schema 2 today, so the same shape would have left schema 3's column unadded and
+            # every read of it an `OperationalError` on the live tenant. The bug was in what the condition assumed,
+            # not in what it did, which is why it is written as a range now.
             with self.transaction():
-                self.db.execute("ALTER TABLE runs ADD COLUMN pr INTEGER")
-                self.db.execute("ALTER TABLE runs ADD COLUMN landed_through INTEGER")
+                if held_schema < 2:
+                    self.db.execute("ALTER TABLE runs ADD COLUMN pr INTEGER")
+                    self.db.execute("ALTER TABLE runs ADD COLUMN landed_through INTEGER")
+                if held_schema < 3:
+                    self.db.execute("ALTER TABLE runs ADD COLUMN carried_from TEXT")
                 self.db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod
@@ -161,8 +179,8 @@ class Ledger:
                     run_id = f"r-{n}"
                     self.db.execute(
                         "INSERT INTO runs (run_id, card, outcome, lane, build_hash, base_sha, story_branch, adapter,"
-                        " dispatched_at, payload_hash, config_hash, context, score, refs_resolved, identity)"
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        " dispatched_at, payload_hash, config_hash, context, score, refs_resolved, identity,"
+                        " carried_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             run_id,
                             run.card,
@@ -179,6 +197,7 @@ class Ledger:
                             _dump(run.score),
                             _dump([dict(r) for r in run.refs_resolved]),
                             run.identity,
+                            run.carried_from,
                         ),
                     )
                     self._event(run_id, run.dispatched_at, DISPATCHED, {"card": run.card})

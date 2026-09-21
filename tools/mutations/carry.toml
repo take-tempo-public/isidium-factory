@@ -1,0 +1,66 @@
+# The resume: a failed run's work carried onto a new run's branch (Q-V31 (c), Q-V32 (a), Q-V33 (c), 2026-09-20).
+# Eight properties: the carried work is committed apart so the record says who did what; the agent is told on the
+# job; a conflict leaves a clean tree; a conflict is `merge` and not `infra`; a refused carry ENDS the run; the
+# schema migration reads a range and not an equality; and the two source checks that stop a carry from a run that
+# has nothing to give.
+# Owner: `tests/factory/test_v4a.py`.
+
+[[mutation]]
+id = "M1"
+label = "the carried work is left uncommitted -- this run claims the previous run's files"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''        _commit_message(work, message, ctx.identity.name, ctx.identity.email)'''
+replace = '''        pass'''
+
+[[mutation]]
+id = "M2"
+label = "the agent is not told it is carrying anything"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''            "carried": carried,'''
+replace = '''            "carried": None,'''
+
+[[mutation]]
+id = "M3"
+label = "a conflict leaves the tree half-applied, markers and all"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''        for args in (["reset", "-q", "--hard"], ["clean", "-fdq"]):
+            subprocess.run(["git", *args], cwd=tree, capture_output=True, check=False)'''
+replace = '''        pass'''
+
+[[mutation]]
+id = "M4"
+label = "a conflict is `failed:infra` again -- r-4's defect, which bought one retry for nothing"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    if r.rule.endswith(".merge"):
+        return "failed:merge"
+'''
+replace = ''''''
+
+[[mutation]]
+id = "M5"
+label = "a refused carry leaves the run in flight, holding the WIP cap for ever"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''                ledger.finish(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), _outcome_of(r))
+                raise'''
+replace = '''                raise'''
+
+[[mutation]]
+id = "M6"
+label = "the migration tests equality against one version again -- schema 2 never reaches 3"
+file = "packages/isidium-factory/src/isidium/factory/ledger.py"
+find = '''        if held_schema < SCHEMA:'''
+replace = '''        if held_schema == 1:'''
+
+[[mutation]]
+id = "M7"
+label = "a run that ended well can be carried from"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''        if not str(source["outcome"]).startswith(FAILED):'''
+replace = '''        if False:'''
+
+[[mutation]]
+id = "M8"
+label = "a failed run that committed nothing can be carried from -- there is nothing there"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''        if not source["head_sha"]:'''
+replace = '''        if False:'''

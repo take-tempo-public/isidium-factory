@@ -147,6 +147,22 @@ class RunIdentity(_Wire):
     email: str = Field(min_length=1)
 
 
+class Carried(_Wire):
+    """The failed run whose work is already in this run's tree [Q-V33 (c), owner 2026-09-20].
+
+    **It rides the JOB and not the payload, and that is the ruling, not a convenience.** The payload is a pure
+    function of the card at a commit, and its hash is re-derived at run start and compared with the one the ledger
+    wrote — the check that proves the substrate did not move under a dispatched run. Putting run history inside it
+    would have made that hash depend on the ledger and weakened the one thing it is for. The job already carries
+    what is not the card (where the phase may write, its budgets, its prompt version), it is written to `job.json`,
+    and it is rendered into the agent's input — so the agent is told, and the record says it was told."""
+
+    run_id: str = Field(min_length=1)
+    outcome: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    files: tuple[str, ...] = ()
+
+
 class RunJob(_Wire):
     """What crosses the seam inwards: one phase of one run, everything it may read, and the only paths it may write.
 
@@ -164,6 +180,7 @@ class RunJob(_Wire):
     policy: ExecutorPolicy
     identity: RunIdentity
     prompt_version: str = Field(min_length=1)
+    carried: Carried | None = None
 
 
 class Artifact(_Wire):
