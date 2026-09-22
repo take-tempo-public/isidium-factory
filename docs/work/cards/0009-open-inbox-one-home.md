@@ -45,6 +45,8 @@ Both answers are printed in the same document. `BOARD.md`'s header line reads `i
 
 The file already carries the precedent: `board.py` re-exports `IN_FLIGHT` from `events` with the note that it is card 7 R5's one home, checked by identity in its tests. This is the same move for the same kind of rule.
 
+Write that re-export explicitly — `from .status import Projection, Queue, open_intake_ids as open_intake_ids` — and not as a plain import. A test that imports the symbol from `board` to check by identity that the two sites are one object makes `board` part of its own public surface, and under mypy `--strict` a plainly-imported name is not exported: the check answers `error: Module "isidium.store.core.board" does not explicitly export attribute "open_intake_ids" [attr-defined]`. `IN_FLIGHT as IN_FLIGHT` two lines above is the form to copy. Every pytest leg passes without the `as`; the type-checker leg is the only one that fails, so a green local test run is not evidence here.
+
 In scope: one function answering "which intake ids are open" over the inbox records, in `core/status.py` beside the queue that needs it; `status.queue` and `board.render` both reading it; and tests pinning the rendered `## Inbox` list and the `inbox_counts` header to that one answer.
 
 Not in scope: changing which outcomes close an intake — `accepted` and `declined` today, with `deferred` deliberately leaving the item open, which R2 pins rather than changes; adding a field to `Queue`, which would move the wire contract in `server/api.py` and cost more than the drift does; the inbox's own schema; and the duplicate suggestions `s2`–`s5` on this tenant, which are a landed fact and not a defect to clean up.
@@ -55,5 +57,6 @@ Not in scope: changing which outcomes close an intake — `accepted` and `declin
 history = [
   { seq = 1, at = "2026-09-21T21:40:31Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:a2eb910ed1d47c63156f920b03df15a569e096224cc9927c74bc8cf0c034d676", h = "sha256:0b8b6df03108703aeba500a520c8c2eb0e7d97fb2fded58641854551633e88c3", batch = 16 },
   { seq = 2, at = "2026-09-22T00:28:24Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:a2eb910ed1d47c63156f920b03df15a569e096224cc9927c74bc8cf0c034d676", h = "sha256:d8eece5144839244566468ccc218e22f71406bd337c747bb4b58a4f940a5aff9" },
+  { seq = 3, at = "2026-09-22T02:21:20Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:ac02793a029091122d6da3d80fc29e492892d188095cb5b093d610d38b82b7e6", h = "sha256:74b9ead1d99d3c4ad10b622ada250bd8377dd67ba028182406c7382d96589054" },
 ]
 ```
