@@ -2,7 +2,7 @@
 schema = 1
 id = 9
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree"
 shape = "bdd"
@@ -54,5 +54,6 @@ Not in scope: changing which outcomes close an intake — `accepted` and `declin
 ```toml
 history = [
   { seq = 1, at = "2026-09-21T21:40:31Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:a2eb910ed1d47c63156f920b03df15a569e096224cc9927c74bc8cf0c034d676", h = "sha256:0b8b6df03108703aeba500a520c8c2eb0e7d97fb2fded58641854551633e88c3", batch = 16 },
+  { seq = 2, at = "2026-09-22T00:28:24Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:a2eb910ed1d47c63156f920b03df15a569e096224cc9927c74bc8cf0c034d676", h = "sha256:d8eece5144839244566468ccc218e22f71406bd337c747bb4b58a4f940a5aff9" },
 ]
 ```
