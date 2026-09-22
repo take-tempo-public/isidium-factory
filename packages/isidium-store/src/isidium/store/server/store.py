@@ -818,7 +818,12 @@ class Store:
                 self._resolve_refs_or_refuse(after)
         # 4. the signature predicate (+ the caller-aware clause: the diff MOVES status to closed/withdrawn — C15)
         reason = derive.needs_signature(
-            bh, after.head, d.diff, ref, landed_closures=self._landed_closures(before) if before else frozenset()
+            bh,
+            after.head,
+            d.diff,
+            ref,
+            landed_closures=self._landed_closures(before) if before else frozenset(),
+            run_in_flight=self._run_in_flight(before) if before else False,
         )
         if (
             reason is None
@@ -978,6 +983,16 @@ class Store:
             if seq and seq <= head_seq:
                 landed.add(str(c.get("id")))
         return frozenset(landed)
+
+    def _run_in_flight(self, doc: Document) -> bool:
+        """Card 10, R1/R2: whether the sidecar's last land found a run in flight for this card — `execution` in
+        `events_mod.IN_FLIGHT`, the same set the fold abandons a demotion or withdrawal against (03 §6). Read
+        before the write that may be about to become one, the way `_landed_closures` reads C6's fact."""
+        cid = doc.head.get("id")
+        if not isinstance(cid, int):
+            return False
+        execution = self.state.get("cards", {}).get(f"{cid:04d}", {}).get("execution")
+        return execution in events_mod.IN_FLIGHT
 
     # ---- the policy file -----------------------------------------------------------------------------------------
 
@@ -1962,7 +1977,12 @@ class Store:
             verdict.append(r)
         bh = before.head if before else None
         reason = derive.needs_signature(
-            bh, after.head, d.diff, req.ref, landed_closures=self._landed_closures(before) if before else frozenset()
+            bh,
+            after.head,
+            d.diff,
+            req.ref,
+            landed_closures=self._landed_closures(before) if before else frozenset(),
+            run_in_flight=self._run_in_flight(before) if before else False,
         )
         if (
             reason is None
