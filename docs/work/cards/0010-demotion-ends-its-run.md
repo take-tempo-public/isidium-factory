@@ -53,7 +53,7 @@ request. The store never heard. Card 9's sidecar still read `execution: dispatch
 was over.
 
 Two readers of one chain disagree about the same entry. `derive.replay_status` honours an unsigned `demoted` act —
-which is why the board rendered card 9 as a draft and why `close` was right to abandon its run. `Store._card_events`
+which is why the board rendered card 9 as a draft and why `close` was right to abandon its run. `Store._act_events`
 does not: it gates every act event on `chain.is_signed(e)`, and `derive.needs_signature` has no rule for
 `ratified → draft`, a retreat from ratified being free by design. So the act moved the card's status for one reader
 and emitted nothing for the other, and the sidecar kept a run in flight that had already ended.
@@ -88,5 +88,6 @@ backwards, and the remedy for one is the gated-edit demotion above.
 ```toml
 history = [
   { seq = 1, at = "2026-09-22T19:49:50Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ad158965f6a951b5954b6d099648cb8c759882c6199da2088c2fe9512a86fdda", h = "sha256:2e892cd3b56aee006a73e942521a79e1e3082ecc9433382c7ca2052e820ec4be", batch = 20 },
+  { seq = 2, at = "2026-09-22T21:02:36Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["scope"], build = "sha256:001c6f3e69460d501022740c5d97eb3c224030fbe7d797674c1b72bb53f96648", h = "sha256:1964e40c9f16b3b634d1b6e7a49a65184dcd5b987f301d484bfabca676589382", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:3z3bmZ6RHFOsbbqmsAVJM9xdS9HK0m3tYwFzy+ZD+Glcd2omZoA38JwKAVQMTR11+I1ZNix3rOpmGR909WKMCA==" },
 ]
 ```
