@@ -2,7 +2,7 @@
 schema = 1
 id = 10
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "session"
 title = "A demotion that ends a run in flight is a signed act, so the sidecar hears it"
 shape = "bdd"
@@ -42,6 +42,14 @@ kind = "test-marker"
 title = "a demotion with nothing in flight stays unsigned"
 rule = "R2"
 observable = { test = "tests/store/test_demotion_ends_its_run.py::test_a_demotion_with_nothing_in_flight_stays_unsigned" }
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass" }
+evidence = ["sha256:89d293405c1f01179d26f1683805d1fd6be676e58990202bd95648eb80cf3f74"]
+retracted = false
 ```
 
 ## Scope
@@ -89,5 +97,6 @@ backwards, and the remedy for one is the gated-edit demotion above.
 history = [
   { seq = 1, at = "2026-09-22T19:49:50Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ad158965f6a951b5954b6d099648cb8c759882c6199da2088c2fe9512a86fdda", h = "sha256:2e892cd3b56aee006a73e942521a79e1e3082ecc9433382c7ca2052e820ec4be", batch = 20 },
   { seq = 2, at = "2026-09-22T21:02:36Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["scope"], build = "sha256:001c6f3e69460d501022740c5d97eb3c224030fbe7d797674c1b72bb53f96648", h = "sha256:1964e40c9f16b3b634d1b6e7a49a65184dcd5b987f301d484bfabca676589382", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:3z3bmZ6RHFOsbbqmsAVJM9xdS9HK0m3tYwFzy+ZD+Glcd2omZoA38JwKAVQMTR11+I1ZNix3rOpmGR909WKMCA==" },
+  { seq = 3, at = "2026-09-22T21:05:50Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:001c6f3e69460d501022740c5d97eb3c224030fbe7d797674c1b72bb53f96648", ref = "c1:sha256:d01592dd1f52a20f5b9eea04c70a45907bea0db401f594078659ef8fb9ffc010", h = "sha256:e30c6df2619058d79e91537c11508413eaaa309300aca7ae678325497d9fd196", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:bj8J3igFhjjbb01pOGHlZFB1QqtgF2QnAam7OryztqNnKzbcOGIvoZqkGNb6tSAtshLWCrj9dRpsTcfN+MA6Ag==" },
 ]
 ```
