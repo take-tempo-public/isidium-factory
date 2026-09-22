@@ -514,6 +514,17 @@ class Queue:
     merged_not_landed: int | None  # ledger-only (X2); None in-project
 
 
+def open_intake_ids(inbox: Sequence[Mapping[str, Any]]) -> frozenset[str]:
+    """Card 9, R1: which intake records are still open — the one function `queue`'s `inbox_counts` and
+    `board.render`'s `## Inbox` list both read, so the two cannot answer the question differently. R2: only
+    `accepted` and `declined` close an intake; `deferred` — and any other outcome — leaves it open."""
+    open_ids = {r["id"] for r in inbox if r.get("type") == "intake"}
+    for r in inbox:
+        if r.get("type") == "disposition" and r.get("outcome") in ("accepted", "declined"):
+            open_ids.discard(r.get("on"))
+    return frozenset(open_ids)
+
+
 def queue(
     inp: Inputs,
     projections: Mapping[int, Projection],
@@ -550,10 +561,7 @@ def queue(
     )
     last_batch_at = max((str(e.get("at", "")) for e in policy_entries if e.get("act") == "batch-manifest"), default="")
     disp = sum(1 for r in inbox if r.get("type") == "disposition" and str(r.get("at", "")) > last_batch_at)
-    open_ids = {r["id"] for r in inbox if r.get("type") == "intake"}
-    for r in inbox:
-        if r.get("type") == "disposition" and r.get("outcome") in ("accepted", "declined"):
-            open_ids.discard(r.get("on"))
+    open_ids = open_intake_ids(inbox)
     counts: dict[str, int] = {}
     for r in inbox:
         if r.get("type") == "intake" and r["id"] in open_ids:
