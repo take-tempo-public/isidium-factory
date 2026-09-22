@@ -2,13 +2,13 @@
 schema = 1
 id = 9
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree"
 shape = "bdd"
 effort = "default"
 refs = ["packages/isidium-store/src/isidium/store/core/status.py::queue", "packages/isidium-store/src/isidium/store/core/board.py::render"]
-surfaces = ["packages/isidium-store/src/isidium/store/core/status.py", "packages/isidium-store/src/isidium/store/core/board.py", "tests/store/"]
+surfaces = ["packages/isidium-store/src/isidium/store/core/status.py", "packages/isidium-store/src/isidium/store/core/board.py", "tests/store/test_open_inbox_one_home.py"]
 priority = "P2"
 
 [narrative]
@@ -59,5 +59,6 @@ history = [
   { seq = 2, at = "2026-09-22T00:28:24Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:a2eb910ed1d47c63156f920b03df15a569e096224cc9927c74bc8cf0c034d676", h = "sha256:d8eece5144839244566468ccc218e22f71406bd337c747bb4b58a4f940a5aff9" },
   { seq = 3, at = "2026-09-22T02:21:20Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:ac02793a029091122d6da3d80fc29e492892d188095cb5b093d610d38b82b7e6", h = "sha256:74b9ead1d99d3c4ad10b622ada250bd8377dd67ba028182406c7382d96589054" },
   { seq = 4, at = "2026-09-22T02:21:51Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ac02793a029091122d6da3d80fc29e492892d188095cb5b093d610d38b82b7e6", h = "sha256:e1255ab96ee18d7096f34c27435f1305f190526748d9900b0e60c1bcad6138a3", batch = 18 },
+  { seq = 5, at = "2026-09-22T19:46:34Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status", "surfaces"], build = "sha256:c891664c3d04a35a81a080263e9a17ccec48c5dc94b0a0ac1b9a05ab87aba791", h = "sha256:75e0564dedb69ea32f9ffc5a6c608b8168c21c454c3ae00dc008144fbdb9eee6", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:zk9Vnzw4I9at75ImbeyZ45qsw/9oqrm8pseeVW9AHbns92qgJ75i4OIByulyrFfAyPzy/sl2SDbvo2JaIbDeBA==" },
 ]
 ```
