@@ -250,10 +250,12 @@ def needs_signature(
     ref: Ref,
     is_policy: bool = False,
     landed_closures: frozenset[str] = frozenset(),
+    run_in_flight: bool = False,
 ) -> str | None:
     """The signature predicate over (before, after) (1.2 step 4, W3) — the reason, or None. `landed_closures`: the
     closure ids the sidecar has landed for this card (C6: "not yet landed" = the closure's entry post-dates the
-    landed history head — the caller computes the set)."""
+    landed history head — the caller computes the set). `run_in_flight` (card 10, R1/R2): whether the sidecar
+    holds a run in flight for this card — the caller computes it, the same way it computes `landed_closures`."""
     if is_policy:
         return "policy"
     if isinstance(ref, int) and not isinstance(ref, bool):
@@ -265,6 +267,13 @@ def needs_signature(
         ah = after.get("hold")
         if ah is None or ah.get("kind") == "watching":
             return "hold-release"
+    # Card 10, R1: a demotion of a card with a run in flight is signed whatever else the write touches, so the
+    # land that walks it (`Store._act_events`, gated on `chain.is_signed`) observes the act and abandons the run —
+    # checked ahead of `gated_touched` below so it wins even when nothing else in the write is gated (a bare
+    # `ratified -> draft`, the gesture an owner actually reaches for). R2: with nothing in flight this falls
+    # through unchanged — a retreat from ratified has never needed a signature.
+    if bs == "ratified" and as_ == "draft" and run_in_flight:
+        return "run-in-flight"
     gated_touched = bool(set(d) & canon.GATED_KEYS)
     # C5/C6: the "more active" clause exempts a contributor's retraction — closed → ratified whose only claims change
     # is the retraction flip on a closure not yet landed, no reopens[] entry, and no gated key in D.
