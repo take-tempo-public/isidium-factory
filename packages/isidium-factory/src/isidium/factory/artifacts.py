@@ -87,12 +87,28 @@ OF_PHASE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
     "judge": ("verdict", Verdict),
 }
 
-# What each phase is handed from the phases before it, by artifact name — the plan to the refuter; the plan and its
-# refutation to the judge (both prompts' "What you are given").
+# What a phase cannot run without, by artifact name — the plan for the refuter; the plan and its refutation for the
+# judge (both prompts' "What you are given"). What each is actually handed is `gate.inputs_for`'s, from the history.
 INPUTS: Final[Mapping[str, tuple[str, ...]]] = {
     "refute": ("plan",),
     "judge": ("plan", "refutation"),
 }
+
+
+class ParkQuestion(_Artifact):
+    """T-C5's typed question, all nine fields: `{run_id, card_id, phase, question, options?, tried, why_blocked,
+    source_tag, artifacts_so_far}` — assembled by the wrapper when the plan gate parks, the reasoning in
+    `why_blocked` and the run's artifacts by hash in `artifacts_so_far`."""
+
+    run_id: str = Field(min_length=1)
+    card_id: int = Field(ge=1)
+    phase: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    options: tuple[str, ...] = ()
+    tried: tuple[str, ...] = ()
+    why_blocked: str = Field(min_length=1)
+    source_tag: str = Field(min_length=1)
+    artifacts_so_far: tuple[str, ...] = ()
 
 
 def schema(model: type[_Artifact]) -> dict[str, Any]:
