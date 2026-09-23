@@ -56,6 +56,9 @@ RUN python -m pip install --no-cache-dir --require-hashes -r /wheels/requirement
 # The prompts are code (7bd.11, ruled 2026-08-26: *"repo now"* — `prompts/<agent>/<version>.md`, changed by pull
 # request, and the run record names the version it ran). They are baked in rather than mounted so that the image and
 # the prompt version move together: an image is one harness and one prompt set, and the ledger records both.
+# **Build with `deploy/build-runner.sh`** [owner, 2026-09-23]: it writes the set this line copies into the
+# `org.isidium.prompts` label, which the factory reads before any spend now that the version is signed policy
+# (config@7). An image built with a bare `podman build` has no label, and the factory refuses it.
 COPY prompts /opt/isidium/prompts
 
 # The phase runs as its own unprivileged user. The worktree is bind-mounted writable and is the only thing it may

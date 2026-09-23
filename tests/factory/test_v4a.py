@@ -68,12 +68,34 @@ TODAY = _dt.datetime.now(_dt.UTC).date()
 
 # The card the fixture ratifies declares these (`base_head`'s own surfaces) — the guard's set, and the one place a
 # phase may write.
+PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
+# What `deploy/build-runner.sh` labels an image with: the repository's own prompt set, `<agent>/<version>`.
+CARRIED = frozenset(p.relative_to(PROMPTS).with_suffix("").as_posix() for p in PROMPTS.glob("*/v*.md"))
+# config@7's `[agents]` rows as a tenant declares them [owner, 2026-09-22]: `tools` on every row, nothing else — the
+# model, the effort and the prompt come from the adopted schema's defaults. The builder writes; the rest read.
+READS = ["Read", "Glob", "Grep"]
+TOOLS: dict[str, list[str]] = {
+    "planner": READS,
+    "plan-author": READS,
+    "plan-refuter": READS,
+    "judge": READS,
+    "builder": ["Read", "Glob", "Grep", "Edit", "Write", "Bash", "TodoWrite"],
+    "reviewer": READS,
+}
 INSIDE = "client/cards/validator.py"
 OUTSIDE = "docs/work/cards/0001-anything.md"
 
 
 # rich paints the help; the text is what this asserts, never the escapes around it.
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def declare_agents(st: Store, tools: dict[str, list[str]] | None = None) -> None:
+    """One signed policy write that declares the tenant's `[agents]` rows — what tenant #0's `config-policy` act
+    does live. A config@7 tenant with no declared row runs nothing: the defaults alone name no tools."""
+    tree = {k: v for k, v in st.config_tree.items() if k != "history"}
+    tree["agents"] = {k: {"tools": list(v)} for k, v in (TOOLS if tools is None else tools).items()}
+    st.write("config.toml", tree, {"seq": st.policy[-1]["seq"], "h": st.policy[-1]["h"]}, None, OWNER)
 
 
 def refuses(rule: str, fn: Any) -> Refusal:
@@ -119,6 +141,7 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     work = tenant_checkout(tmp)
     st = store_on_disk(work, tmp / "journal.sqlite", root=ROOT)
     st.init(OWNER, software_key_ack="ok for V4a", root=ROOT)
+    declare_agents(st)
     r = st.write(NewCard("v4a-story"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER)
     assert r.id is not None
     st.ratify([r.id], OWNER)
@@ -147,7 +170,9 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     mp.setenv("ISIDIUM_DEPLOY", str(home))
     ctx = context_mod.load(TENANT, work, base="main", root=ROOT)
     led = Ledger(fd / "ledger.sqlite", TENANT)
-    row = dispatch_mod.pick(ctx, led, lambda n, a: Api(st).call(n, LANDER, a), Branch(work), card=r.id)
+    row = dispatch_mod.pick(
+        ctx, led, lambda n, a: Api(st).call(n, LANDER, a), Branch(work), card=r.id, factory=lambda h, g: Fake()
+    )
     led.close()
     yield Disk(work, fd, st, r.id, ctx, str(row["run_id"]))
     mp.undo()
@@ -198,12 +223,15 @@ class Podman:
     found: list[bool] = field(default_factory=list)  # whether an attempt found the edits already there
     seen: list[list[str]] = field(default_factory=list)
     env: list[dict[str, str]] = field(default_factory=list)
+    label: str = ",".join(sorted(CARRIED))  # the image's `org.isidium.prompts`; `<no value>` is podman's absent label
 
     def __call__(self, argv: list[str], **kw: Any) -> subprocess.CompletedProcess[str]:
         self.seen.append(list(argv))
         self.env.append(dict(kw.get("env") or {}))
         if argv[1] in ("kill", "rm"):
             return subprocess.CompletedProcess(argv, 0, "", "")
+        if argv[1:3] == ["image", "inspect"]:
+            return subprocess.CompletedProcess(argv, 0, self.label + "\n", "")
         first = len([a for a in self.seen if a[1] == "run"]) == 1
         if self.edits:
             tree = Path(next(a for a in argv if a.endswith(f":{render.WORK}:rw")).rsplit(":", 2)[0])
@@ -258,6 +286,7 @@ class Fake:
     writes: tuple[str, ...] = ()
     ran: str | None = None  # a model other than the one the policy named — what the conformance check must catch
     seen: list[RunJob] = field(default_factory=list)
+    carried: frozenset[str] = CARRIED
 
     def capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
@@ -273,6 +302,9 @@ class Fake:
             billing_class="plan",
             hosts=(),
         )
+
+    def prompts(self) -> frozenset[str]:
+        return self.carried
 
     def execute(self, job: RunJob) -> PhaseResult:
         self.seen.append(job)
@@ -319,7 +351,10 @@ def test_the_seam_names_no_executor() -> None:
         assert word not in code, f"{word!r} is named by the seam's code: it belongs behind an adapter"
     assert "pydantic" in code and "protocol" in code, "the token scan read nothing: it would pass vacuously"
     names = {m for m in dir(adapter_mod.Adapter) if not m.startswith("_")}
-    assert names == {"capabilities", "execute"}, names
+    # `prompts` since config@7 [owner, 2026-09-23]: the executor's own answer to which prompts it carries, read before
+    # any spend. It names no executor — `<agent>/<version>` is the factory's vocabulary — and it neither commits,
+    # pushes nor lands, which is what this set exists to keep off the seam.
+    assert names == {"capabilities", "prompts", "execute"}, names
 
 
 def test_an_unregistered_adapter_is_refused_naming_the_registered_set() -> None:
@@ -342,6 +377,22 @@ def test_the_policy_is_the_tenants_signed_one_and_a_tenant_without_config6_is_re
     assert "config@6" in r.detail
 
 
+def test_a_config6_tenant_is_refused_by_name_and_a_row_the_defaults_alone_supply_is_not_declared(disk: Disk) -> None:
+    """[owner, 2026-09-22] config@7 or nothing: a config@6 policy has an `[executor]` and `[agents]` but signs no tools
+    and no prompt, and running it would need a second copy of both in code — so it is refused, naming config@7.
+
+    And under config@7 a row the tenant did not declare is not a row: `tools` has no default, so a kind present
+    only through the schema's defaults names no tools, and asking for it fails closed like a kind with no row."""
+    six = {**disk.ctx.eff, "schema": 6}
+    r = refuses("adapter.policy", lambda: adapter_mod.ExecutorPolicy.from_effective(six))
+    assert "config@6" in r.detail and "config@7" in r.detail
+    agents = {k: v for k, v in disk.ctx.eff["agents"].items() if k != "judge"}
+    undeclared = {**disk.ctx.eff, "agents": {**agents, "judge": {"model": "claude-opus-5", "effort": "high"}}}
+    policy = adapter_mod.ExecutorPolicy.from_effective(undeclared)
+    assert policy.agent("builder").tools and "judge" not in policy.agents
+    refuses("adapter.policy", lambda: policy.agent("judge"))
+
+
 def test_an_agent_the_policy_does_not_carry_is_fail_closed(disk: Disk) -> None:
     """A guessed model is spend the owner did not sign — so an agent with no row refuses rather than defaulting."""
     policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
@@ -359,9 +410,12 @@ def test_a_malformed_result_is_one_refusal_that_names_the_field() -> None:
 
 
 def test_the_rendered_policy_is_the_allowlist_and_the_guard_hook(disk: Disk) -> None:
+    """config@7: the surface is the AGENT's signed `tools`, never the tenant ceiling — two agents in one test, or a
+    render that ignored the agent and handed every phase the allowlist would pass."""
     policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
-    s = render.settings(policy)
-    assert s["permissions"]["allow"] == list(policy.allowlist)
+    s = render.settings(policy, "builder")
+    assert s["permissions"]["allow"] == TOOLS["builder"]
+    assert render.settings(policy, "judge")["permissions"]["allow"] == READS != list(policy.allowlist)
     assert s["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == render.GUARD_COMMAND
     assert "Write" in s["hooks"]["PreToolUse"][0]["matcher"]
 
@@ -371,7 +425,7 @@ def test_a_post_hoc_guard_renders_no_hook_and_says_so(disk: Disk) -> None:
     row is what announces it. Silence is the thing this forbids."""
     policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
     degraded = policy.model_copy(update={"guard": "post-hoc"})
-    assert "hooks" not in render.settings(degraded)
+    assert "hooks" not in render.settings(degraded, "builder")
 
 
 # ------------------------------------------------------------------------------ the write guard, at write time
@@ -768,12 +822,13 @@ def test_a_phase_lands_on_the_row_it_was_dispatched_under(disk: Disk, led: Ledge
     assert not (disk.home / "worktrees" / run_id).exists(), "the worktree per run is taken down again"
 
 
-def test_the_prompt_version_is_per_agent_and_unnamed_agents_take_the_floor(disk: Disk, led: Ledger) -> None:
-    """7bd.11's `prompts/<agent>/<version>.md`, selected per agent kind [owner, 2026-09-19]: the builder's job
-    carries its own `v2`, and an agent the map does not name carries the floor.
+def test_the_prompt_version_is_the_agents_signed_row(disk: Disk, led: Ledger) -> None:
+    """7bd.11's `prompts/<agent>/<version>.md`, selected per agent kind from its signed `[agents].<kind>.prompt`
+    (config@7, [owner, 2026-09-22]) — the builder's `v3` and the reviewer's `v1`, config@7's defaults, which mirror the
+    code map they replaced so the bump changed no run.
 
     **Two phases in one test is the discriminator.** Asserting the builder alone would pass on a selector that
-    ignored the agent it was handed and answered `v2` to everything — which is exactly the shape the one shared
+    ignored the agent it was handed and answered `v3` to everything — which is exactly the shape the one shared
     constant had, one version for every agent kind."""
     fake = Fake()
     build = fresh_run(disk, led)
@@ -781,30 +836,81 @@ def test_the_prompt_version_is_per_agent_and_unnamed_agents_take_the_floor(disk:
     review = fresh_run(disk, led)
     runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=review, phase="review", factory=lambda h, r: fake)
     assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v3", "reviewer": "v1"}
+    assert not hasattr(runner_mod, "PROMPT_VERSIONS"), "one home: the signed row, never a map beside it"
 
 
-def test_every_agent_the_wrapper_can_run_has_the_prompt_it_would_ask_for() -> None:
-    """The ground the map stands on rather than a signed policy row [owner, 2026-09-19]: the selector and the prompt
-    files ship in one image from one pull request (`Containerfile.runner`), so a version named in code can never be
-    one the image lacks. `harness.prompt_input` reads that file directly — a missing one raises inside the
-    container, mid-phase, and lands as `failed:infra`. So the check belongs here, where a pull request sees it.
+def test_every_default_prompt_is_one_the_repository_carries_and_the_build_labels_it() -> None:
+    """The ground a signed version stands on [owner, 2026-09-23]. config@7's defaults name a prompt per agent kind; an
+    image carries what `prompts/` held when `deploy/build-runner.sh` built it, and says so in its label. So two
+    things are checked here, where a pull request sees them: **every default the schema names is a file in the
+    repository**, and **the label the script would write is exactly the repository's set** — a script that dropped a
+    directory, or labelled a version the build did not copy, fails here rather than at a dispatch."""
+    from isidium.store.registry.loader import Registry
 
-    **Widened 2026-09-21 from the map to every agent `AGENT_OF` can name.** It used to check only the versions the
-    map spells out and declared the rest a gap: `plan-author`, `plan-refuter`, `judge` and `reviewer` had no prompt
-    file at all, so each would have taken a floor that was not there and raised on the first plan or review phase —
-    which is V4a-ii, the next chunk. The four prompts exist now, so the gap closes and the check becomes the one
-    that would have caught it: **resolve every phase's agent the way `_job` does, and require the file.**"""
-    prompts = Path(__file__).resolve().parents[2] / "prompts"
-    versions = runner_mod.PROMPT_VERSIONS
-    wanted = {a: versions.get(a, runner_mod.PROMPT_VERSION) for a in runner_mod.AGENT_OF.values()}
-    assert set(wanted) == {"plan-author", "plan-refuter", "judge", "builder", "reviewer"}, "every phase's agent"
-    asked = {**wanted, **versions}
-    missing = [f"{a}/{v}.md" for a, v in asked.items() if not (prompts / a / f"{v}.md").is_file()]
-    assert not missing, f"the image would not carry {missing}"
-    kept = [(prompts / "builder" / f"{v}.md").read_bytes() for v in ("v1", "v2", "v3")]
+    reg = Registry.shipped()
+    defaults = reg.defaults_of(f"config@{reg.newest('config')}")["agents"]
+    asked = {f"{k}/{row['prompt']}" for k, row in defaults.items()}
+    assert {a.split("/")[0] for a in asked} >= set(runner_mod.AGENT_OF.values()), "every phase's agent has a row"
+    assert asked <= CARRIED, f"the image would not carry {sorted(asked - CARRIED)}"
+    script = Path(__file__).resolve().parents[2] / "deploy" / "build-runner.sh"
+    out = subprocess.run(["sh", str(script), "--label"], capture_output=True, text=True, check=True).stdout.strip()
+    assert frozenset(out.split(",")) == CARRIED and out == ",".join(sorted(CARRIED)), out
+    kept = [(PROMPTS / "builder" / f"{v}.md").read_bytes() for v in ("v1", "v2", "v3")]
     assert len({*kept}) == len(kept), "a new version is a new file, never an edit (7bd.11)"
-    every = [p.read_bytes() for p in sorted(prompts.rglob("*.md"))]
+    every = [p.read_bytes() for p in sorted(PROMPTS.rglob("*.md"))]
     assert not any(b"\r" in b for b in every), "the prompts are LF: they are read in a Linux container"
+
+
+def test_a_prompt_the_executor_lacks_is_refused_before_anything_is_spent(
+    disk: Disk, led: Ledger, tmp_path: Path
+) -> None:
+    """The check that makes a signed version safe [owner, 2026-09-23]: every miss named in one refusal, at the pick
+    (no row written, so the run never starts) and again at a phase (before the worktree, the adapter never called)."""
+    policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
+    short = frozenset(CARRIED - {"judge/v1", "builder/v3"})
+    r = refuses("adapter.prompt-missing", lambda: adapter_mod.require_prompts(policy, short, "here"))
+    assert "builder/v3" in r.detail and "judge/v1" in r.detail, "every miss at once, not the first"
+    adapter_mod.require_prompts(policy, CARRIED, "here")
+
+    lacking = Fake(carried=short)
+    # A card of its own, ratified and landed, and a context loaded after it — the fixture's card is already in flight,
+    # and the pick's cheaper refusals (the ready-view, the payload) must all pass for this one to be what refuses.
+    new = disk.store.write(
+        NewCard("prompt-check"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER
+    )
+    assert new.id is not None
+    disk.store.ratify([new.id], OWNER)
+    disk.store.land(EMPTY, LANDER)
+    ctx = context_mod.load(TENANT, disk.work, base="main", root=ROOT)
+    with Ledger.open(tmp_path, TENANT) as empty:  # nothing in flight, so the WIP cap is not what refuses
+        refuses(
+            "adapter.prompt-missing",
+            lambda: dispatch_mod.pick(
+                ctx, empty, disk.call, Branch(disk.work), card=new.id, factory=lambda h, g: lacking
+            ),
+        )
+        assert empty.db.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0, "no row: the run never started"
+
+    run_id = fresh_run(disk, led)
+    refuses(
+        "adapter.prompt-missing",
+        lambda: runner_mod.run_phase(
+            disk.ctx, _reg(disk), led, disk.call, run_id=run_id, phase="build", factory=lambda h, g: lacking
+        ),
+    )
+    assert not lacking.seen and not (disk.home / "worktrees" / run_id).exists()
+
+
+def test_the_container_reads_its_images_label_once_and_refuses_an_image_without_one(disk: Disk) -> None:
+    """The label is image metadata — `podman image inspect`, no container started — read once per adapter; and an
+    image built by hand, with no label, is refused rather than trusted to carry anything."""
+    pod = Podman()
+    drv = Container(disk.home, _reg(disk), run=pod)
+    assert drv.prompts() == CARRIED == drv.prompts()
+    inspects = [a for a in pod.seen if a[1:3] == ["image", "inspect"]]
+    assert len(inspects) == 1 and inspects[0][-1] == IMAGE and not [a for a in pod.seen if a[1] == "run"]
+    bare = Container(disk.home, _reg(disk), run=Podman(label="<no value>"))
+    assert "build-runner.sh" in refuses("adapter.prompt-missing", bare.prompts).detail
 
 
 def _failed_with_work(disk: Disk, led: Ledger) -> str:

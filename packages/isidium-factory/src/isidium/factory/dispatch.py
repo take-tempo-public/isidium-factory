@@ -16,6 +16,8 @@ T-A6's seven matching conditions, in order, each a typed refusal:
 * **(f)** the payload (T-B3) at `base_sha` — `payload.incomplete` / `payload.oversize` pass through as T-A6's
   *"back to the design queue"*, no row written — then its `refs_resolved` against the fingerprint's
   (`dispatch.ref-drifted` naming every path whose blob moved: 03 §9.5, *"dispatch re-checks it under the same name"*);
+* **(f2)** [owner, 2026-09-23] the executor carries every prompt the signed policy names —
+  `adapter.prompt-missing`, before anything is written, so a run that could not start is never dispatched;
 * **(g)** **the record first**: the ledger row and its `dispatched` event in one transaction, then the story branch
   `story/<run-id>` at `base_sha` (local). A branch failure after the record ends the run `failed:environment` and
   refuses `dispatch.environment` — the record tells the truth about what happened after it.
@@ -34,6 +36,7 @@ from typing import Any, Final, Protocol
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
+from . import adapter as adapter_mod
 from . import checkout, lander, ordering
 from . import payload as payload_mod
 from .context import TenantContext
@@ -64,11 +67,12 @@ def pick(
     carry_from: str | None = None,
     dry_run: bool = False,
     now: Callable[[], _dt.datetime] = _now,
+    factory: adapter_mod.AdapterFactory | None = None,
 ) -> dict[str, Any]:
     """One pick on one tenant; the run row back (or, dry, what it would be)."""
     with telemetry.span(SPAN, **{"isidium.tenant": ctx.tenant, "isidium.dry_run": dry_run}) as sp:
         try:
-            out = _pick(ctx, ledger, call, forge, card, carry_from, dry_run, now, sp)
+            out = _pick(ctx, ledger, call, forge, card, carry_from, dry_run, now, sp, factory)
         except Refusal as r:
             telemetry.record_refusal_on(sp, r.rule)
             raise
@@ -86,6 +90,7 @@ def _pick(
     dry_run: bool,
     now: Callable[[], _dt.datetime],
     sp: Any,
+    factory: adapter_mod.AdapterFactory | None,
 ) -> dict[str, Any]:
     reg = require(ctx.registration, ctx.home)
     # (a) the store's precondition and the ready-view, one call
@@ -166,6 +171,14 @@ def _pick(
     drifted = _drifted(fp.get("refs_resolved", []), p.refs_resolved)
     if drifted:
         raise Refusal("dispatch.ref-drifted", drifted[0], "; ".join(drifted))
+    # (f2) [owner, 2026-09-23] the prompts the signed policy names, against what the executor carries — every declared
+    # row at once, so a chain whose third agent's prompt is missing is refused before its first phase spends. Last of
+    # the refusals, because it is the one that asks the executor (a `podman image inspect`); a policy that declares no
+    # row names no prompt, and the adapter is not even constructed for it. Before the record, and in a dry run too.
+    policy = adapter_mod.ExecutorPolicy.from_effective(ctx.eff)
+    if policy.agents:
+        drv = (factory or adapter_mod.resolve(reg.adapter))(ctx.home, reg)
+        adapter_mod.require_prompts(policy, drv.prompts(), "dispatch")
     run = NewRun(
         card=chosen.card,
         lane=ordering.EXPEDITE if chosen.expedite else "standard",

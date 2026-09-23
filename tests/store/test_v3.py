@@ -194,7 +194,7 @@ def test_a_config4_tenant_is_handed_no_ratified_line_and_keeps_its_story_leaf(tm
         "v3mig",
         repo,
         Journal(path, "v3mig"),
-        registry_without(tmp_path, "config@5", "config@6"),
+        registry_without(tmp_path, "config@5", "config@6", "config@7"),
         clock,
         signer,
         root=ROOT,

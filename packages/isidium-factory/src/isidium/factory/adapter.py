@@ -68,6 +68,7 @@ GuardMode = Literal["write-time", "post-hoc"]
 
 CONTAINER: Final = "container"
 REGISTERED: Final[frozenset[str]] = frozenset({CONTAINER})
+MIN_CONFIG: Final = 7  # the config schema that signs each agent's tools and prompt [owner, 2026-09-22]
 
 
 class _Wire(BaseModel):
@@ -87,16 +88,22 @@ class Budgets(_Wire):
 
 
 class AgentSpec(_Wire):
-    """One row of 05 §1a's table: which model runs this agent kind, at what effort."""
+    """One row of 05 §1a's table: which model runs this agent kind, at what effort — and, since config@7 (V4a-ii-a),
+    which tools it may call and which prompt it runs, all four under the one signature.
+
+    `tools` may be empty: a row that may call no tool at all. It is the whole permission surface for this agent's
+    phase, already proven a subset of `[executor].allowlist` by the store before the policy was signed."""
 
     model: str = Field(min_length=1)
     effort: Effort
+    tools: tuple[str, ...]
+    prompt: str = Field(pattern=r"^v[1-9][0-9]*$")
 
 
 class ExecutorPolicy(_Wire):
     """The executor policy, read once from the tenant's signed policy and rendered per adapter."""
 
-    allowlist: tuple[str, ...] = Field(min_length=1)
+    allowlist: tuple[str, ...] = Field(min_length=1)  # the ceiling each row's `tools` sits under (config@7)
     budgets: Budgets
     guard: GuardMode
     agents: Mapping[str, AgentSpec]
@@ -115,6 +122,19 @@ class ExecutorPolicy(_Wire):
                 "no [executor]/[agents] in the effective config: the tenant's policy adopts a config schema older "
                 "than config@6, which is where the executor policy is declared",
             )
+        # [owner, 2026-09-22] config@7 or nothing: each agent's tools and prompt are signed there, and a config@6
+        # tenant would need a second copy of both in this code to run at all — so it is refused, by name, instead.
+        schema = eff.get("schema")
+        if not isinstance(schema, int) or schema < MIN_CONFIG:
+            raise Refusal(
+                "adapter.policy",
+                "schema",
+                f"the tenant's policy adopts config@{schema}; the factory runs under config@{MIN_CONFIG}, where each "
+                "agent's tools and prompt are signed — move the policy by a config-policy act",
+            )
+        # A row the defaults alone supply names no tools (`tools` has no default, on purpose): it is not a row the
+        # tenant declared, so it is left out, and `agent()` refuses that kind rather than run it on unsigned tools.
+        agents = {k: v for k, v in agents.items() if isinstance(v, dict) and "tools" in v}
         try:
             return cls.model_validate(
                 {
@@ -277,10 +297,24 @@ class Adapter(Protocol):
     """
 
     def capabilities(self) -> AdapterCapabilities: ...
+    def prompts(self) -> frozenset[str]: ...
     def execute(self, job: RunJob) -> PhaseResult: ...
 
 
 AdapterFactory = Callable[[Path, "Registration"], Adapter]
+
+
+def require_prompts(policy: ExecutorPolicy, have: frozenset[str], where: str) -> None:
+    """Every prompt the policy's declared rows name is one the executor carries — checked before any spend
+    [owner, 2026-09-23]. `have` is `{"<agent>/<version>", …}`, the executor's own answer (the container adapter reads
+    its image's label). A signed version the image lacks used to surface inside the container, mid-phase, as
+    `failed:infra`; this is the check `runner.py`'s 2026-09-19 note said a signed version would need.
+
+    Every miss is named in one refusal: a chain that would fail at its third phase is refused at its first."""
+    missing = sorted(f"{k}/{s.prompt}" for k, s in policy.agents.items() if f"{k}/{s.prompt}" not in have)
+    if missing:
+        carried = ", ".join(sorted(have)) or "none"
+        raise Refusal("adapter.prompt-missing", where, f"the policy names {missing}; the executor carries {carried}")
 
 
 def resolve(name: str) -> AdapterFactory:

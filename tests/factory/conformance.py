@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from collections.abc import Sequence
 from contextlib import redirect_stderr
 from typing import Any
@@ -27,6 +28,7 @@ from isidium.factory import guard, render
 from isidium.factory.adapter import Adapter, BillingClass, PhaseResult, RunJob
 
 BILLING: tuple[str, ...] = ("plan", "metered")
+PROMPT = r"[a-z][a-z-]*/v[1-9][0-9]*"
 
 
 def run(adapter: Adapter, job: RunJob, monkeypatch: Any, tmp_path: Any) -> list[str]:
@@ -53,6 +55,11 @@ def _capabilities(adapter: Adapter) -> list[str]:
         bad.append("an adapter that lets the model hold the identity cannot be registered (7j.5, W9)")
     if not caps.telemetry_per_phase:
         bad.append("telemetry per phase is T-C6's contract, not an option")
+    # config@7 [owner, 2026-09-23]: the prompt set is the executor's own answer, read before any spend, in the one
+    # shape `require_prompts` compares against — `<agent>/<version>`.
+    have: object = adapter.prompts()
+    if not isinstance(have, frozenset) or not all(isinstance(x, str) and re.fullmatch(PROMPT, x) for x in have):
+        bad.append(f"prompts() answered {have!r}, not a frozenset of '<agent>/v<n>'")
     return bad
 
 
@@ -85,7 +92,7 @@ def _guard(adapter: Adapter, job: RunJob, monkeypatch: Any, tmp_path: Any) -> li
     surfaces while allowing one inside. `post-hoc` means no hook is rendered — declared degradation, visible."""
     bad: list[str] = []
     caps = adapter.capabilities()
-    rendered = render.settings(job.policy)
+    rendered = render.settings(job.policy, job.identity.agent)
     hooked = "hooks" in rendered
     if caps.write_guard_at_write_time != hooked:
         bad.append(f"declares write_guard_at_write_time={caps.write_guard_at_write_time} but renders hooks={hooked}")
