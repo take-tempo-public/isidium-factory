@@ -4,9 +4,10 @@
 R1 is the "one home" itself: `board.py` re-exports the function explicitly (`as open_intake_ids`, the same move as
 `IN_FLIGHT`, card 7 R5) rather than importing it plainly, so it type-checks under mypy `--strict` and so the two
 call sites are provably the same object, not two definitions that happen to agree today. A behavioral check alone
-would not discriminate this — the two sites computed the same thing before this card, too — so the identity
-assertion is the test that actually pins R1; the rendered board is checked alongside it because that is what a
-tenant reads.
+would not discriminate this — the two sites computed the same thing before this card, too. Nor does identity alone:
+it proves the name is one object, not that `render` or `queue` calls it, and a site keeping its own identical copy
+of the rule passes it. So S1 also substitutes the function through each module's binding and requires the list and
+the count to follow; the rendered board is what a tenant reads.
 
 R2 is a specific input to that one function: a disposition outcome that is neither `accepted` nor `declined` (a
 `deferred` disposition, or anything else the schema allows) leaves its intake open, in the count and in the list
@@ -16,6 +17,8 @@ alike.
 from __future__ import annotations
 
 from typing import Any
+
+import pytest
 
 from isidium.store.core import board as board_mod
 from isidium.store.core import status as status_mod
@@ -40,7 +43,7 @@ def _board(inbox: list[dict[str, Any]]) -> str:
     return board_mod.render({}, {}, q, inbox, wip_ceiling=3)
 
 
-def test_the_board_list_and_the_inbox_counts_read_one_open_set() -> None:
+def test_the_board_list_and_the_inbox_counts_read_one_open_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """`board.open_intake_ids` is the exact object `status.open_intake_ids` is (R1) — not a second definition that
     happens to agree, the same discipline `IN_FLIGHT` already carries (card 7 R5). With `s1` declined and `s2`
     left undispositioned, both the header's `inbox docs …` count and the rendered `## Inbox` list answer from that
@@ -53,6 +56,24 @@ def test_the_board_list_and_the_inbox_counts_read_one_open_set() -> None:
     assert header.endswith("inbox docs 1"), header
     assert len(listed) == 1 and listed[0].startswith("- s2 ·"), listed
     assert "s1" not in section, section
+
+    # Identity proves the name is one object, not that either site reads it: a site keeping its own copy of the rule
+    # would still pass everything above. So answer differently through each module's binding and watch its output
+    # follow — the list through `board`'s, the count through `status`'s.
+    def only_s1(_records: Any) -> frozenset[Any]:
+        return frozenset({"s1"})
+
+    inbox = _inbox(second_outcome=None)
+    with monkeypatch.context() as m:
+        m.setattr(board_mod, "open_intake_ids", only_s1)
+        section = _board(inbox)
+        section = section[section.index("## Inbox") : section.index("## Open")]
+        listed = [line for line in section.splitlines() if line.startswith("- ")]
+        assert len(listed) == 1 and listed[0].startswith("- s1 ·"), listed
+    with monkeypatch.context() as m:
+        m.setattr(status_mod, "open_intake_ids", lambda _records: frozenset({"s1", "s2"}))
+        header = _board(inbox).splitlines()[2]
+        assert header.endswith("inbox docs 2"), header
 
 
 def test_a_deferred_disposition_leaves_its_intake_open_in_both() -> None:
