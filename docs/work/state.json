@@ -324,17 +324,18 @@
       "334cce4104d850044b0e5e13f53e30cc03d617506dca97aa2ebf6f594b7ac1e4",
       "4d5874335cfa756e0aa11077f797e7ce3050b8abc2a61056ce9df2639d75f3e8",
       "86a8a59ed1b240b536717944f6ce4e3dc2d3acdb35e9f366a6a16cf84bdd8a50",
-      "449d6f5053c1ac390fac96f326ffac80d728f3f22f448e6fd927014be466eb94"
+      "449d6f5053c1ac390fac96f326ffac80d728f3f22f448e6fd927014be466eb94",
+      "5d182932bdc69f95294cfb765d29d9ae32ea02c2195ea54e08b66901f561a999"
     ],
     "overflow": 0,
     "run_id": "r-12"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:f6b0428f6633029ea25ef8d282aec62bede453c87b4ff05b392250ff5009add6",
-    "seq": 103
+    "h": "sha256:5f788521cafc21348c7c197f6dd49e2a3358efbeb32784bf8089a040cfbe9eff",
+    "seq": 104
   },
-  "landed_at": "2026-09-23T02:43:15Z",
-  "ledger_cursor": "8453815f2d90165c4ca172d901ed0b80e1b9a494",
+  "landed_at": "2026-09-23T20:00:38Z",
+  "ledger_cursor": "bb5b657ce6eb52202e50cd0963a92a5fea819f03",
   "schema": 2
 }
