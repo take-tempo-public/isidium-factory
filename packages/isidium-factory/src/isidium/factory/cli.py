@@ -260,19 +260,26 @@ def run_verb(
     tenant: TENANT,
     checkout_path: CHECKOUT,
     run: Annotated[str, typer.Option("--run", help="the dispatched run to execute, `r-<n>`")],
-    phase: Annotated[str, typer.Option("--phase", help="which phase to run")] = "build",
+    phase: Annotated[
+        str | None, typer.Option("--phase", help="run this one phase; without it, drive the chain from the ledger")
+    ] = None,
     base: BASE = "main",
     root: ROOT = None,
 ) -> None:
-    """Run one phase of a dispatched run through the tenant's adapter (T-C6): a worktree on the run's story branch,
-    the payload re-assembled and checked against the hash the ledger wrote, the phase inside the write guard, the
-    change set recomputed from git, one commit by the wrapper, and the phase on the row it was dispatched under."""
+    """Run a dispatched run through the tenant's adapter (T-C6): a worktree on the run's story branch, the payload
+    re-assembled and checked against the hash the ledger wrote, each phase inside the write guard, the change set
+    recomputed from git, one commit by the wrapper per phase that wrote, and each phase on the row it was dispatched
+    under. Without `--phase`, the chain is driven from the last phase the ledger holds — plan, refute, judge, and it
+    stops at the judge until the plan gate is built [V4a-ii-a]; `--phase build` runs a build alone, as before."""
     try:
         ctx = context.load(tenant, checkout_path, base=base, root=root)
         reg = tenant_mod.require(ctx.registration, ctx.home)
         channel = Transport(ctx.client, ctx.home)
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
-            row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
+            if phase is None:
+                row = runner_mod.run_chain(ctx, reg, led, channel.call, run_id=run)
+            else:
+                row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
     except Refusal as r:
         _refuse(r)
     _out(row)

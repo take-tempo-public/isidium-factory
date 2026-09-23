@@ -29,6 +29,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from pydantic import ValidationError
+
+from . import artifacts
 from .adapter import RunJob
 from .adapter import job as job_of
 
@@ -41,6 +44,9 @@ UNMEASURED: Final = "unmeasured"
 # `r-4` (2026-09-14): `"subtype": "error_max_turns"`, `"errors": ["Reached maximum number of turns (40)"]`. T-A7 routes
 # `budget` to the design queue, never to a retry — the same turns would be spent again.
 BUDGET_ENDS: Final[frozenset[str]] = frozenset({"error_max_turns"})
+# T-B4 (1)'s end for a plan-gate call that answered with no conforming artifact — the plan, the refutation and the
+# verdict alike [owner, 2026-09-23]. Never retried by the adapter: the harness already re-asked inside the call.
+MALFORMED: Final = "failed:malformed-plan"
 
 # A core dump the harness left in its working directory — the phase's worktree. Measured on `r-5` (2026-09-15): the
 # runner VM's `core_pattern` is `core` with the pid appended, and `core.2` (the harness, PID 2) sat among the card's
@@ -78,6 +84,10 @@ def argv(job: RunJob, settings: str) -> list[str]:
     `--settings` carries the permission surface and the PreToolUse guard. Bare mode is never used: it does not read
     `CLAUDE_CODE_OAUTH_TOKEN` (the adapter-auth note, 2026-08-17), which is the billing lane this tenant runs on."""
     spec = job.policy.agent(job.identity.agent)
+    # A phase that answers with an artifact is handed its schema: the harness validates the answer and re-asks the model
+    # inside the call when it does not conform (measured 2026-09-23) — T-B4 (1)'s one retry [owner, 2026-09-23].
+    shaped = artifacts.OF_PHASE.get(job.phase)
+    structured = ["--json-schema", json.dumps(artifacts.schema(shaped[1]), sort_keys=True)] if shaped else []
     return [
         "claude",
         "--print",
@@ -97,6 +107,7 @@ def argv(job: RunJob, settings: str) -> list[str]:
         spec.model,
         "--effort",
         spec.effort,
+        *structured,
     ]
 
 
@@ -144,6 +155,27 @@ def report(job: RunJob, out: Mapping[str, Any], ok: bool, harness_version: str) 
         "harness_version": harness_version,
         "billing_class": "plan",
     }
+
+
+def harvest(job: RunJob, out: Mapping[str, Any], rundir: Path) -> tuple[str | None, list[dict[str, str]]]:
+    """A structured phase's artifact, from the harness's `structured_output`: validated by the artifact's own model,
+    written to `<name>.json` as canonical bytes, and named by hash — or the outcome that says there is none.
+
+    **A null `structured_output` is malformed, not `ok`.** Measured 2026-09-23: a model that never satisfied the
+    schema ends the call `subtype: success`, `is_error: false`, exit 0, with `structured_output: null` and its
+    explanation in `result` — so `outcome_of` alone would record it as a success. `path` is relative to the run
+    directory; the adapter makes it relative to the deploy home, where the wrapper reads it."""
+    shaped = artifacts.OF_PHASE.get(job.phase)
+    if shaped is None:
+        return None, []
+    name, model = shaped
+    try:
+        value = model.model_validate(out.get("structured_output")).model_dump(mode="json")
+    except ValidationError:
+        return MALFORMED, []
+    data = artifacts.canonical(value)
+    (rundir / f"{name}.json").write_bytes(data)
+    return None, [{"name": name, "sha256": artifacts.sha256(data), "path": f"{name}.json"}]
 
 
 def outcome_of(out: Mapping[str, Any], ok: bool) -> str:
@@ -272,6 +304,10 @@ def run(
     out = stream_out(lines, code, cores)
     (rundir / "harness.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     result = report(job, out, code == 0, harness_version)
+    if result["outcome"] == "ok":
+        malformed, made = harvest(job, out, rundir)
+        result["outcome"] = malformed or "ok"
+        result["artifacts"] = made
     (rundir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     if result["outcome"] == "ok":
         return 0

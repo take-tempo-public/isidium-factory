@@ -415,6 +415,18 @@ class Ledger:
         rows = self.db.execute("SELECT * FROM phases WHERE run_id = ? ORDER BY rowid", (run_id,)).fetchall()
         return [{k: r[k] for k in r.keys() if k != "run_id"} for r in rows]  # noqa: SIM118
 
+    def artifacts_of(self, run_id: str) -> dict[str, dict[str, Any]]:
+        """The run's artifacts by name, from its `phase` events — the newest of a name wins, so a revised plan is the
+        plan a later phase reads. One query over the run's own events; the bytes stay in the run directory."""
+        rows = self.db.execute(
+            "SELECT data FROM events WHERE run_id = ? AND kind = ? ORDER BY seq", (run_id, PHASE)
+        ).fetchall()
+        out: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            for a in json.loads(r["data"]).get("artifacts") or []:
+                out[str(a["name"])] = dict(a)
+        return out
+
     def events_of(self, run_id: str, *, since: int = 0) -> list[dict[str, Any]]:
         rows = self.db.execute(
             "SELECT * FROM events WHERE run_id = ? AND seq > ? ORDER BY seq", (run_id, since)
