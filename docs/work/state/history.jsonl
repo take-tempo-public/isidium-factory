@@ -38,3 +38,4 @@
 {"at":"2026-09-22T21:46:17Z","card":9,"id":"e38","kind":"dispatched","run_id":"r-11"}
 {"at":"2026-09-23T00:14:05Z","card":9,"id":"e39","kind":"demoted","seq":9}
 {"at":"2026-09-23T00:18:09Z","card":9,"commit":"ce3824c70ce02873747f2fa23f3e7ecce91bba20","ext_schema_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","id":"e40","kind":"ratified","refs_resolved":[{"blob":"db2a64a9096d2d3ce54b6bef11b3cb1662f5ef53","path":"packages/isidium-store/src/isidium/store/core/status.py"},{"blob":"77ae386f8fb1413e4d4c40952c458f9fb4d49e02","path":"packages/isidium-store/src/isidium/store/core/board.py"}],"seq":10}
+{"at":"2026-09-23T01:34:56Z","card":9,"id":"e41","kind":"dispatched","run_id":"r-12"}
