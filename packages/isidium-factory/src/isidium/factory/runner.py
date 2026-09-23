@@ -37,7 +37,7 @@ from isidium.store.core.refusal import Refusal
 
 from . import adapter as adapter_mod
 from . import artifacts as artifacts_mod
-from . import checkout, guard, lander
+from . import checkout, gate, guard, lander
 from . import payload as payload_mod
 from .context import TenantContext
 from .ledger import Ledger
@@ -75,9 +75,9 @@ TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
 # write by construction, and a write that happened anyway ends the run uncommitted.
 READ_ONLY: Final[frozenset[str]] = frozenset({"plan", "refute", "judge", "review"})
 
-# The chain `run_chain` drives [owner, 2026-09-23]: to the judge and no further until the plan gate — what the
-# verdict does — is built. The next pull request extends it through the gate to the build.
-LINE: Final[tuple[str, ...]] = ("plan", "refute", "judge")
+# The phases the plan gate can route a chain through (`gate.next_step`), up to the build — every one's agent row
+# is checked before a chain's first phase spends. The review gate beyond the build is V4a-ii-b's.
+LINE: Final[tuple[str, ...]] = ("plan", "refute", "judge", "build")
 
 # The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md` — is the agent's signed
 # `[agents].<kind>.prompt` since config@7 [owner, 2026-09-22]. It was a map here until then, kept in code on purpose
@@ -110,7 +110,7 @@ def run_phase(
     """One phase of one dispatched run, end to end. Returns the run's row as the ledger holds it afterwards."""
     if phase not in AGENT_OF:
         raise Refusal("run.phase", phase, f"not a phase an adapter runs: {sorted(AGENT_OF)}")
-    return _drive(ctx, reg, ledger, call, run_id, (phase,), factory, now, carry=True)
+    return _drive(ctx, reg, ledger, call, run_id, (phase,), factory, now)
 
 
 def run_chain(
@@ -126,19 +126,12 @@ def run_chain(
     """The run driven from the last phase the ledger holds to its next end or gate [V4a-ii-a, point 7] — in **one
     worktree**, created at the first phase and removed at the end, not one per phase.
 
-    **It stops at the judge** [owner, 2026-09-23]: the plan gate — what the verdict does — is the next pull request's,
-    so until it lands the chain is plan → refute → judge, and the run stays in flight with its verdict recorded and
-    not acted on. A chain whose phases are all on the ledger already has nothing to do and returns the row. A resumed
-    chain carries nothing: a carry is replayed before a run's first phase, or not at all."""
-    done = {str(p["phase"]) for p in ledger.phases_of(run_id)}
-    todo = tuple(p for p in LINE if p not in done)
-    with telemetry.span(CHAIN_SPAN, **{"isidium.run_id": run_id, "isidium.phases": len(todo)}):
-        if not todo:
-            after = ledger.run(run_id)
-            if after is None:
-                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
-            return {**after, "phases": ledger.phases_of(run_id)}
-        return _drive(ctx, reg, ledger, call, run_id, todo, factory, now, carry=not done)
+    **The path is the plan gate's** (`gate.next_step`, a function of the history the ledger holds and the card): plan,
+    the lint, refute, judge, at most one revision, then the build or a park. The chain ends after the build — the review
+    gate is V4a-ii-b's — or at a park, or when a phase ends the run. A resumed chain takes the path it would have taken
+    uninterrupted, because the step is a function of the history and nothing else."""
+    with telemetry.span(CHAIN_SPAN, **{"isidium.run_id": run_id}):
+        return _drive(ctx, reg, ledger, call, run_id, None, factory, now)
 
 
 def _drive(
@@ -147,34 +140,39 @@ def _drive(
     ledger: Ledger,
     call: Call,
     run_id: str,
-    phases: Sequence[str],
+    phases: Sequence[str] | None,
     factory: adapter_mod.AdapterFactory | None,
     now: Now,
-    *,
-    carry: bool,
 ) -> dict[str, Any]:
-    """The phases in order, in one worktree, until one ends the run. Everything checked before the worktree exists
-    spends nothing and leaves the run in flight."""
+    """The phases — the named ones, or the gate's when `phases` is None — in one worktree, until one ends the run.
+    Everything checked before the worktree exists spends nothing and leaves the run in flight: the run's row, every
+    agent's policy row, the image's prompt set, the payload's hash and the history's artifacts."""
     row = ledger.run(run_id)
     if row is None:
         raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
     if row["ended_at"]:
         raise Refusal("run.ended", run_id, f"this run ended {row['ended_at']} as {row['outcome']}")
     policy = adapter_mod.ExecutorPolicy.from_effective(ctx.eff)
-    for phase in phases:  # every agent's row before any phase spends: a chain that cannot finish never starts
+    for phase in phases if phases is not None else LINE:  # a chain that cannot finish never starts
         policy.agent(AGENT_OF[phase])
     drv = (factory or adapter_mod.resolve(str(row["adapter"])))(ctx.home, reg)
     # Again here, not only at dispatch: the image can be swapped between the two. Before the worktree, so a miss
     # spends nothing and leaves the run in flight like the policy refusals above — swap the image, run again.
     adapter_mod.require_prompts(policy, drv.prompts(), run_id)
+    # The payload once per drive, not once per phase: every phase of a run reads the same card at the same commit, and
+    # re-gathering it (a store call and the git reads) for each of up to seven phases would buy nothing.
+    p = _payload(ctx, reg, row, call, run_id)
+    history = _history(ledger, ctx.home, run_id)
+    carry = not history
 
     tree = ctx.home / "worktrees" / run_id
     work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
     try:
         carried = None
         if carry:
+            first = phases[0] if phases is not None else "plan"
             try:
-                carried = _carry(ledger, row, work, run_id, AGENT_OF[phases[0]], ctx)
+                carried = _carry(ledger, row, work, run_id, AGENT_OF[first], ctx)
             except Refusal as r:
                 # **Its own handler, not the adapter's below.** That one writes a phase row and keeps the phase's
                 # work; a carry that refused ran no phase and left a tree it had already reset, so there is neither.
@@ -182,11 +180,27 @@ def _drive(
                 # one in flight holds the WIP cap for ever — the defect V5a was built to close.
                 ledger.finish(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), _outcome_of(r))
                 raise
-        for phase in phases:
+        queue = list(phases) if phases is not None else None
+        while True:
+            if queue is not None:
+                if not queue:
+                    break
+                phase = queue.pop(0)
+            else:
+                step = gate.next_step(history, p.value)
+                if step.kind == "done":
+                    break
+                if step.kind == "park":
+                    _park(ledger, ctx.home, row, history, step, now)
+                    lander.land_run(ledger, call, run_id)
+                    break
+                assert step.phase is not None
+                phase = step.phase
             with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
                 sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
-                _phase(ctx, reg, ledger, call, row, drv, policy, work, phase, carried, now)
+                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, now)
             carried = None  # the carry is told to the phase it was replayed for, and to no later one
+            history = _history(ledger, ctx.home, run_id)
             after = ledger.run(run_id)
             if after is not None and after["ended_at"]:
                 break
@@ -205,7 +219,6 @@ def _drive(
 
 def _phase(
     ctx: TenantContext,
-    reg: Registration,
     ledger: Ledger,
     call: Call,
     row: Mapping[str, Any],
@@ -213,26 +226,17 @@ def _phase(
     policy: adapter_mod.ExecutorPolicy,
     work: Path,
     phase: str,
+    p: payload_mod.Payload,
+    history: Sequence[gate.Done],
     carried: adapter_mod.Carried | None,
     now: Now,
 ) -> None:
     """One phase in a worktree that already exists: the job, the adapter, the recompute, the record."""
     run_id = str(row["run_id"])
     agent = AGENT_OF[phase]
-    inputs = _inputs(ledger, ctx.home, run_id, phase)
-    job = _job(
-        ctx,
-        reg,
-        row,
-        call,
-        run_id=run_id,
-        phase=phase,
-        agent=agent,
-        policy=policy,
-        work=work,
-        carried=carried,
-        inputs=inputs,
-    )
+    job = _job(ctx, row, p, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work, history=history)
+    if carried is not None:
+        job = job.model_copy(update={"carried": carried})
     try:
         res = drv.execute(job)
     except Refusal as r:
@@ -273,11 +277,19 @@ def _phase(
         head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
         ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
         raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
+    verdict = None
     if res.outcome == "ok":
         _believe_artifacts(res, phase, ctx.home)
+        if phase == "judge":
+            # The verdict row, in the phase's own transaction (V4a-ii-a point 4): the judge's verdict as it said it —
+            # the floor is applied by the gate, never written over the record — and its reasoning by the artifact's
+            # hash (03 §6: *"`reasoning` a ref into the run's artifacts"*).
+            art = res.artifacts[0]
+            said = artifacts_mod.Verdict.model_validate_json((ctx.home / art.path).read_bytes())
+            verdict = (said.verdict, art.sha256)
     failed = None if res.outcome == "ok" else res.outcome
     head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
-    ledger.phase(run_id, at, {**res.row(), "touched": list(touched)})
+    ledger.phase(run_id, at, {**res.row(), "touched": list(touched)}, verdict=verdict)
     if res.outcome != "ok":
         ledger.finish(
             run_id,
@@ -292,29 +304,64 @@ def _phase(
         ledger.advance(run_id, head, list(touched), res.billing_class)
 
 
-def _inputs(ledger: Ledger, home: Path, run_id: str, phase: str) -> tuple[adapter_mod.Input, ...]:
-    """The earlier phases' artifacts this phase reads, each re-hashed against the ledger before it is handed on
-    (T-B7 (3): *"every artifact referenced exists at its hash"*). A missing one — `--phase judge` before any refute —
-    or one whose bytes moved is refused before anything spends, and the run stays in flight."""
-    wanted = artifacts_mod.INPUTS.get(phase, ())
-    if not wanted:
-        return ()
-    have = ledger.artifacts_of(run_id)
-    out: list[adapter_mod.Input] = []
-    for name in wanted:
-        art = have.get(name)
-        if art is None:
-            raise Refusal("run.artifact-missing", run_id, f"the {phase} phase reads the {name}, and no phase made one")
-        try:
-            data = (home / str(art["path"])).read_bytes()
-        except OSError as e:
-            raise Refusal(
-                "run.artifact-missing", str(art["path"]), f"the {name} is not where the ledger says: {e}"
-            ) from None
-        if artifacts_mod.sha256(data) != art["sha256"]:
-            raise Refusal("run.artifact-moved", str(art["path"]), f"the {name} no longer hashes to {art['sha256']}")
-        out.append(adapter_mod.Input(name=name, sha256=str(art["sha256"]), content=json.loads(data)))
-    return tuple(out)
+def _history(ledger: Ledger, home: Path, run_id: str) -> list[gate.Done]:
+    """The phases the ledger holds, in order, each with its artifact re-hashed against the ledger's record (T-B7 (3):
+    *"every artifact referenced exists at its hash"*) — what the gate decides from and what later phases are handed.
+    An artifact whose bytes moved is refused here, before anything spends, and the run stays in flight."""
+    out: list[gate.Done] = []
+    for ev in ledger.events_of(run_id):
+        if ev["kind"] != "phase":
+            continue
+        made = ev["data"].get("artifacts") or []
+        value: dict[str, Any] | None = None
+        if made:
+            art = made[0]
+            try:
+                data = (home / str(art["path"])).read_bytes()
+            except OSError as e:
+                raise Refusal(
+                    "run.artifact-missing", str(art["path"]), f"the {art['name']} is not where the ledger says: {e}"
+                ) from None
+            if artifacts_mod.sha256(data) != art["sha256"]:
+                raise Refusal(
+                    "run.artifact-moved", str(art["path"]), f"the {art['name']} no longer hashes to {art['sha256']}"
+                )
+            value = json.loads(data)
+        out.append(gate.Done(str(ev["data"].get("phase")), value))
+    return out
+
+
+def _park(
+    ledger: Ledger, home: Path, row: Mapping[str, Any], history: Sequence[gate.Done], step: gate.Step, now: Now
+) -> None:
+    """T-C5 as far as V4a-ii reaches: the typed question — all nine fields — kept as the run's `question.json`, the
+    ledger ended `parked`, and the store told `parked{run_id, text}` with the question and its hash. The answer's
+    channel is the sitting; re-dispatch after it is V6's [Q-V28 (a)]."""
+    run_id = str(row["run_id"])
+    made = [
+        str(a["sha256"])
+        for ev in ledger.events_of(run_id)
+        if ev["kind"] == "phase"
+        for a in ev["data"].get("artifacts") or []
+    ]
+    question = artifacts_mod.ParkQuestion(
+        run_id=run_id,
+        card_id=int(row["card"]),
+        phase=history[-1].phase if history else "plan",
+        question=step.question,
+        options=(),
+        tried=tuple(d.phase for d in history),
+        why_blocked=step.why_blocked,
+        source_tag=step.source_tag,
+        artifacts_so_far=tuple(made),
+    )
+    data = artifacts_mod.canonical(question.model_dump(mode="json"))
+    path = home / "runs" / run_id / "question.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    sha = artifacts_mod.sha256(data)
+    text = f"[{step.source_tag}] {step.question} — {step.why_blocked} (question {sha})"
+    ledger.end(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), "parked", text=text, detail={"question": sha})
 
 
 def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, home: Path) -> None:
@@ -335,20 +382,9 @@ def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, home: Path) -> 
             raise Refusal("run.artifact", a.path, f"the {a.name}'s bytes do not hash to {a.sha256}")
 
 
-def _job(
-    ctx: TenantContext,
-    reg: Registration,
-    row: Mapping[str, Any],
-    call: Call,
-    *,
-    run_id: str,
-    phase: str,
-    agent: str,
-    policy: adapter_mod.ExecutorPolicy,
-    work: Path,
-    carried: adapter_mod.Carried | None = None,
-    inputs: tuple[adapter_mod.Input, ...] = (),
-) -> adapter_mod.RunJob:
+def _payload(
+    ctx: TenantContext, reg: Registration, row: Mapping[str, Any], call: Call, run_id: str
+) -> payload_mod.Payload:
     """The payload, re-assembled at the run's own `base_sha` — and checked against the hash the ledger wrote at
     dispatch. Same inputs, same hash (T-B3 (4)); a different one means the substrate moved under a dispatched run,
     which is an environment fault and not something to build on."""
@@ -371,23 +407,59 @@ def _job(
             run_id,
             f"the payload at {row['base_sha']} hashes {p.payload_hash}, the ledger wrote {row['payload_hash']}",
         )
-    surfaces = tuple(str(s) for s in (p.value["constraints"].get("surfaces") or ()))
-    if not surfaces:
+    if not p.value["constraints"].get("surfaces"):
         raise Refusal("run.no-surfaces", str(card), "the card declares no surfaces: there is nowhere it may write")
+    return p
+
+
+def _job(
+    ctx: TenantContext,
+    row: Mapping[str, Any],
+    p: payload_mod.Payload,
+    *,
+    run_id: str,
+    phase: str,
+    agent: str,
+    policy: adapter_mod.ExecutorPolicy,
+    work: Path,
+    history: Sequence[gate.Done] = (),
+) -> adapter_mod.RunJob:
+    """The job for one phase: what it reads (the payload, and the earlier artifacts the gate names for it — refused if
+    a phase that cannot run without one has none) and where it may write — nothing for a read-only phase; for the build,
+    the approved plan's `touched` ∪ the test paths (T-B5 (1): the plan narrows, nothing widens — the lint already
+    proved it ⊆ the card's), or the card's `surfaces` ∪ the test paths for a build with no plan behind it."""
+    named = gate.inputs_for(phase, history, p.value)
+    have = {n for n, _ in named}
+    missing = [n for n in artifacts_mod.INPUTS.get(phase, ()) if n not in have]
+    if missing:
+        raise Refusal(
+            "run.artifact-missing", run_id, f"the {phase} phase reads the {missing[0]}, and no phase made one"
+        )
+    inputs = tuple(
+        adapter_mod.Input(name=n, sha256=artifacts_mod.sha256(artifacts_mod.canonical(v)), content=v) for n, v in named
+    )
+    surfaces = tuple(str(s) for s in p.value["constraints"]["surfaces"])
+    plan = next((v for n, v in named if n == "plan"), None)
+    if phase in READ_ONLY:
+        writes: tuple[str, ...] = ()
+    elif phase == "build" and plan is not None:
+        writes = tuple(artifacts_mod.Plan.model_validate(plan).touched) + TEST_PATHS
+    else:
+        writes = surfaces + TEST_PATHS
     return adapter_mod.job(
         {
             "run_id": run_id,
-            "card": card,
+            "card": int(row["card"]),
             "phase": phase,
             "payload": p.value,
             "payload_hash": p.payload_hash,
             "worktree": str(work),
-            "allowed_writes": () if phase in READ_ONLY else surfaces + TEST_PATHS,
+            "allowed_writes": writes,
             "policy": policy,
             "identity": {"agent": agent, "name": ctx.identity.name, "email": ctx.identity.email},
             "prompt_version": policy.agent(agent).prompt,
-            "carried": carried,
             "inputs": inputs,
+            "round": 1 + sum(1 for d in history if d.phase == phase),
         }
     )
 

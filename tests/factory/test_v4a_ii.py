@@ -34,7 +34,10 @@ PLAN: dict[str, Any] = {
     "steps": [{"id": "s1", "action": "write the validator", "purpose": "R1"}],
     "touched": [INSIDE],
     "tests": [{"path": "tests/test_validator.py", "scenario": "S1", "fails_today": "the validator does not exist"}],
-    "traceability": [{"id": "S1", "covered_by": ["s1"], "note": ""}],
+    "traceability": [
+        {"id": "S1", "covered_by": ["s1"], "note": ""},
+        {"id": "S2", "covered_by": ["tests/test_validator.py"], "note": ""},
+    ],
     "risks": [],
     "questions": [],
 }
@@ -70,11 +73,13 @@ class Shaped(Fake):
         shaped = artifacts.OF_PHASE.get(job.phase)
         if shaped is not None:
             value = self.answers.get(job.phase)
+            if isinstance(value, list):
+                value = value.pop(0) if len(value) > 1 else value[0]
             if value is None:
                 outcome = "failed:malformed-plan"
             else:
                 data = artifacts.canonical(value)
-                rel = f"runs/{job.run_id}/{job.phase}/{shaped[0]}.json"
+                rel = f"runs/{job.run_id}/{job.step}/{shaped[0]}.json"
                 (self.home / rel).parent.mkdir(parents=True, exist_ok=True)
                 (self.home / rel).write_bytes(data)
                 made.append(
@@ -199,6 +204,11 @@ def test_the_container_does_not_retry_a_malformed_answer_and_names_its_artifact_
     ok = Podman(result=_harness_result(phase="judge", agent="judge", artifacts=[art]))
     got = Container(disk.home, _reg(disk), run=ok).execute(job)
     assert got.artifacts[0].path == f"runs/{job.run_id}/judge/verdict.json"
+    again = Container(
+        disk.home, _reg(disk), run=Podman(result=_harness_result(phase="judge", agent="judge", artifacts=[art]))
+    )
+    second = again.execute(job.model_copy(update={"round": 2}))
+    assert second.artifacts[0].path == f"runs/{job.run_id}/judge-2/verdict.json", "round two keeps its own files"
 
 
 # -------------------------------------------------------------------------------------- the phases that write nothing
@@ -225,12 +235,13 @@ def test_a_read_only_phase_that_wrote_ends_the_run_uncommitted(disk: Disk, led: 
 # ------------------------------------------------------------------------------------------------------ the chain
 
 
-def test_the_chain_runs_plan_refute_judge_in_one_worktree_and_stops_at_the_judge(
+def test_an_approved_plan_runs_plan_refute_judge_build_in_one_worktree(
     disk: Disk, led: Ledger, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """[owner, 2026-09-23] the chain stops at the judge: the verdict recorded, not acted on, the run in flight. One
-    worktree for the whole chain — V4a-i's own efficiency line, testable at last. And each later phase is handed the
-    earlier artifacts by the hash the ledger holds."""
+    """The line through the gate: an approved plan with no blocking finding goes to the build, in the one worktree the
+    chain made — V4a-i's own efficiency line, testable at last. Each later phase is handed the earlier artifacts by the
+    hash the ledger holds; the build's write surface is the plan's `touched` and the test paths (T-B5 (1)); the judge's
+    verdict is a `verdicts` row whose reasoning is the verdict artifact's hash."""
     made: list[Path] = []
     real = checkout_mod.worktree
 
@@ -242,18 +253,18 @@ def test_the_chain_runs_plan_refute_judge_in_one_worktree_and_stops_at_the_judge
     run_id = fresh_run(disk, led)
     drv = Shaped(home=disk.home)
     row = chain(disk, led, run_id, drv)
-    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge"]
-    assert row["ended_at"] is None, "the chain stops at the judge and the run stays in flight"
+    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge", "build"]
     assert len(made) == 1, f"one worktree per run, not per phase: {made}"
     have = led.artifacts_of(run_id)
-    assert set(have) == {"plan", "refutation", "verdict"}
-    judge = drv.seen[-1]
+    judge, build = drv.seen[2], drv.seen[3]
     assert [(i.name, i.sha256) for i in judge.inputs] == [
         ("plan", have["plan"]["sha256"]),
         ("refutation", have["refutation"]["sha256"]),
     ]
     assert judge.inputs[0].content == artifacts.Plan.model_validate(PLAN).model_dump(mode="json")
     assert [i.name for i in drv.seen[1].inputs] == ["plan"] and drv.seen[0].inputs == ()
+    assert build.allowed_writes == (INSIDE, "tests/"), "the plan narrows the card's surfaces; nothing widens"
+    assert led.verdicts_of(run_id) == [{"phase": "judge", "verdict": "approve", "reasoning": have["verdict"]["sha256"]}]
     again = Shaped(home=disk.home)
     assert chain(disk, led, run_id, again)["phases"] == row["phases"] and not again.seen, "nothing left to drive"
 
@@ -263,7 +274,7 @@ def test_the_chain_resumes_from_the_last_phase_the_ledger_holds(disk: Disk, led:
     one(disk, led, run_id, "plan", Shaped(home=disk.home))
     drv = Shaped(home=disk.home)
     chain(disk, led, run_id, drv)
-    assert [j.phase for j in drv.seen] == ["refute", "judge"]
+    assert [j.phase for j in drv.seen] == ["refute", "judge", "build"]
 
 
 def test_a_malformed_answer_ends_the_chain_failed_malformed_plan(disk: Disk, led: Ledger) -> None:
@@ -308,4 +319,69 @@ def test_the_chain_span_wraps_its_phases(disk: Disk, led: Ledger, monkeypatch: p
     monkeypatch.setattr(telemetry, "span", spying)
     chain(disk, led, fresh_run(disk, led), Shaped(home=disk.home))
     ran = [n for n in names if n.startswith("isidium.factory.run.")]  # the ledger's own spans ride the same module
-    assert ran == [runner_mod.CHAIN_SPAN, runner_mod.SPAN, runner_mod.SPAN, runner_mod.SPAN], ran
+    assert ran == [runner_mod.CHAIN_SPAN, *[runner_mod.SPAN] * 4], ran
+
+
+# ------------------------------------------------------------------------------------------ the gate, end to end
+
+BLOCKED: dict[str, Any] = {
+    "findings": [{"id": "F1", "severity": "blocking", "claim": "S2 fails", "location": "S2", "why": "no test"}]
+}
+
+
+def verdict(v: str) -> dict[str, Any]:
+    return {"verdict": v, "reasoning": f"the judge said {v}"}
+
+
+def test_a_blocked_round_is_revised_once_and_the_revision_reads_what_sent_it_back(disk: Disk, led: Ledger) -> None:
+    """[owner, 2026-09-23] the judge is called on a blocked round, its verdict recorded as it said it (`approve`), and
+    the floor revises anyway: the author's second plan is handed its first, the refutation and the verdict; the second
+    round's judge sees what the revision answered; approved, the chain builds."""
+    run_id = fresh_run(disk, led)
+    drv = Shaped(
+        home=disk.home,
+        answers={"plan": PLAN, "refute": [BLOCKED, REFUTATION], "judge": [verdict("approve"), verdict("approve")]},
+    )
+    row = chain(disk, led, run_id, drv)
+    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge", "plan", "refute", "judge", "build"]
+    revision, second_judge = drv.seen[3], drv.seen[5]
+    assert [i.name for i in revision.inputs] == ["plan", "refutation", "verdict"]
+    assert [i.name for i in second_judge.inputs] == ["plan", "refutation", "answered-refutation"]
+    assert [v["verdict"] for v in led.verdicts_of(run_id)] == ["approve", "approve"], "recorded as the judge said it"
+
+
+def test_a_second_failure_parks_with_the_nine_field_question_and_the_store_told(disk: Disk, led: Ledger) -> None:
+    """7bd.10: the second failure parks — the judge's reasoning the `why_blocked`, the run's artifacts by hash, the
+    question kept as `question.json`, the ledger `parked`, the store's `parked` event carrying the text."""
+    run_id = fresh_run(disk, led)
+    drv = Shaped(home=disk.home, answers={**ANSWERS, "judge": [verdict("revise"), verdict("revise")]})
+    row = chain(disk, led, run_id, drv)
+    assert row["outcome"] == "parked" and [j.phase for j in drv.seen][-1] == "judge", "no third plan, no build"
+    q = artifacts.ParkQuestion.model_validate_json((disk.home / "runs" / run_id / "question.json").read_bytes())
+    assert (q.source_tag, q.why_blocked, q.card_id) == ("plan-failed", "the judge said revise", disk.card)
+    assert len(q.artifacts_so_far) == 6 and q.tried == ("plan", "refute", "judge", "plan", "refute", "judge")
+    parked = [e for e in led.events_of(run_id) if e["kind"] == "parked"]
+    assert len(parked) == 1 and "plan-failed" in parked[0]["data"]["text"]
+    assert len(led.verdicts_of(run_id)) == 2
+
+
+def test_a_plan_with_questions_parks_before_any_refuter_or_judge(disk: Disk, led: Ledger) -> None:
+    run_id = fresh_run(disk, led)
+    drv = Shaped(home=disk.home, answers={**ANSWERS, "plan": {**PLAN, "questions": ["which validator?"]}})
+    row = chain(disk, led, run_id, drv)
+    assert row["outcome"] == "parked" and [j.phase for j in drv.seen] == ["plan"]
+    q = artifacts.ParkQuestion.model_validate_json((disk.home / "runs" / run_id / "question.json").read_bytes())
+    assert (q.source_tag, q.question) == ("card-ambiguity", "which validator?")
+
+
+def test_a_plan_outside_the_surfaces_is_revised_once_then_parks_as_card_ambiguity(disk: Disk, led: Ledger) -> None:
+    """[owner, 2026-09-23] a lint refusal — no refuter or judge call for a mechanically wrong plan — then one revision
+    handed the lint's findings; a second out-of-surface plan parks."""
+    run_id = fresh_run(disk, led)
+    wide = {**PLAN, "touched": [INSIDE, "docs/elsewhere.md"]}
+    drv = Shaped(home=disk.home, answers={**ANSWERS, "plan": wide})
+    row = chain(disk, led, run_id, drv)
+    assert [j.phase for j in drv.seen] == ["plan", "plan"], "the lint spends no refuter or judge call"
+    assert [i.name for i in drv.seen[1].inputs] == ["plan", "lint"]
+    q = artifacts.ParkQuestion.model_validate_json((disk.home / "runs" / run_id / "question.json").read_bytes())
+    assert row["outcome"] == "parked" and q.source_tag == "card-ambiguity"

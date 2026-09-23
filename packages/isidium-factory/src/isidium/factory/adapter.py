@@ -214,6 +214,15 @@ class RunJob(_Wire):
     prompt_version: str = Field(min_length=1)
     carried: Carried | None = None
     inputs: tuple[Input, ...] = ()
+    # Which occurrence of this phase in the run this is — 2 for the plan author's one revision and the round it
+    # opens. A phase's files are kept per occurrence (`step`), because a second round writing over the first would
+    # move the bytes the ledger recorded for round one (found building the gate, 2026-09-23).
+    round: int = Field(default=1, ge=1)
+
+    @property
+    def step(self) -> str:
+        """The phase's own directory name within the run: `plan`, then `plan-2` for the revision."""
+        return self.phase if self.round == 1 else f"{self.phase}-{self.round}"
 
 
 class Artifact(_Wire):

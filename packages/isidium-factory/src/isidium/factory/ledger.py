@@ -222,7 +222,7 @@ class Ledger:
             self._end(run_id, at, FAILED + reason)
             self._event(run_id, at, "interrupt", {"reason": reason, "detail": detail})
 
-    def phase(self, run_id: str, at: str, result: Mapping[str, Any]) -> None:
+    def phase(self, run_id: str, at: str, result: Mapping[str, Any], *, verdict: tuple[str, str] | None = None) -> None:
         """A phase's record, written the way `dispatch` writes a run's: the `phases` row and the ledger's own
         `phase` event in ONE transaction (the card's R2 — *"the same transaction discipline dispatch used"*).
 
@@ -265,6 +265,18 @@ class Ledger:
                     "billing_class": result.get("billing_class"),
                 },
             )
+            if verdict is not None:
+                # 03 §6's `verdicts[]` — the first rows it has ever held — in the phase's own transaction (V4a-ii-a
+                # point 4): a verdict with no phase, or a judge phase with no verdict, is never on the record.
+                self.db.execute(
+                    "INSERT INTO verdicts (run_id, phase, verdict, reasoning) VALUES (?, ?, ?, ?)",
+                    (run_id, result["phase"], verdict[0], verdict[1]),
+                )
+
+    def verdicts_of(self, run_id: str) -> list[dict[str, Any]]:
+        """03 §6's `verdicts[]` for one run, in the order they were rendered."""
+        rows = self.db.execute("SELECT * FROM verdicts WHERE run_id = ? ORDER BY rowid", (run_id,)).fetchall()
+        return [{k: r[k] for k in r.keys() if k != "run_id"} for r in rows]  # noqa: SIM118
 
     def finish(
         self,
@@ -303,6 +315,7 @@ class Ledger:
         price_table: Any = None,
         store_events: Sequence[tuple[str, Mapping[str, Any]]] = (),
         detail: Mapping[str, Any] | None = None,
+        text: str | None = None,
     ) -> None:
         """**The one writer of `ended_at`** [V5a]. Until V5a a run that succeeded was never ended — `advance` moved
         its head and nothing else — so `wip = 1` meant one card, ever. Now every end is this: the outcome from the
@@ -320,6 +333,7 @@ class Ledger:
                 billing_class=billing_class,
                 price_table=price_table,
                 store_events=store_events,
+                text=text,
             )
             self._event(run_id, at, ENDED, {"outcome": outcome, **(detail or {})})
 
@@ -334,6 +348,7 @@ class Ledger:
         billing_class: str | None = None,
         price_table: Any = None,
         store_events: Sequence[tuple[str, Mapping[str, Any]]] = (),
+        text: str | None = None,
     ) -> None:
         if outcome not in ENDS:
             raise Refusal("ledger.outcome", outcome, "not an outcome a run ends as: " + ", ".join(sorted(ENDS)))
@@ -361,7 +376,7 @@ class Ledger:
         if outcome.startswith(FAILED):
             self._event(run_id, at, "failed", {"class": outcome[len(FAILED) :], "run_id": run_id})
         elif outcome == PARKED:
-            self._event(run_id, at, PARKED, {"run_id": run_id})
+            self._event(run_id, at, PARKED, {"run_id": run_id, **({"text": text} if text else {})})
 
     def set_pr(self, run_id: str, number: int) -> None:
         """The run's pull request, on its row [V5a] — `pr-open` writes it; `close --pr` names one the ledger missed."""

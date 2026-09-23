@@ -129,7 +129,7 @@ class Container:
         return self._prompts
 
     def execute(self, job: RunJob) -> PhaseResult:
-        rundir = self._home / "runs" / job.run_id / job.phase
+        rundir = self._home / "runs" / job.run_id / job.step
         render.write_run_dir(rundir, job)
         token = self._token()
         argv = self._argv(job, rundir)
@@ -341,7 +341,7 @@ def _sum(spent: Sequence[PhaseResult]) -> PhaseResult | None:
 
 def _name(job: RunJob) -> str:
     """One container name per run and phase, so the watchdog can find the thing it has to kill."""
-    return f"isidium-{job.run_id}-{job.phase}"
+    return f"isidium-{job.run_id}-{job.step}"
 
 
 def _environment(detail: str) -> bool:
