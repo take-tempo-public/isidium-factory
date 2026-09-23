@@ -10,6 +10,7 @@ from typing import Any
 from .events import IN_FLIGHT as IN_FLIGHT  # re-exported: card 7 R5's one home, checked by identity in its tests
 from .grammar import Document
 from .status import Projection, Queue
+from .status import open_intake_ids as open_intake_ids  # re-exported: card 9 R1's one home
 
 CAP_TITLE, CAP_HOLD, CAP_SUMMARY = 120, 80, 120
 
@@ -110,12 +111,9 @@ def render(
     if archive_line:
         out.append(archive_line)
     out += ["", *queue_lines(q), "", "## Inbox", ""]
-    open_ids = {r["id"] for r in inbox if r.get("type") == "intake"}
-    dispositioned = {
-        r.get("on") for r in inbox if r.get("type") == "disposition" and r.get("outcome") in ("accepted", "declined")
-    }
+    open_ids = open_intake_ids(inbox)
     for r in inbox:
-        if r.get("type") == "intake" and r["id"] in open_ids and r["id"] not in dispositioned:
+        if r.get("type") == "intake" and r["id"] in open_ids:
             out.append(
                 f"- {r['id']} · {r.get('kind')} · {r.get('source')} · {_cap(str(r.get('title', '')), CAP_TITLE)}"
             )
