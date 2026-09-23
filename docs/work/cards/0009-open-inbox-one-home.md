@@ -2,7 +2,7 @@
 schema = 1
 id = 9
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree"
 shape = "bdd"
@@ -63,5 +63,6 @@ history = [
   { seq = 6, at = "2026-09-22T19:47:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c891664c3d04a35a81a080263e9a17ccec48c5dc94b0a0ac1b9a05ab87aba791", h = "sha256:7509a82308abe09db53e5dace1785dfd9e9b1ad267c5198b990a8aad21c95822", batch = 19 },
   { seq = 7, at = "2026-09-22T21:43:06Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:c891664c3d04a35a81a080263e9a17ccec48c5dc94b0a0ac1b9a05ab87aba791", h = "sha256:4840c41983ed5fb3b3c9ceeeca148a9d5b2c85e2cce2521d68c39bba0887a417" },
   { seq = 8, at = "2026-09-22T21:44:19Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c891664c3d04a35a81a080263e9a17ccec48c5dc94b0a0ac1b9a05ab87aba791", h = "sha256:2d5392fc5687440ee038a5123a187bb2f79d32c8cb59f34519554ad0e31ba7f5", batch = 21 },
+  { seq = 9, at = "2026-09-23T00:14:05Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:c891664c3d04a35a81a080263e9a17ccec48c5dc94b0a0ac1b9a05ab87aba791", h = "sha256:6ed333f4ecc492a03e16e7dca446131889066d1a6923256da6b04fe4b92a6389", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:y1F8QGobekTGh11atHGf1PiQsk/5rFWFaHsL2WgKHro1GRB1evCTtUUmlnbaVbsrsrkDPkBc4GOipE6U10XCCQ==" },
 ]
 ```
