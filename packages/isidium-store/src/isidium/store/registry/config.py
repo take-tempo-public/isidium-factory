@@ -22,9 +22,8 @@ from ..core.refusal import Refusal
 from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
-SCHEMA_VERSION: Final = (
-    6  # the config schema version this module's cross-key code mirrors (V4a-i: config@6, `[agents]` + `[executor]`)
-)
+# the config schema version this module's cross-key code mirrors (V4a-ii-a: config@7, per-agent `tools` + `prompt`)
+SCHEMA_VERSION: Final = 7
 
 # 04 §2.1 — scalars first, among themselves in this inventory order
 SCALAR_ORDER: Final[tuple[str, ...]] = (
@@ -390,7 +389,7 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
     _v_payload(rs, tree.get("payload"), doc)
     _v_effort_cross(rs, tree.get("effort"), dfl)
     _v_ladder_cross(rs, tree.get("ladder"))
-    _v_agents(rs, tree.get("agents"), doc)
+    _v_agents(rs, tree.get("agents"), doc, tree, dfl)
     if isinstance(tree.get("profiles"), dict):
         _set_dup(rs, tree["profiles"].get("enabled"), "profiles.enabled")
     if isinstance(tree.get("surfaces"), dict):
@@ -456,8 +455,9 @@ def _v_ladder_cross(rs: list[Refusal], t: Any) -> None:
         _r(rs, "config.enum", "ladder.leaf", f"{leaf!r} is neither a core kind nor a declared ladder level")
 
 
-def _v_agents(rs: list[Refusal], t: Any, doc: SchemaDoc) -> None:
-    """[agents] (config@6, V4a-i): one row per agent kind that makes model calls, each `{model, effort}`.
+def _v_agents(rs: list[Refusal], t: Any, doc: SchemaDoc, tree: Mapping[str, Any], dfl: Mapping[str, Any]) -> None:
+    """[agents] (config@6, V4a-i): one row per agent kind that makes model calls, each `{model, effort}`; config@7
+    (V4a-ii-a) adds `tools` and `prompt`.
 
     The closed set and the per-member rows are read from the adopted schema document, never from a table here — the
     roster's seven kinds are its list to change, and a default has one home (Y1, C-1). The `lander` is absent from
@@ -466,7 +466,14 @@ def _v_agents(rs: list[Refusal], t: Any, doc: SchemaDoc) -> None:
     `model` is checked as a non-empty string and no further: the store holds no referent for a model name, and a
     frozen enum here would make every new model release need a schema version and a signing act before the factory
     could run under it. The run record carries the model that actually ran (03 §6), which is where a wrong one is
-    caught."""
+    caught.
+
+    **config@7 [owner, 2026-09-22].** A member key the schema marks `required_when = []` must be on every row the
+    tenant declares — `tools`, which has no default on purpose, so a row the defaults alone supply names no tools and
+    is not a declared row. A row's `tools` must be a subset of `[executor].allowlist` (the tenant's file, else the
+    adopted defaults): the allowlist stays the ceiling, and a row over it is refused here, before a signature, rather
+    than at a run (`config.agents-tools`). The ceiling is read only when a row names tools, so a config@6 tree pays
+    nothing for it."""
     if t is None:
         return
     if not isinstance(t, dict):
@@ -483,6 +490,25 @@ def _v_agents(rs: list[Refusal], t: Any, doc: SchemaDoc) -> None:
             _r(rs, "config.type", f"agents.{k}", "expected a per-agent table")
             continue
         rows = {r["name"]: r for r in members.get(k, [])}
+        for kk, row in rows.items():
+            if row.get("required_when") == [] and kk not in v:
+                _r(rs, "config.type", f"agents.{k}.{kk}", f"required key absent: every declared row names its {kk}")
+        tools = v.get("tools")
+        if "tools" in rows and isinstance(tools, list):
+            _set_dup(rs, tools, f"agents.{k}.tools")
+            ex = tree.get("executor")
+            ceiling = (ex if isinstance(ex, dict) and "allowlist" in ex else dfl.get("executor") or {}).get("allowlist")
+            ceiling = ceiling if isinstance(ceiling, list) else []
+            for x in tools:
+                if not isinstance(x, str):
+                    _r(rs, "config.type", f"agents.{k}.tools[]", f"expected a tool name, got {type(x).__name__}")
+                elif x not in ceiling:
+                    _r(
+                        rs,
+                        "config.agents-tools",
+                        f"agents.{k}.tools",
+                        f"{x!r} is not in [executor].allowlist {ceiling}",
+                    )
         for kk, vv in v.items():
             row = rows.get(kk)
             if row is None:

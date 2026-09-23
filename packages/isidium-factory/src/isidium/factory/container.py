@@ -39,6 +39,10 @@ NAME: Final = "container"
 HARNESS: Final = "claude-code"
 TOKEN_FILE: Final = "claude.token"
 PODMAN: Final = "podman"
+# The runner image's prompt set, written at build by `deploy/build-runner.sh` as `<agent>/<version>,…` [owner,
+# 2026-09-23]. A second statement of what `prompts/` holds, true only while that script is how an image is made — the
+# cost named at the ruling; an image built any other way carries no label and is refused, never trusted.
+PROMPTS_LABEL: Final = "org.isidium.prompts"
 
 # Literal at every raise, never a constant: the sweep that classifies every rule namespace reads the literal
 # at the raise site (C-12) and cannot follow a name. Found building V4a-i — see adapter.py.
@@ -72,6 +76,7 @@ class Container:
         self._reg = reg
         self._run: Runner = run or subprocess.run
         self._podman = podman
+        self._prompts: frozenset[str] | None = None
 
     def capabilities(self) -> AdapterCapabilities:
         """Declared, not probed — and checked against behaviour by the conformance suite, which is the only thing
@@ -96,6 +101,29 @@ class Container:
             billing_class="plan",
             hosts=("api.anthropic.com",),
         )
+
+    def prompts(self) -> frozenset[str]:
+        """The prompt set the image carries, from its label — image metadata, no container started. Read once per
+        adapter: the pick and a phase each build their own, so it is one `podman image inspect` for each."""
+        if self._prompts is None:
+            image = self._image()
+            fmt = '{{ index .Config.Labels "' + PROMPTS_LABEL + '" }}'
+            proc = self._run(
+                [self._podman, "image", "inspect", "--format", fmt, image], capture_output=True, text=True, check=False
+            )
+            if proc.returncode != 0:
+                raise Refusal(
+                    "adapter.no-image", image, f"podman cannot inspect it: {(proc.stderr or '').strip()[:300]}"
+                )
+            label = (proc.stdout or "").strip()
+            if not label or label == "<no value>":
+                raise Refusal(
+                    "adapter.prompt-missing",
+                    image,
+                    f"the image carries no {PROMPTS_LABEL} label: build it with deploy/build-runner.sh",
+                )
+            self._prompts = frozenset(x.strip() for x in label.split(",") if x.strip())
+        return self._prompts
 
     def execute(self, job: RunJob) -> PhaseResult:
         rundir = self._home / "runs" / job.run_id / job.phase
@@ -150,10 +178,7 @@ class Container:
 
     # ---------------------------------------------------------------------------------------------- the mechanics
 
-    def _argv(self, job: RunJob, rundir: Path) -> list[str]:
-        """The one spawn. `--rm` because the record is the ledger's and never the container's; `--network` is left
-        to the host's default because the phase must reach the provider — the egress allowlist is agent-station's
-        by pointer and `capabilities().hosts` is what this adapter declares it needs."""
+    def _image(self) -> str:
         image = self._reg.runner_image
         if not image:
             raise Refusal(
@@ -161,6 +186,13 @@ class Container:
                 str(self._home / "tenant.toml"),
                 "no [runner].image: this tenant names the container adapter but declares no image to run it in",
             )
+        return image
+
+    def _argv(self, job: RunJob, rundir: Path) -> list[str]:
+        """The one spawn. `--rm` because the record is the ledger's and never the container's; `--network` is left
+        to the host's default because the phase must reach the provider — the egress allowlist is agent-station's
+        by pointer and `capabilities().hosts` is what this adapter declares it needs."""
+        image = self._image()
         argv = [
             self._podman,
             "run",

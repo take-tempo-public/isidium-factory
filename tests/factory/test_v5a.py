@@ -52,7 +52,7 @@ from isidium.store.server.api import Api
 from isidium.store.server.store import NewCard, Store
 
 from ..store.conftest import BASE_SCOPE, LANDER, OWNER, PLANNER, base_head, git, store_on_disk, tenant_checkout
-from .test_v4a import Branch, Fake, _harness_result
+from .test_v4a import Branch, Fake, _harness_result, declare_agents
 
 ROOT = "docs/work/"
 TENANT = "sartor"
@@ -126,6 +126,7 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     work = tenant_checkout(tmp)
     st = store_on_disk(work, tmp / "journal.sqlite", root=ROOT)
     st.init(OWNER, software_key_ack="ok for V5a", root=ROOT)
+    declare_agents(st)
     ids = [_card(st, slug) for slug in ("picked", "phased", "human-closed", "factory-closed", "refused")]
     st.ratify(ids, OWNER)
     st.land(EMPTY, LANDER)
@@ -440,7 +441,9 @@ def test_a_schema_1_ledger_gains_every_later_column_at_open_and_keeps_its_rows(t
 def test_a_pick_lands_its_dispatched_and_the_store_counts_the_run(disk: Disk, tmp_path: Path) -> None:
     ledger = numbered(tmp_path, 101)
     try:
-        row = dispatch_mod.pick(disk.ctx, ledger, disk.call, Branch(disk.work), card=disk.picked)
+        row = dispatch_mod.pick(
+            disk.ctx, ledger, disk.call, Branch(disk.work), card=disk.picked, factory=lambda h, g: Fake()
+        )
         assert row["land"]["sent"] == 1 and row["landed_through"] == ledger.events_of(row["run_id"])[-1]["seq"]
         assert execution_of(disk, disk.picked) == "dispatched" and label_of(disk, disk.picked) == "dispatched"
         assert disk.picked not in {int(r["id"]) for r in disk.call("dispatch", {})["ready"]}, "not dispatchable twice"
@@ -451,7 +454,9 @@ def test_a_pick_lands_its_dispatched_and_the_store_counts_the_run(disk: Disk, tm
 def test_a_phase_that_fails_lands_its_failure_on_the_store(disk: Disk, tmp_path: Path) -> None:
     ledger = numbered(tmp_path, 201)
     try:
-        row = dispatch_mod.pick(disk.ctx, ledger, disk.call, Branch(disk.work), card=disk.phased)
+        row = dispatch_mod.pick(
+            disk.ctx, ledger, disk.call, Branch(disk.work), card=disk.phased, factory=lambda h, g: Fake()
+        )
         reg = disk.ctx.registration
         assert reg is not None
         broken = Fake(result=_harness_result(outcome="failed:infra"))

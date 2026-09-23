@@ -67,29 +67,14 @@ AGENT_OF: Final[Mapping[str, str]] = {
 # A card that declares its own test file gets it through `surfaces` as well; this is the floor, not the ceiling.
 TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
 
-# The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md`, where a change is a pull
-# request and a new version is a new file. `PROMPT_VERSION` is the floor: an agent with no row below runs `v1`.
-#
-# **This is code, not signed policy, and that is the choice, not the omission** [owner, 2026-09-19]. The selector and
-# the prompt files ship in one image from one pull request (`Containerfile.runner`: *"an image is one harness and one
-# prompt set, and the ledger records both"*), so a version named here can never be one the image lacks. The
-# alternative — a signed `prompt_version` beside `model` and `effort` in `[agents]` — would put all three of the
-# things that decide what an agent does under one signature, but a signed row can name a version the running image
-# does not carry, and `harness.prompt_input` reads that file directly: the failure would surface inside the
-# container, mid-phase, as `failed:infra`. Making it safe needs a check that an image's prompt set covers the
-# versions its policy names, and that check does not exist. Whether to build it and move this map into `config@7`
-# is OPEN, not deferred-and-decided; the asymmetry it leaves (model and effort signed, the prompt not) is declared
-# here rather than resolved.
-PROMPT_VERSION: Final = "v1"
-PROMPT_VERSIONS: Final[Mapping[str, str]] = {
-    # v2 named the project gate and the turn budget, which v1 did not: `r-6` finished card 7's work and then spent
-    # its remaining turns re-running `mypy`, `ruff` and the whole suite in the background, polling with `sleep 90`,
-    # and ended `failed:budget` at 101 turns with the work complete and unpushed. **v3** adds what to do with a
-    # previous attempt's work already in the tree, which a carried run now puts there (Q-V31 (c)): verify it rather
-    # than trust it, and rather than redo it. Told nothing, a builder handed a half-done tree does one or the other,
-    # and both cost more than reading it — the same shape of gap v2 was written to close.
-    "builder": "v3",
-}
+# The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md` — is the agent's signed
+# `[agents].<kind>.prompt` since config@7 [owner, 2026-09-22]. It was a map here until then, kept in code on purpose
+# [owner, 2026-09-19]: a signed row can name a version the running image does not carry, and `harness.prompt_input`
+# would fail on it inside the container, mid-phase. The check that note said was missing is built with the move —
+# `adapter.require_prompts` against the image's own label, at dispatch and again before each spawn — so the model,
+# the effort and the prompt are one signature now. The builder's `v3` default carries the map's history: v2 named the
+# project gate and the turn budget (`r-6` spent its last turns polling `sleep 90` and ended `failed:budget` with the
+# work done); v3 says what to do with a previous attempt's work already in the tree (Q-V31 (c)).
 
 Call = Callable[[str, Mapping[str, Any]], Mapping[str, Any]]
 Now = Callable[[], _dt.datetime]
@@ -125,6 +110,9 @@ def run_phase(
         spec = policy.agent(agent)
         sp.set_attribute("isidium.model", spec.model)
         drv = (factory or adapter_mod.resolve(str(row["adapter"])))(ctx.home, reg)
+        # Again here, not only at dispatch: the image can be swapped between the two. Before the worktree, so a miss
+        # spends nothing and leaves the run in flight like the policy refusals above — swap the image, run again.
+        adapter_mod.require_prompts(policy, drv.prompts(), run_id)
 
         tree = ctx.home / "worktrees" / run_id
         work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
@@ -250,7 +238,7 @@ def _job(
             "allowed_writes": surfaces + TEST_PATHS,
             "policy": policy,
             "identity": {"agent": agent, "name": ctx.identity.name, "email": ctx.identity.email},
-            "prompt_version": PROMPT_VERSIONS.get(agent, PROMPT_VERSION),
+            "prompt_version": policy.agent(agent).prompt,
             "carried": carried,
         }
     )

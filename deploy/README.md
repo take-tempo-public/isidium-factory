@@ -1119,9 +1119,14 @@ harness version is a required build argument, so the version the ledger records 
 
 ```sh
 npm view @anthropic-ai/claude-code version          # what to pin, read on the day
-podman build -f deploy/Containerfile.runner -t isidium-runner:v4a \
-  --build-arg CLAUDE_CODE_VERSION=<version> .
+deploy/build-runner.sh isidium-runner:<tag> <version>
 ```
+
+**Build it with `deploy/build-runner.sh`, never a bare `podman build`** [owner, 2026-09-23]. Since config@7 the prompt
+version is signed policy, and the factory checks that the image carries every version the policy names before any
+spend — at dispatch and again before each phase — by reading the `org.isidium.prompts` label the script writes from
+`prompts/`. An unlabelled image is refused (`adapter.prompt-missing`); `deploy/build-runner.sh --label` prints what a
+build would write.
 
 **What the factory does around the phase**, none of which the phase can do for itself: a `git worktree` per run on
 the `story/<run-id>` branch dispatch created; the payload re-assembled at the run's own `base_sha` and refused if it

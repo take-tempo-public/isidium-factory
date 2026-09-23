@@ -36,14 +36,16 @@ GUARD_COMMAND: Final = "python -m isidium.factory.guard"
 MATCHER: Final = "|".join(sorted(WRITING_TOOLS))
 
 
-def settings(policy: ExecutorPolicy) -> dict[str, Any]:
-    """The harness's settings: the allowlist as the permission surface, and the guard as a PreToolUse hook.
+def settings(policy: ExecutorPolicy, agent: str) -> dict[str, Any]:
+    """The harness's settings: the agent's own signed `tools` as the permission surface (config@7 — the tenant's
+    `[executor].allowlist` is their ceiling, enforced by the store before signing, never the surface itself), and the
+    guard as a PreToolUse hook.
 
     `deny` carries nothing: everything absent from `allow` is already denied by construction, and a deny list beside
     a closed allow list is a second home for the same fact. A policy whose `guard` is `post-hoc` renders **no hook**
     — that is what declared degradation means, and the capability row says so out loud rather than the settings
     quietly omitting it."""
-    out: dict[str, Any] = {"permissions": {"allow": list(policy.allowlist)}}
+    out: dict[str, Any] = {"permissions": {"allow": list(policy.agent(agent).tools)}}
     if policy.guard == "write-time":
         out["hooks"] = {"PreToolUse": [{"matcher": MATCHER, "hooks": [{"type": "command", "command": GUARD_COMMAND}]}]}
     return out
@@ -77,7 +79,9 @@ def write_run_dir(directory: Path, job: RunJob) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "job.json").write_text(json.dumps(job.model_dump(mode="json"), indent=2), encoding="utf-8")
     (directory / "allow.json").write_text(json.dumps(allow_spec(job), indent=2), encoding="utf-8")
-    (directory / "settings.json").write_text(json.dumps(settings(job.policy), indent=2), encoding="utf-8")
+    (directory / "settings.json").write_text(
+        json.dumps(settings(job.policy, job.identity.agent), indent=2), encoding="utf-8"
+    )
     (directory / "blocks.jsonl").write_text("", encoding="utf-8")
 
 
