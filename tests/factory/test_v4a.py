@@ -875,18 +875,18 @@ def test_a_prompt_the_executor_lacks_is_refused_before_anything_is_spent(
     lacking = Fake(carried=short)
     # A card of its own, ratified and landed, and a context loaded after it — the fixture's card is already in flight,
     # and the pick's cheaper refusals (the ready-view, the payload) must all pass for this one to be what refuses.
-    r = disk.store.write(
+    new = disk.store.write(
         NewCard("prompt-check"), Document(base_head(0, "draft"), {"Scope": BASE_SCOPE}), None, None, PLANNER
     )
-    assert r.id is not None
-    disk.store.ratify([r.id], OWNER)
+    assert new.id is not None
+    disk.store.ratify([new.id], OWNER)
     disk.store.land(EMPTY, LANDER)
     ctx = context_mod.load(TENANT, disk.work, base="main", root=ROOT)
     with Ledger.open(tmp_path, TENANT) as empty:  # nothing in flight, so the WIP cap is not what refuses
         refuses(
             "adapter.prompt-missing",
             lambda: dispatch_mod.pick(
-                ctx, empty, disk.call, Branch(disk.work), card=r.id, factory=lambda h, g: lacking
+                ctx, empty, disk.call, Branch(disk.work), card=new.id, factory=lambda h, g: lacking
             ),
         )
         assert empty.db.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0, "no row: the run never started"
