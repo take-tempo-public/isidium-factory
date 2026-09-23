@@ -50,6 +50,9 @@ PROMPTS_LABEL: Final = "org.isidium.prompts"
 # T-C6's *"one retry"*, named where it bites (C-10): the start and the watchdog each get one second attempt and no
 # more, because a phase that died twice is an environment to fix, not a thing to keep paying a model to re-attempt.
 ATTEMPTS: Final = 2
+# The ends a second attempt would only repeat, returned to the wrapper as they are. A budget end would spend the same
+# turns again (T-A7); a malformed plan-gate answer was already re-asked inside the call (T-B4 (1), [owner, 2026-09-23]).
+FINAL: Final[frozenset[str]] = frozenset({"failed:budget", "failed:malformed-plan"})
 
 # How long `podman rm --force` lets a stopped phase's harness finish writing its result before it kills the container.
 # Seconds, not minutes: the harness is stopping, not working, and the retry waits on this.
@@ -164,9 +167,10 @@ class Container:
             if proc.returncode == 0:
                 return _total(self._result(job, rundir), spent)
             left = self._left(job, rundir)
-            if left and left[0].outcome == "failed:budget":
+            if left and left[0].outcome in FINAL:
                 # T-A7: *"`budget`/`timeout` ⇒ design queue with the telemetry attached"* — never a retry, which would
-                # spend the same turns again. The phase's result goes back to the wrapper like any other end.
+                # spend the same turns again; nor for a malformed answer (`FINAL`). The phase's result goes back to the
+                # wrapper like any other end.
                 return _total(left[0], spent)
             detail = self._why(proc, rundir)
             if _environment(detail):
@@ -290,9 +294,17 @@ class Container:
         if not isinstance(raw, dict):
             raise Refusal("adapter.infra", job.run_id, "the container's result is not an object")
         blocks = render.count_blocks(_lines(rundir / "blocks.jsonl"))
+        # An artifact's path, from the run directory's to the deploy home's — the seam's one frame of reference, so
+        # the wrapper reads it without knowing where this adapter keeps a phase's files.
+        made = [
+            {**a, "path": (rundir / str(a.get("path", ""))).relative_to(self._home).as_posix()}
+            for a in raw.get("artifacts") or []
+            if isinstance(a, dict)
+        ]
         return result(
             {
                 **raw,
+                "artifacts": made,
                 "run_id": job.run_id,
                 "phase": job.phase,
                 "agent": job.identity.agent,

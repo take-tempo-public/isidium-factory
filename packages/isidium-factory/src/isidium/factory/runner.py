@@ -25,6 +25,7 @@ is the owner's call, not this chunk's. The trailer is the seam: the record says 
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
@@ -35,6 +36,7 @@ from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 from . import adapter as adapter_mod
+from . import artifacts as artifacts_mod
 from . import checkout, guard, lander
 from . import payload as payload_mod
 from .context import TenantContext
@@ -42,6 +44,7 @@ from .ledger import Ledger
 from .tenant import Registration
 
 SPAN: Final = "isidium.factory.run.phase"
+CHAIN_SPAN: Final = "isidium.factory.run.chain"
 TRAILER_RUN: Final = "Factory-Run"
 TRAILER_AGENT: Final = "Factory-Agent"
 # [owner, 2026-09-15] a failed phase's work is committed to its story branch and never pushed; the trailer is how the
@@ -66,6 +69,15 @@ AGENT_OF: Final[Mapping[str, str]] = {
 # The test paths a card may always write, beside its declared `surfaces` — T-B5 (1)'s *"surfaces ∪ test paths"*.
 # A card that declares its own test file gets it through `surfaces` as well; this is the floor, not the ceiling.
 TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
+
+# The phases that write nothing (05 §1: the plan-refuter and the judge write *"nothing"*; the plan author's one output
+# is the plan artifact; the reviewer files findings). Their job carries no write surface, so the guard denies every
+# write by construction, and a write that happened anyway ends the run uncommitted.
+READ_ONLY: Final[frozenset[str]] = frozenset({"plan", "refute", "judge", "review"})
+
+# The chain `run_chain` drives [owner, 2026-09-23]: to the judge and no further until the plan gate — what the
+# verdict does — is built. The next pull request extends it through the gate to the build.
+LINE: Final[tuple[str, ...]] = ("plan", "refute", "judge")
 
 # The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md` — is the agent's signed
 # `[agents].<kind>.prompt` since config@7 [owner, 2026-09-22]. It was a map here until then, kept in code on purpose
@@ -96,29 +108,73 @@ def run_phase(
     now: Now = _now,
 ) -> dict[str, Any]:
     """One phase of one dispatched run, end to end. Returns the run's row as the ledger holds it afterwards."""
-    with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
-        row = ledger.run(run_id)
-        if row is None:
-            raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
-        if row["ended_at"]:
-            raise Refusal("run.ended", run_id, f"this run ended {row['ended_at']} as {row['outcome']}")
-        agent = AGENT_OF.get(phase)
-        if agent is None:
-            raise Refusal("run.phase", phase, f"not a phase an adapter runs: {sorted(AGENT_OF)}")
+    if phase not in AGENT_OF:
+        raise Refusal("run.phase", phase, f"not a phase an adapter runs: {sorted(AGENT_OF)}")
+    return _drive(ctx, reg, ledger, call, run_id, (phase,), factory, now, carry=True)
 
-        policy = adapter_mod.ExecutorPolicy.from_effective(ctx.eff)
-        spec = policy.agent(agent)
-        sp.set_attribute("isidium.model", spec.model)
-        drv = (factory or adapter_mod.resolve(str(row["adapter"])))(ctx.home, reg)
-        # Again here, not only at dispatch: the image can be swapped between the two. Before the worktree, so a miss
-        # spends nothing and leaves the run in flight like the policy refusals above — swap the image, run again.
-        adapter_mod.require_prompts(policy, drv.prompts(), run_id)
 
-        tree = ctx.home / "worktrees" / run_id
-        work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
-        try:
+def run_chain(
+    ctx: TenantContext,
+    reg: Registration,
+    ledger: Ledger,
+    call: Call,
+    *,
+    run_id: str,
+    factory: adapter_mod.AdapterFactory | None = None,
+    now: Now = _now,
+) -> dict[str, Any]:
+    """The run driven from the last phase the ledger holds to its next end or gate [V4a-ii-a, point 7] — in **one
+    worktree**, created at the first phase and removed at the end, not one per phase.
+
+    **It stops at the judge** [owner, 2026-09-23]: the plan gate — what the verdict does — is the next pull request's,
+    so until it lands the chain is plan → refute → judge, and the run stays in flight with its verdict recorded and
+    not acted on. A chain whose phases are all on the ledger already has nothing to do and returns the row. A resumed
+    chain carries nothing: a carry is replayed before a run's first phase, or not at all."""
+    done = {str(p["phase"]) for p in ledger.phases_of(run_id)}
+    todo = tuple(p for p in LINE if p not in done)
+    with telemetry.span(CHAIN_SPAN, **{"isidium.run_id": run_id, "isidium.phases": len(todo)}):
+        if not todo:
+            after = ledger.run(run_id)
+            if after is None:
+                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+            return {**after, "phases": ledger.phases_of(run_id)}
+        return _drive(ctx, reg, ledger, call, run_id, todo, factory, now, carry=not done)
+
+
+def _drive(
+    ctx: TenantContext,
+    reg: Registration,
+    ledger: Ledger,
+    call: Call,
+    run_id: str,
+    phases: Sequence[str],
+    factory: adapter_mod.AdapterFactory | None,
+    now: Now,
+    *,
+    carry: bool,
+) -> dict[str, Any]:
+    """The phases in order, in one worktree, until one ends the run. Everything checked before the worktree exists
+    spends nothing and leaves the run in flight."""
+    row = ledger.run(run_id)
+    if row is None:
+        raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+    if row["ended_at"]:
+        raise Refusal("run.ended", run_id, f"this run ended {row['ended_at']} as {row['outcome']}")
+    policy = adapter_mod.ExecutorPolicy.from_effective(ctx.eff)
+    for phase in phases:  # every agent's row before any phase spends: a chain that cannot finish never starts
+        policy.agent(AGENT_OF[phase])
+    drv = (factory or adapter_mod.resolve(str(row["adapter"])))(ctx.home, reg)
+    # Again here, not only at dispatch: the image can be swapped between the two. Before the worktree, so a miss
+    # spends nothing and leaves the run in flight like the policy refusals above — swap the image, run again.
+    adapter_mod.require_prompts(policy, drv.prompts(), run_id)
+
+    tree = ctx.home / "worktrees" / run_id
+    work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
+    try:
+        carried = None
+        if carry:
             try:
-                carried = _carry(ledger, row, work, run_id, agent, ctx)
+                carried = _carry(ledger, row, work, run_id, AGENT_OF[phases[0]], ctx)
             except Refusal as r:
                 # **Its own handler, not the adapter's below.** That one writes a phase row and keeps the phase's
                 # work; a carry that refused ran no phase and left a tree it had already reset, so there is neither.
@@ -126,67 +182,157 @@ def run_phase(
                 # one in flight holds the WIP cap for ever — the defect V5a was built to close.
                 ledger.finish(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), _outcome_of(r))
                 raise
-            job = _job(
-                ctx, reg, row, call, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work, carried=carried
-            )
-            try:
-                res = drv.execute(job)
-            except Refusal as r:
-                # The end is when the adapter gave up, not when it was handed the job: `r-4`'s `ended_at` read the
-                # phase's start, seventeen minutes early (2026-09-14). And what the phase spent is on the record even
-                # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
-                at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
-                outcome = _outcome_of(r)
-                changed = checkout.touched(work)
-                if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
-                    ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed)})
-                # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
-                # when its harness crashed, and the worktree was removed with nothing kept.
-                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
-                ledger.finish(
-                    run_id,
-                    at,
-                    outcome,
-                    head_sha=head,
-                    surfaces_actual=list(changed) if changed else None,
-                    billing_class=drv.capabilities().billing_class,
-                )
-                raise
-            touched = checkout.touched(work)
-            _believe_nothing(res, touched)
-            outside = guard.outside(touched, job.allowed_writes)
-            at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
-            if outside:
-                ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope"})
-                head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
-                ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
-                raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
-            failed = None if res.outcome == "ok" else res.outcome
-            head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
-            ledger.phase(run_id, at, {**res.row(), "touched": list(touched)})
-            if res.outcome != "ok":
-                ledger.finish(
-                    run_id,
-                    at,
-                    res.outcome,
-                    head_sha=head,
-                    surfaces_actual=list(touched),
-                    billing_class=res.billing_class,
-                )
-                lander.land_run(ledger, call, run_id)
-            elif head is not None:
-                ledger.advance(run_id, head, list(touched), res.billing_class)
-        except Refusal:
-            # [V5a] a phase that ended the run tells the store before the refusal reaches the operator: a failure the
-            # store never heard of reads `dispatched` on the board for ever (Q-V22). A refusal that ended nothing
-            # sends only what an earlier land missed — the watermark decides, not this line.
-            lander.land_run(ledger, call, run_id)
-            raise
-        finally:
-            checkout.worktree_remove(ctx.checkout, tree)
-        after = ledger.run(run_id)
-        assert after is not None
-        return {**after, "phases": ledger.phases_of(run_id)}
+        for phase in phases:
+            with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
+                sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
+                _phase(ctx, reg, ledger, call, row, drv, policy, work, phase, carried, now)
+            carried = None  # the carry is told to the phase it was replayed for, and to no later one
+            after = ledger.run(run_id)
+            if after is not None and after["ended_at"]:
+                break
+    except Refusal:
+        # [V5a] a phase that ended the run tells the store before the refusal reaches the operator: a failure the
+        # store never heard of reads `dispatched` on the board for ever (Q-V22). A refusal that ended nothing
+        # sends only what an earlier land missed — the watermark decides, not this line.
+        lander.land_run(ledger, call, run_id)
+        raise
+    finally:
+        checkout.worktree_remove(ctx.checkout, tree)
+    after = ledger.run(run_id)
+    assert after is not None
+    return {**after, "phases": ledger.phases_of(run_id)}
+
+
+def _phase(
+    ctx: TenantContext,
+    reg: Registration,
+    ledger: Ledger,
+    call: Call,
+    row: Mapping[str, Any],
+    drv: adapter_mod.Adapter,
+    policy: adapter_mod.ExecutorPolicy,
+    work: Path,
+    phase: str,
+    carried: adapter_mod.Carried | None,
+    now: Now,
+) -> None:
+    """One phase in a worktree that already exists: the job, the adapter, the recompute, the record."""
+    run_id = str(row["run_id"])
+    agent = AGENT_OF[phase]
+    inputs = _inputs(ledger, ctx.home, run_id, phase)
+    job = _job(
+        ctx,
+        reg,
+        row,
+        call,
+        run_id=run_id,
+        phase=phase,
+        agent=agent,
+        policy=policy,
+        work=work,
+        carried=carried,
+        inputs=inputs,
+    )
+    try:
+        res = drv.execute(job)
+    except Refusal as r:
+        # The end is when the adapter gave up, not when it was handed the job: `r-4`'s `ended_at` read the
+        # phase's start, seventeen minutes early (2026-09-14). And what the phase spent is on the record even
+        # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
+        at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+        outcome = _outcome_of(r)
+        changed = checkout.touched(work)
+        if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
+            ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed)})
+        # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
+        # when its harness crashed, and the worktree was removed with nothing kept. A phase that may write nothing
+        # has no work to keep — whatever it wrote is not work.
+        head = None
+        if phase not in READ_ONLY:
+            head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
+        ledger.finish(
+            run_id,
+            at,
+            outcome,
+            head_sha=head,
+            surfaces_actual=list(changed) if changed else None,
+            billing_class=drv.capabilities().billing_class,
+        )
+        raise
+    touched = checkout.touched(work)
+    _believe_nothing(res, touched)
+    outside = guard.outside(touched, job.allowed_writes)
+    at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    if outside:
+        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope"})
+        if phase in READ_ONLY:
+            # [owner, 2026-09-23] a phase that may write nothing and wrote something ends the run uncommitted: there
+            # is no work of its to keep, and a commit would put a read-only agent's edit on the story branch.
+            ledger.finish(run_id, at, "failed:scope", surfaces_actual=list(touched))
+            raise Refusal("run.read-only", outside[0], f"the {phase} phase writes nothing; it wrote {list(touched)}")
+        head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
+        ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
+        raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
+    if res.outcome == "ok":
+        _believe_artifacts(res, phase, ctx.home)
+    failed = None if res.outcome == "ok" else res.outcome
+    head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
+    ledger.phase(run_id, at, {**res.row(), "touched": list(touched)})
+    if res.outcome != "ok":
+        ledger.finish(
+            run_id,
+            at,
+            res.outcome,
+            head_sha=head,
+            surfaces_actual=list(touched),
+            billing_class=res.billing_class,
+        )
+        lander.land_run(ledger, call, run_id)
+    elif head is not None:
+        ledger.advance(run_id, head, list(touched), res.billing_class)
+
+
+def _inputs(ledger: Ledger, home: Path, run_id: str, phase: str) -> tuple[adapter_mod.Input, ...]:
+    """The earlier phases' artifacts this phase reads, each re-hashed against the ledger before it is handed on
+    (T-B7 (3): *"every artifact referenced exists at its hash"*). A missing one — `--phase judge` before any refute —
+    or one whose bytes moved is refused before anything spends, and the run stays in flight."""
+    wanted = artifacts_mod.INPUTS.get(phase, ())
+    if not wanted:
+        return ()
+    have = ledger.artifacts_of(run_id)
+    out: list[adapter_mod.Input] = []
+    for name in wanted:
+        art = have.get(name)
+        if art is None:
+            raise Refusal("run.artifact-missing", run_id, f"the {phase} phase reads the {name}, and no phase made one")
+        try:
+            data = (home / str(art["path"])).read_bytes()
+        except OSError as e:
+            raise Refusal(
+                "run.artifact-missing", str(art["path"]), f"the {name} is not where the ledger says: {e}"
+            ) from None
+        if artifacts_mod.sha256(data) != art["sha256"]:
+            raise Refusal("run.artifact-moved", str(art["path"]), f"the {name} no longer hashes to {art['sha256']}")
+        out.append(adapter_mod.Input(name=name, sha256=str(art["sha256"]), content=json.loads(data)))
+    return tuple(out)
+
+
+def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, home: Path) -> None:
+    """A structured phase that says `ok` answered with exactly its artifact, and the bytes at the path hash to what it
+    claims — the adapter's word is not taken for either (the gajae follow-up's rule, applied to artifacts). Refused
+    like a change set that disagrees with git: the run stays in flight and the operator reads why."""
+    shaped = artifacts_mod.OF_PHASE.get(phase)
+    expected = [shaped[0]] if shaped else []
+    got = [a.name for a in res.artifacts]
+    if got != expected:
+        raise Refusal("run.artifact", res.run_id, f"the {phase} phase answers with {expected}; the result names {got}")
+    for a in res.artifacts:
+        try:
+            data = (home / a.path).read_bytes()
+        except OSError as e:
+            raise Refusal("run.artifact", a.path, f"the {a.name} the result names is not there: {e}") from None
+        if artifacts_mod.sha256(data) != a.sha256:
+            raise Refusal("run.artifact", a.path, f"the {a.name}'s bytes do not hash to {a.sha256}")
 
 
 def _job(
@@ -201,6 +347,7 @@ def _job(
     policy: adapter_mod.ExecutorPolicy,
     work: Path,
     carried: adapter_mod.Carried | None = None,
+    inputs: tuple[adapter_mod.Input, ...] = (),
 ) -> adapter_mod.RunJob:
     """The payload, re-assembled at the run's own `base_sha` — and checked against the hash the ledger wrote at
     dispatch. Same inputs, same hash (T-B3 (4)); a different one means the substrate moved under a dispatched run,
@@ -235,11 +382,12 @@ def _job(
             "payload": p.value,
             "payload_hash": p.payload_hash,
             "worktree": str(work),
-            "allowed_writes": surfaces + TEST_PATHS,
+            "allowed_writes": () if phase in READ_ONLY else surfaces + TEST_PATHS,
             "policy": policy,
             "identity": {"agent": agent, "name": ctx.identity.name, "email": ctx.identity.email},
             "prompt_version": policy.agent(agent).prompt,
             "carried": carried,
+            "inputs": inputs,
         }
     )
 

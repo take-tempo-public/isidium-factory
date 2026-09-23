@@ -53,7 +53,7 @@ Phase = Literal["plan", "refute", "judge", "build", "review", "reconcile"]
 # does not close a card. `failed:budget` is T-A7's *"`budget`/`timeout` ⇒ design queue with the telemetry attached"*:
 # a phase that spent its turns ended on the work's own terms, and a second attempt spends them again (found live on
 # `r-4`, 2026-09-14, where a turn limit was called `failed:infra` and retried).
-Outcome = Literal["ok", "failed:infra", "failed:scope", "failed:budget", "parked"]
+Outcome = Literal["ok", "failed:infra", "failed:scope", "failed:budget", "failed:malformed-plan", "parked"]
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
@@ -183,12 +183,24 @@ class Carried(_Wire):
     files: tuple[str, ...] = ()
 
 
+class Input(_Wire):
+    """A prior phase's artifact, handed to this one inline [V4a-ii-a]: its name, the hash the ledger recorded, and
+    its content. The wrapper re-hashes the stored bytes against the ledger before it builds the job (T-B7 (3)), so
+    what the agent reads is what the earlier phase produced, not what the run directory holds now."""
+
+    name: str = Field(min_length=1)
+    sha256: str = Field(min_length=1)
+    content: Mapping[str, Any]
+
+
 class RunJob(_Wire):
     """What crosses the seam inwards: one phase of one run, everything it may read, and the only paths it may write.
 
     `payload` is V1's assembled value verbatim — the card's gated set, its refs' excerpts, the neighborhood block,
     the constraints and the identity. `allowed_writes` is the guard's data: the card's `surfaces` ∪ the test paths
-    (T-B5 (1)), resolved here and enforced at write time inside."""
+    (T-B5 (1)), resolved here and enforced at write time inside. **Empty for a phase that writes nothing** — plan,
+    refute, judge and review (05 §1: they write *"nothing"*): the guard then denies every write, by construction.
+    `inputs` are the earlier phases' artifacts this phase reads (`artifacts.INPUTS`)."""
 
     run_id: str = Field(min_length=1)
     card: int = Field(ge=1)
@@ -196,16 +208,18 @@ class RunJob(_Wire):
     payload: Mapping[str, Any]
     payload_hash: str = Field(min_length=1)
     worktree: str = Field(min_length=1)
-    allowed_writes: tuple[str, ...] = Field(min_length=1)
+    allowed_writes: tuple[str, ...] = ()
     policy: ExecutorPolicy
     identity: RunIdentity
     prompt_version: str = Field(min_length=1)
     carried: Carried | None = None
+    inputs: tuple[Input, ...] = ()
 
 
 class Artifact(_Wire):
     """A phase's output, by hash. T-B7 (3): *"every artifact referenced exists at its hash"* — so the hash is the
-    reference, and a name without one has no place to live."""
+    reference, and a name without one has no place to live. `path` is relative to the tenant's deploy home, whatever
+    the adapter: the wrapper reads the bytes there and re-hashes them, believing nothing."""
 
     name: str = Field(min_length=1)
     sha256: str = Field(min_length=1)
