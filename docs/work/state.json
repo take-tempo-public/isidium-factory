@@ -308,6 +308,41 @@
           "run_id": "r-10"
         }
       ]
+    },
+    "0011": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:3b265877f4618eb275bb3258c537382a0df50842c3ced8861cf0d0e9981554ca",
+        "seq": 1
+      },
+      "runs": []
+    },
+    "0012": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "9f9fb445e4e1f1f6ea7b6560f41fbd26c5df035b",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "f476577462dbeb16f0fe2ff875a21cd5ae2ca56a",
+            "path": "packages/isidium-factory/src/isidium/factory/close.py"
+          },
+          {
+            "blob": "14aa732cfb7a48b416457f930db714be7c0b7c8b",
+            "path": "packages/isidium-factory/src/isidium/factory/ledger.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:28ccaea7740753f9787b6689cee7dfce0d2ec6593ae658411bfaae285ececa52",
+        "seq": 2
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -332,10 +367,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:5f788521cafc21348c7c197f6dd49e2a3358efbeb32784bf8089a040cfbe9eff",
-    "seq": 104
+    "h": "sha256:b56d293c67fbb15dea5ff1e35e5bd24a6dfb7484a569bcc063a14a409ecbc571",
+    "seq": 110
   },
-  "landed_at": "2026-09-23T20:00:38Z",
-  "ledger_cursor": "bb5b657ce6eb52202e50cd0963a92a5fea819f03",
+  "landed_at": "2026-09-24T03:09:06Z",
+  "ledger_cursor": "9f9fb445e4e1f1f6ea7b6560f41fbd26c5df035b",
   "schema": 2
 }

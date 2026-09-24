@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox run 1
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -15,7 +15,7 @@ WIP 0/1 · inbox run 1
 
 ## Inbox
 
-- s1 · docs · run · the first land is synthetic: say so where the sidecar is read
+none
 
 ## Open
 
@@ -28,6 +28,8 @@ WIP 0/1 · inbox run 1
 - **8** · The sidecar's first entry says it is synthetic where the sidecar is read · closed · software-grade · (derived)
 - **9** · The open-inbox rule has one home, so the board's inbox count and its inbox list cannot disagree · closed · software-grade · (derived)
 - **10** · A demotion that ends a run in flight is a signed act, so the sidecar hears it · closed (unverified) · software-grade · (derived)
+- **11** · the first land is synthetic: say so where the sidecar is read · draft · (derived)
+- **12** · A phase's result left on disk reaches the ledger when its run ends, so a crashed host's spend is recorded · ready · software-grade · (derived)
 
 ## Blocked
 
