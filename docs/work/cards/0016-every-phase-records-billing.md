@@ -2,7 +2,7 @@
 schema = 1
 id = 16
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled"
 shape = "bdd"
@@ -82,5 +82,6 @@ Not in scope: r-13's own row, which stays null as the record of the gap; close's
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T21:21:17Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:b236678f23868412d9cb9a7d8c189642709ec7c6a4ad24977a7821f3326a8904", h = "sha256:43f2ba901dda081ca4ce1f4c70dc10dae748d00dc63556db600fb33057d3b890" },
+  { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:b236678f23868412d9cb9a7d8c189642709ec7c6a4ad24977a7821f3326a8904", h = "sha256:58ec5cb49bc7404abc7eeb9224ece42cba1395d6d27745cafdc092cf04391cf4", batch = 26 },
 ]
 ```

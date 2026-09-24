@@ -2,7 +2,7 @@
 schema = 1
 id = 13
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run"
 shape = "bdd"
@@ -112,5 +112,6 @@ Not in scope: re-dispatch after an answer (V6); the dispatcher's WIP count (its 
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T21:20:58Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:340b5ab4da03b917d427074d72a4a10569e3874a77c2c80c0e756022b7a3210c", h = "sha256:7174f5d124702d2670adf320688fc5ded9a13a6c332224ed785b2dcc2b09e1da" },
+  { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:340b5ab4da03b917d427074d72a4a10569e3874a77c2c80c0e756022b7a3210c", h = "sha256:9dee2849e404d2a658bc8520c4ac5690ef6845fcd319e6de6dc472320b8cd657", batch = 26 },
 ]
 ```

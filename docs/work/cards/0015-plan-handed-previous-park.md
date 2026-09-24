@@ -2,7 +2,7 @@
 schema = 1
 id = 15
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A card's next plan is handed the question its last run parked on"
 shape = "bdd"
@@ -103,5 +103,6 @@ Not in scope: re-dispatch after an answer (V6); carrying work. After the merge, 
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T21:21:11Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:2ed4c5d4ed2828506354a8bac8e22db423f6fda798a2ce9418e937314f2fc4ee" },
+  { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:866f82b4990867242d1522d11aa5bc78e7acbfb7d4d05dbcf89a2bd6ac4d8f85", batch = 26 },
 ]
 ```

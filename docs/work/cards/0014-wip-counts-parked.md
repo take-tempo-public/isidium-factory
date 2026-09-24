@@ -2,7 +2,7 @@
 schema = 1
 id = 14
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line"
 shape = "bdd"
@@ -94,5 +94,6 @@ Not in scope: what a parked card's question becomes when the owner answers it (t
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T21:21:05Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:b49efb54eddd01784fd38f29c2145bc1c2a1c0162d9954548814f3ae547e0f00" },
+  { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:3a47f0cc069112e42e1393ec4b92b47fc4f12cec8dcfe196f32b63f90eae9b6f", batch = 26 },
 ]
 ```

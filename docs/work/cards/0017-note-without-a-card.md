@@ -2,7 +2,7 @@
 schema = 1
 id = 17
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Accepting a suggestion as a note on a suggestion that names no card is refused by its own rule, and nothing is written"
 shape = "bdd"
@@ -71,5 +71,6 @@ Not in scope: letting the owner name the card at disposition time. That adds an 
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T21:21:24Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:98e058ae7f0d56de8c93d6e8c2a3357d5edb143c22d4c9ca0b869fcde8177e75" },
+  { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:6af7042368b1f7d2b00827eb205521fc6916b53d02b97c23a718ad0ff70fa2a3", batch = 26 },
 ]
 ```
