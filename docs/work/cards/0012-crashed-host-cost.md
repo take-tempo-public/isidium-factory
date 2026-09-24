@@ -2,7 +2,7 @@
 schema = 1
 id = 12
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A phase's result left on disk reaches the ledger when its run ends, so a crashed host's spend is recorded"
 shape = "bdd"
@@ -89,5 +89,6 @@ Not in scope: r-11 itself, which has already ended and is not re-opened; an outc
 ```toml
 history = [
   { seq = 1, at = "2026-09-24T02:52:09Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:2dbaae7bb7122275382b740b77f4c766b1bbb399f4242f007117e676c60bf251", h = "sha256:a625a59f7b88193ad3be2b24e8f5c81047b14fa8da417290e6e3a31bea96d641" },
+  { seq = 2, at = "2026-09-24T03:09:06Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:2dbaae7bb7122275382b740b77f4c766b1bbb399f4242f007117e676c60bf251", h = "sha256:28ccaea7740753f9787b6689cee7dfce0d2ec6593ae658411bfaae285ececa52", batch = 24 },
 ]
 ```
