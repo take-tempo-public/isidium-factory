@@ -2,7 +2,7 @@
 schema = 1
 id = 12
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A phase's result left on disk reaches the ledger when its run ends, so a crashed host's spend is recorded"
 shape = "bdd"
@@ -20,7 +20,7 @@ text = "When close ends a run, every phase whose run directory holds a readable 
 
 [[rules]]
 id = "R2"
-text = "When the run's row holds no billing class, the end takes the billing class of the results it recorded"
+text = "When the run's row holds no billing class, close passes the billing class of the results it recorded to the end; when the row holds one, close passes none, and the row's class stands"
 
 [[rules]]
 id = "R3"
@@ -45,6 +45,11 @@ id = "C2"
 text = "the run directory is found as the container adapter lays it out, <deploy home>/runs/<run>/<step>/result.json, and one directory listing per run is the whole cost"
 because = "close runs on every run end; it must not walk the deploy home"
 
+[[guidance.constraints]]
+id = "C3"
+text = "Ledger._end's SQL is not changed; the choice is close's"
+because = "_end's COALESCE(?, col) prefers the value passed; other callers rely on that"
+
 [[acceptance.scenarios]]
 id = "S1"
 kind = "test-marker"
@@ -58,6 +63,13 @@ kind = "test-marker"
 title = "the end takes the recorded result's billing class"
 rule = "R2"
 observable = { test = "tests/factory/test_close_records_left_results.py::test_the_end_takes_the_recorded_results_billing_class" }
+
+[[acceptance.scenarios]]
+id = "S5"
+kind = "test-marker"
+title = "a row that already holds a billing class keeps it"
+rule = "R2"
+observable = { test = "tests/factory/test_close_records_left_results.py::test_a_row_that_holds_a_billing_class_keeps_it" }
 
 [[acceptance.scenarios]]
 id = "S3"
@@ -90,5 +102,6 @@ Not in scope: r-11 itself, which has already ended and is not re-opened; an outc
 history = [
   { seq = 1, at = "2026-09-24T02:52:09Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:2dbaae7bb7122275382b740b77f4c766b1bbb399f4242f007117e676c60bf251", h = "sha256:a625a59f7b88193ad3be2b24e8f5c81047b14fa8da417290e6e3a31bea96d641" },
   { seq = 2, at = "2026-09-24T03:09:06Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:2dbaae7bb7122275382b740b77f4c766b1bbb399f4242f007117e676c60bf251", h = "sha256:28ccaea7740753f9787b6689cee7dfce0d2ec6593ae658411bfaae285ececa52", batch = 24 },
+  { seq = 3, at = "2026-09-24T14:38:31Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "status"], build = "sha256:08cb645af1de141ba51bcbe9c0edbcfd68611beb13e7a4a17701fc902af94691", h = "sha256:290588b6be5abdc8218294212299ca3f4debc84b866bd220746f5f6244f6d8d4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:gMeiMuNQk+9kHJjSWPiOA+uap3bd/bSHshLOQyr8cRSdUQm2E/1rsz2JyJLdE/lbMmjvHg8mM1w/fer888H9Dw==" },
 ]
 ```
