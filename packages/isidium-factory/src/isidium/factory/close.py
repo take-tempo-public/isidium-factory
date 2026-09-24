@@ -31,13 +31,22 @@ so, and for a run whose `dispatched` the store holds, the store's walk has emitt
 
 **Declared, not checked:** condition 3's *signed* (the wrapper does not sign commits — V4a-i); condition 5 is on the
 row already (`surfaces_actual`); condition 6's close-report template does not exist yet.
+
+**Before every end it writes, close recovers what a dead host left behind** [card 12, 2026-09-22]: `r-11`'s build
+finished inside its container — a readable `result.json`, its spend measured — while the host process that would
+have written the ledger's phase row was killed before it could. Close is the one door every such run leaves by, so a
+phase directory the ledger never recorded is picked up there, at the container adapter's own layout
+(`<deploy home>/runs/<run>/<step>/result.json`) — one directory listing per run, never a walk of the deploy home.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import subprocess
-from collections.abc import Callable, Mapping
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
@@ -45,7 +54,9 @@ from isidium.store.client import accept as accept_mod
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
-from . import lander
+from . import adapter as adapter_mod
+from . import artifacts as artifacts_mod
+from . import lander, render
 from .context import TenantContext
 from .forge import Checks, MergeState, Verdict
 from .ledger import ABANDONED, CLOSED, Ledger
@@ -56,8 +67,47 @@ SPAN: Final = "isidium.factory.close"
 ABANDONING: Final[frozenset[str]] = frozenset({"withdrawn", "draft"})
 FACTORY_CLOSURE: Final = "f-"
 
+# The container adapter's own layout (C2) — named once, here, and nowhere inside the scan itself (C-10).
+RUNS: Final = "runs"
+RESULT: Final = "result.json"
+BLOCKS: Final = "blocks.jsonl"
+LEFT_SPAN: Final = "isidium.factory.close.left"
+RECORDED: Final = "isidium.close.recorded"
+UNREADABLE: Final = "isidium.close.unreadable"
+
 Call = Callable[[str, Mapping[str, Any]], Any]
 Accept = Callable[[Call, Path, str, int], Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
+class Recovered:
+    """One left-behind phase, validated and ready for the ledger: the result `ledger.phase` takes, and — for a
+    recovered `judge` — the verdict pair beside it, so the two are written in the same transaction rather than the
+    verdict being looked up again at write time."""
+
+    result: adapter_mod.PhaseResult
+    verdict: tuple[str, str] | None
+
+
+@dataclass(frozen=True)
+class Left:
+    """What a run's recovery found, for the end that follows it. `billing_class` is R2's asymmetry, decided here and
+    not in `Ledger._end`: its `COALESCE(?, col)` prefers what is passed, and other callers rely on that (C3), so the
+    choice of *what* to pass is close's. A run has one adapter — the `runs` row carries a single `adapter` — so its
+    results cannot honestly disagree, and the first one found (phase, round order) is as good a pick as any merge
+    rule this card does not ask for."""
+
+    billing_class: str | None
+    recorded: tuple[str, ...]
+    unreadable: tuple[str, ...]
+
+    def detail(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if self.recorded:
+            out["recorded"] = list(self.recorded)
+        if self.unreadable:
+            out["unreadable"] = list(self.unreadable)
+        return out
 
 
 class Reader(Protocol):
@@ -78,6 +128,113 @@ def _stamp(t: _dt.datetime) -> str:
 def _accept(call: Call, workdir: Path, root: str, card_id: int) -> Mapping[str, Any]:
     """`accept` without `--close`: the scenarios run and their verdicts come back; the factory writes no card."""
     return accept_mod.accept(call, workdir, root, card_id)
+
+
+def _step_of(name: str) -> tuple[str, int]:
+    """A run directory entry's name, split the way `RunJob.step` built it: `plan` is round 1, `plan-2` is `plan`'s
+    round 2. No phase name carries a dash (05 §1's roster), so a trailing field that does not parse as a positive
+    integer is not a round at all — it stays part of the name, at round 1."""
+    phase, sep, suffix = name.rpartition("-")
+    if sep and suffix.isdigit() and int(suffix) > 0:
+        return phase, int(suffix)
+    return name, 1
+
+
+def _lines(path: Path) -> Sequence[str]:
+    """Mirrors `container._lines`: `adapter.resolve` defers importing an adapter's module on purpose, and close must
+    not be the one thing that imports podman's."""
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ()
+
+
+def _left_results(home: Path, run_id: str, held: Sequence[Mapping[str, Any]]) -> tuple[list[Recovered], list[str]]:
+    """R1's readable results and R3's unreadable ones, found at C2's one listing of the run's own directory — no walk
+    above it, and never the deploy home. R4's dedupe is by phase name, consumed in (phase, round) order: the `phases`
+    table holds no round column, so *this occurrence* is what is skipped, not the name outright — a `plan` row
+    already on the ledger is skipped unopened, and a revision's own `plan-2` result is still recorded.
+
+    Every candidate is validated through `adapter.result` (C1), never trusted as a dict — the ledger's rows are the
+    wire's own dump, and an unvalidated one would drift from it. Nothing is reconstructed from `harness.json` or the
+    stream (A1): `result.json` is the adapter's typed answer already, `blocks.jsonl` is the guard's own log (counted
+    exactly as `container.py` counts it, because the harness reports no such field), and a judge's verdict artifact
+    is read at the home-relative path the result itself names."""
+    try:
+        steps = sorted((p for p in (home / RUNS / run_id).iterdir() if p.is_dir()), key=lambda p: _step_of(p.name))
+    except OSError:
+        return [], []
+    counts = Counter(str(p["phase"]) for p in held)
+    recovered: list[Recovered] = []
+    unreadable: list[str] = []
+    for step in steps:
+        phase, _round = _step_of(step.name)
+        if counts[phase] > 0:
+            counts[phase] -= 1
+            continue
+        result_path = step / RESULT
+        if not result_path.is_file():
+            continue
+        offending = result_path.relative_to(home).as_posix()
+        try:
+            raw = json.loads(result_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("the container's result is not an object")
+            # The artifact path frame, rebased exactly as `container._result` rebases it: run-directory-relative on
+            # disk, deploy-home-relative on the record — the seam's one frame of reference.
+            made = [
+                {**a, "path": (step / str(a.get("path", ""))).relative_to(home).as_posix()}
+                for a in raw.get("artifacts") or []
+                if isinstance(a, dict)
+            ]
+            res = adapter_mod.result(
+                {**raw, "artifacts": made, "guard_blocks": render.count_blocks(_lines(step / BLOCKS))}
+            )
+            verdict = None
+            if res.phase == "judge" and res.outcome == "ok":
+                # `runner.py`'s own derivation [F2], with one addition: the bytes are re-hashed against the
+                # artifact's claimed `sha256` before the row is written, because the `verdicts` row stores that hash
+                # as its `reasoning` ref and close must not record a hash it did not check.
+                if not res.artifacts:
+                    raise ValueError("a judge result answering ok names no verdict artifact")
+                art = res.artifacts[0]
+                offending = art.path
+                data = (home / art.path).read_bytes()
+                if artifacts_mod.sha256(data) != art.sha256:
+                    raise Refusal("close.left-unreadable", art.path, f"the {art.name} does not hash to {art.sha256}")
+                said = artifacts_mod.Verdict.model_validate_json(data)
+                verdict = (said.verdict, art.sha256)
+            recovered.append(Recovered(result=res, verdict=verdict))
+        except (OSError, ValueError, Refusal) as e:
+            unreadable.append(offending)
+            telemetry.note("close.left-result", f"{offending}: {e}")
+    return recovered, unreadable
+
+
+def _record_left(ctx: TenantContext, ledger: Ledger, row: Mapping[str, Any], at: str) -> Left:
+    """The recovery, in one door: every left result found and validated, written to the ledger before any end, and
+    what the end needs back. Three choices, each true of the file it belongs to:
+
+    (1) R2's asymmetry is close's to make, not `Ledger._end`'s (C3) — see `Left`'s own docstring.
+    (2) `guard_blocks` is counted from the run directory's own `blocks.jsonl`, not taken from the result: the harness
+    reports no such field, and a phase that scored its own denials could score none.
+    (3) `touched` stays at the result's own default, `()`: the live path computes it from git in the phase's
+    worktree at the moment the phase ended, and that moment is gone by close time — the tree may already be removed,
+    or a dead host's left mid-flight, or a closing run's branch has since merged — so no honest recomputation
+    exists. What the run touched is on the row as `surfaces_actual`, which R1 does not ask this to change."""
+    run_id = str(row["run_id"])
+    with telemetry.span(LEFT_SPAN, **{"isidium.run_id": run_id}) as sp:
+        recovered, unreadable = _left_results(ctx.home, run_id, ledger.phases_of(run_id))
+        for rec in recovered:
+            ledger.phase(run_id, at, rec.result.row(), verdict=rec.verdict)
+        sp.set_attribute(RECORDED, len(recovered))
+        sp.set_attribute(UNREADABLE, len(unreadable))
+        billing = None if row.get("billing_class") else (recovered[0].result.billing_class if recovered else None)
+        return Left(
+            billing_class=billing,
+            recorded=tuple(r.result.phase for r in recovered),
+            unreadable=tuple(unreadable),
+        )
 
 
 def close(
@@ -123,7 +280,11 @@ def _close(
     card = call("show", {"target": "card", "id": cid})
     status = str(card["head"].get("status"))
     if status in ABANDONING:
-        ledger.end(run_id, _stamp(now()), ABANDONED, detail={"card_status": status})
+        at = _stamp(now())
+        left = _record_left(ctx, ledger, row, at)
+        ledger.end(
+            run_id, at, ABANDONED, billing_class=left.billing_class, detail={"card_status": status, **left.detail()}
+        )
         return _result(ledger, run_id, {"sent": 0, "abandoned": status})
 
     number = pr if pr is not None else row["pr"]
@@ -151,7 +312,6 @@ def _close(
         "pr": int(number),
         "merge_commit": state.merge_commit,
         "checkout": at_head,
-        "phases": [str(p["phase"]) for p in ledger.phases_of(run_id)],
     }
     failure: str | None = None
     verdicts: dict[str, str] = {}
@@ -171,8 +331,11 @@ def _close(
         if not verdicts or not res["passed"]:
             failure = "acceptance"
     at = _stamp(now())
+    left = _record_left(ctx, ledger, row, at)
+    detail.update(left.detail())
+    detail["phases"] = [str(p["phase"]) for p in ledger.phases_of(run_id)]
     if failure is not None:
-        ledger.end(run_id, at, f"failed:{failure}", detail=detail)
+        ledger.end(run_id, at, f"failed:{failure}", billing_class=left.billing_class, detail=detail)
         return _result(ledger, run_id, lander.land_run(ledger, call, run_id))
 
     closures = card["head"].get("closures") or []
@@ -193,7 +356,14 @@ def _close(
         "evidence": [detail["manifest_hash"], at_head],
         "verified": True,
     }
-    ledger.end(run_id, at, CLOSED, store_events=(("complete", complete), ("closed", closed)), detail=detail)
+    ledger.end(
+        run_id,
+        at,
+        CLOSED,
+        store_events=(("complete", complete), ("closed", closed)),
+        billing_class=left.billing_class,
+        detail=detail,
+    )
     return _result(ledger, run_id, lander.land_run(ledger, call, run_id))
 
 
