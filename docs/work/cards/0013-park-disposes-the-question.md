@@ -2,7 +2,7 @@
 schema = 1
 id = 13
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run"
 shape = "bdd"
@@ -20,11 +20,11 @@ text = "A parked event adds its run to the card's runs as an entry with outcome 
 
 [[rules]]
 id = "R2"
-text = "A demoted or withdrawn event on a card whose execution is parked or answered abandons no run: the parked run's entry records how its question was left, with the act, the card entry's seq and the time, and the card's execution clears"
+text = "A demoted or withdrawn event on a card whose execution is parked or answered abandons no run: it appends a response {act, card_seq, at}: act the event's kind, card_seq the card entry's seq (required), at the event's time, to the parked run's entry, and the card's execution clears"
 
 [[rules]]
 id = "R3"
-text = "An answered event on a parked card records on the parked run's entry that its question was answered, with the card entry's seq and the time; the card's execution reads answered"
+text = "An answered event on a parked card appends a response with act answered, the card entry's seq as card_seq and the event's time as at, to the parked run's entry; the card's execution reads answered"
 
 [[rules]]
 id = "R4"
@@ -33,6 +33,10 @@ text = "A demoted or withdrawn event on a card whose execution is dispatched aba
 [[rules]]
 id = "R5"
 text = "A card whose question was left by a demotion reads ready once it is re-ratified"
+
+[[rules]]
+id = "R6"
+text = "A parked run's responses are appended in order and never rewritten or removed: a later act on the card adds a response after the ones already there, and the first response is the one that disposed of the question"
 
 [[guidance.avoid]]
 id = "A1"
@@ -51,8 +55,13 @@ because = "every land re-folds the whole file, which is also how the tenant's ow
 
 [[guidance.constraints]]
 id = "C2"
-text = "test_a_run_in_flight_with_no_dispatched_line_is_abandoned_without_a_run_id changes with R2: a parked card reported alone and then withdrawn records a parked entry whose question was left, not an abandoned one"
+text = "test_a_run_in_flight_with_no_dispatched_line_is_abandoned_without_a_run_id changes with R2: a parked card reported alone and then withdrawn records a parked entry with a withdrawn response, not an abandoned one"
 because = "that test pins the behavior this card replaces; it is rewritten, not deleted, and keeps its no-run-id case"
+
+[[guidance.constraints]]
+id = "C3"
+text = "the parked run's entry links to its question by its run_id alone; no question hash is added to the entry or to the parked event"
+because = "a run parks at most once, so its run_id names one question.json and the ledger's detail holds that file's hash; the parked event carries no structured hash, and widening it would reach the factory's land path"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -95,13 +104,20 @@ kind = "test-marker"
 title = "card 12's own history folds to r-13 parked and its question left by the demotion, then ready"
 rule = "R5"
 observable = { test = "tests/store/test_fold_parks.py::test_card_12s_history_folds_to_a_parked_run_whose_question_was_left" }
+
+[[acceptance.scenarios]]
+id = "S7"
+kind = "test-marker"
+title = "a park answered and then demoted keeps both responses in order"
+rule = "R6"
+observable = { test = "tests/store/test_fold_parks.py::test_a_park_answered_then_demoted_keeps_both_responses_in_order" }
 ```
 
 ## Scope
 
 Found on 2026-09-24 with run r-13. It parked at 03:34:21 and the ledger ended it parked. When card 12 was demoted at 14:38:31 to answer that park, the fold recorded r-13 as abandoned, because it treats parked and answered as in flight and a demotion of an in-flight card abandons its run. The ledger and the sidecar now disagree about one run.
 
-The owner ruled the flow: a park ends the run and opens a question on the card. The owner's response (answering it, changing the card, or withdrawing it) disposes of the question and never abandons a run; only a run still dispatched is abandoned. The fold also never writes a runs entry for a park, so today the demotion's abandoned line is the only trace a parked run leaves.
+The owner ruled the flow: a park ends the run and opens a question on the card. The owner's response (answering it, changing the card, or withdrawing it) disposes of the question and never abandons a run; only a run still dispatched is abandoned. The owner ruled the record's shape (2026-09-25, from r-15's park): history is preserved regardless, so a parked run's entry carries responses appended in order and never rewritten, each {act, card_seq, at} with card_seq required, and it links to its question by its run_id. The fold also never writes a runs entry for a park, so today the demotion's abandoned line is the only trace a parked run leaves.
 
 In scope: the fold recording parked runs and how their questions were left, dispatched runs abandoned as before, the re-ratification path back to ready, and the tests.
 
@@ -113,5 +129,6 @@ Not in scope: re-dispatch after an answer (V6); the dispatcher's WIP count (its 
 history = [
   { seq = 1, at = "2026-09-24T21:20:58Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:340b5ab4da03b917d427074d72a4a10569e3874a77c2c80c0e756022b7a3210c", h = "sha256:7174f5d124702d2670adf320688fc5ded9a13a6c332224ed785b2dcc2b09e1da" },
   { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:340b5ab4da03b917d427074d72a4a10569e3874a77c2c80c0e756022b7a3210c", h = "sha256:9dee2849e404d2a658bc8520c4ac5690ef6845fcd319e6de6dc472320b8cd657", batch = 26 },
+  { seq = 3, at = "2026-09-25T17:01:56Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "scope", "status"], build = "sha256:35b165b4e17670e72b4f62e932a064c99938c2a5865ec234f96bbb724467ce5a", h = "sha256:257b6e4553ae000e9f144c478b1342e4b50f50be069b6b0db00a92fc1239dced", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:SYLVJTOfaL9ZAcY3ILgDERG/T/RZDhSRkvQHSsasprIAh5tJhcee7NUm6UGAet4tycYFZchRupr7/XvPlqhlDA==" },
 ]
 ```
