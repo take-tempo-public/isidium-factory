@@ -30,7 +30,7 @@ none
 - **10** · A demotion that ends a run in flight is a signed act, so the sidecar hears it · closed (unverified) · software-grade · (derived)
 - **11** · the first land is synthetic: say so where the sidecar is read · draft · (derived)
 - **12** · A phase's result left on disk reaches the ledger when its run ends, so a crashed host's spend is recorded · closed · software-grade · (derived)
-- **13** · A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run · dispatched · software-grade · (derived)
+- **13** · A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run · parked · software-grade · (derived)
 - **14** · The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line · ready · software-grade · (derived)
 - **15** · A card's next plan is handed the question its last run parked on · ready · software-grade · (derived)
 - **16** · Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled · ready · software-grade · (derived)
