@@ -2,7 +2,7 @@
 schema = 1
 id = 13
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run"
 shape = "bdd"
@@ -16,7 +16,7 @@ feature = "the sidecar records a parked run as ended parked, the way the ledger 
 
 [[rules]]
 id = "R1"
-text = "A parked event adds its run to the card's runs as an entry with outcome parked and ended_at the event's time; the run is the event's own run_id, and the card's last dispatched run only when the event names none; the card's execution reads parked"
+text = "A parked event adds its run to the card's runs as an entry with outcome parked, ended_at the event's time and responses an empty list; the run is the event's own run_id, and the card's last dispatched run only when the event names none; the card's execution reads parked"
 
 [[rules]]
 id = "R2"
@@ -36,7 +36,7 @@ text = "A card whose question was left by a demotion reads ready once it is re-r
 
 [[rules]]
 id = "R6"
-text = "A parked run's responses are appended in order and never rewritten or removed: a later act on the card adds a response after the ones already there, and the first response is the one that disposed of the question"
+text = "A parked run's responses are appended in order and never rewritten or removed: while the card's execution reads parked or answered, each answered, demoted or withdrawn act adds a response after the ones already there; once the execution clears, later acts add none (the card's own history keeps them); the first response is the one that disposed of the question"
 
 [[guidance.avoid]]
 id = "A1"
@@ -65,13 +65,18 @@ because = "a run parks at most once, so its run_id names one question.json and t
 
 [[guidance.constraints]]
 id = "C4"
-text = "docs/design/03-card-schema.md changes only where it states the behavior this card replaces: §1.5's row 9, the `ratified → draft` and `ratified → withdrawn` transition rows, and §6's `state/history.jsonl` paragraph (an act on a card in flight abandons the run), restated to: only a dispatched run is abandoned; a parked run's entry gains responses"
+text = "docs/design/03-card-schema.md changes only where it states the behavior this card replaces: the execution-status row's `abandoned` gloss (\"a run in flight when the card was withdrawn or demoted\"), §1.5's row 9, the `ratified → draft` and `ratified → withdrawn` transition rows, and §6's `state/history.jsonl` paragraph (an act on a card in flight abandons the run), restated to: only a dispatched run is abandoned; a parked run's entry gains responses"
 because = "the design record must not contradict the merged code, and it is owner-ratified: no other line of it is this card's to change"
 
 [[guidance.constraints]]
 id = "C5"
 text = "an act event that names no seq still appends its response, with the card_seq key omitted, never null and never a raise"
 because = "history is preserved regardless and the fold stays pure over any file; the store's own emission always names seq, so card_seq is present on every response the store writes"
+
+[[guidance.constraints]]
+id = "C6"
+text = "an answered, demoted or withdrawn event on a card whose execution reads answered with no parked event before it appends no response and still clears or sets the execution as R2 and R3 say; it never raises"
+because = "the store cannot emit it, but the fold must be total over any event file: a raise inside the fold fails every later land over the same file (the r-6 precedent)"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -143,5 +148,6 @@ history = [
   { seq = 4, at = "2026-09-25T17:03:14Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:35b165b4e17670e72b4f62e932a064c99938c2a5865ec234f96bbb724467ce5a", h = "sha256:5f41ee3944741882389c575aec381c22950c4bc36f84d0c6634ad50c964d3212", batch = 27 },
   { seq = 5, at = "2026-09-25T20:00:58Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "rules", "status", "surfaces"], build = "sha256:72482ece92d1fa3d1130dc12c04c43aa312684899e369bd6c95e08da4cb570e3", h = "sha256:ee9d78ba02b8c7267c836091b5abe02752a422f054199bb3e22313e6e4042ce4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:A9ERHSqkOv95CLX59gwdDtG12shDb5CFAZM3IZWhKbWBOVtkLWZW+oqLGPbKPoCOzgFdVniY3qnVnggYluNDCA==" },
   { seq = 6, at = "2026-09-25T20:01:39Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:72482ece92d1fa3d1130dc12c04c43aa312684899e369bd6c95e08da4cb570e3", h = "sha256:c91a56af74820212e988ee2602a2a0f4f8aee63350048b993df841d2ecc47404", batch = 28 },
+  { seq = 7, at = "2026-09-25T20:19:30Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "rules", "status"], build = "sha256:87125dd5c4dad0b74a1b2be55c92562fca106a0a71812dad2307c031ef2acab4", h = "sha256:bb33bc0073f4b694b2e30f7c4c2d800c4739408a95166eb19cb6de166a4e1b11", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:78ktpLvdA7N3On1hnNgpSvhWNm45ov57NPgL7m+xOK2DsfXD00yCWFp7057T8sMIQdeVpqV6mYoMw2XbnxZIBw==" },
 ]
 ```
