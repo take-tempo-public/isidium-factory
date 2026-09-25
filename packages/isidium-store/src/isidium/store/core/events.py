@@ -294,6 +294,15 @@ def _new_card() -> dict[str, Any]:
     return {"execution": None, "runs": [], "closures": [], "fingerprint": None, "history_head": None}
 
 
+def _response(kind: str, e: Mapping[str, Any]) -> dict[str, Any]:
+    """One `responses[]` row on a parked run's entry (card 13, R2/R3/R6): `act` the event's own kind, `card_seq`
+    the card entry's `seq` when the event names one, `at` the event's own time. Canon has no null (C5): a `seq`-less
+    act — the store never emits one, but the fold must be total over any file (the r-6 precedent) — omits the key
+    rather than writing it as `None`."""
+    seq = e.get("seq")
+    return {"act": kind, **({"card_seq": int(seq)} if seq is not None else {}), "at": e["at"]}
+
+
 def fold(
     events: Sequence[Mapping[str, Any]],
     cursor: str | None,
@@ -318,29 +327,78 @@ def fold(
     # `failed(class)` string the sidecar holds (C-2: nothing parses a rendered value apart).
     failed: set[str] = set()
     dispatched_run: dict[str, str] = {}  # card key → its last `dispatched` event's run_id (card 7 R2)
+    # Card 13: the `runs[]` entry of the park whose question is still open, by card key — the same mutable dict held
+    # in `c["runs"]`, so a response appended below is visible in the fold's output without a second lookup.
+    # `key in open_park` holds exactly while the card's execution has read `parked`/`answered` continuously since
+    # that park (R6's window); every kind that ends the window pops it in the same branch that ends it.
+    open_park: dict[str, dict[str, Any]] = {}
     for e in events:
         key = f"{int(e['card']):04d}"
         c = cards.setdefault(key, _new_card())
         k = str(e["kind"])
+        prior_execution = c["execution"]  # read before this event's kind can overwrite it (R1/R2/R3 all need it)
         if k in _EXECUTION:
             c["execution"] = _EXECUTION[k]
             failed.discard(key)
             if k == "dispatched":
+                # A re-dispatch ends any open park outright (its question is moot once a new run starts): without
+                # this pop, a later demotion of the re-dispatched run would both abandon it and append a response
+                # to the stale parked entry.
                 dispatched_run[key] = e["run_id"]
+                open_park.pop(key, None)
+            elif k == "parked":
+                # Card 13, R1: the event's own run id first, the card's last dispatched run only when the event
+                # names none — canon has no null, so an unknown id is an absent key, the same idiom the abandoned
+                # entry below already uses.
+                run_id = e.get("run_id") or dispatched_run.get(key)
+                entry = {
+                    **({"run_id": run_id} if run_id is not None else {}),
+                    "outcome": "parked",
+                    "ended_at": e["at"],
+                    "responses": [],
+                }
+                c["runs"].append(entry)
+                open_park[key] = entry
+            elif k == "answered":
+                # Card 13, R3: an `answered` observed while the question is still open (parked, or already
+                # answered once) appends its own response and leaves the entry open; observed with no park before
+                # it (C6 — the store cannot emit this, but the fold must be total over any file), it appends
+                # nothing and sets `execution` regardless, without raising.
+                if prior_execution in ("parked", "answered"):
+                    open_entry = open_park.get(key)
+                    if open_entry is not None:
+                        open_entry["responses"].append(_response(k, e))
+                else:
+                    open_park.pop(key, None)
+            else:  # complete, closed, reverted, reopened: nothing left open once execution moves on
+                open_park.pop(key, None)
         elif k == "failed":
             c["execution"] = f"failed({e['class']})"
             failed.add(key)
-        elif k in ("withdrawn", "demoted") and c["execution"] in IN_FLIGHT:
-            # Card 7, R1/R2: a withdrawal or demotion observed on a run in flight abandons it — never on a run
-            # already `complete` (K1) or on a card with nothing in flight (R4, where neither branch above nor this
-            # one matches and the card is left untouched). The run id rides only when the file names one: a card in
-            # flight with no `dispatched` line (a `parked` reported alone) must not raise inside the fold, where every
-            # later land would meet the same file — and canon has no null, so an unknown id is an absent key.
+            open_park.pop(key, None)
+        elif k in ("withdrawn", "demoted") and prior_execution == "dispatched":
+            # Card 7 R1/R2, reaffirmed unchanged by card 13 R4: a withdrawal or demotion observed on a *dispatched*
+            # run abandons it — never on a run already `complete` (K1), never on a parked or answered run (that is
+            # the next branch, card 13 R2), and never on a card with nothing in flight (where neither branch matches
+            # and the card is left untouched). The run id rides only when the file names one: a card in flight with
+            # no `dispatched` line (a `parked` reported alone) must not raise inside the fold, where every later
+            # land would meet the same file — and canon has no null, so an unknown id is an absent key.
             run_id = dispatched_run.get(key)
             c["runs"].append(
                 {**({"run_id": run_id} if run_id is not None else {}), "outcome": "abandoned", "ended_at": e["at"]}
             )
             c["execution"] = "abandoned"
+        elif k in ("withdrawn", "demoted") and prior_execution in ("parked", "answered"):
+            # Card 13, R2/R6: a demotion or withdrawal of a parked or answered card disposes of its question —
+            # it abandons no run. It appends a response to the parked run's entry (absent an entry only in the
+            # C6 case, where the fold still clears the execution and never raises) and clears the execution, which
+            # is R5's whole mechanism: a card re-ratified afterward reads `ratified`/`ready` because nothing here
+            # ever wrote `abandoned` for it to clear.
+            open_entry = open_park.get(key)
+            if open_entry is not None:
+                open_entry["responses"].append(_response(k, e))
+            c["execution"] = None
+            open_park.pop(key, None)
         if k == "complete":
             c["runs"].append(
                 {
