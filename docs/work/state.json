@@ -380,7 +380,7 @@
     },
     "0013": {
       "closures": [],
-      "execution": "parked",
+      "execution": "abandoned",
       "fingerprint": {
         "commit": "8d5ecf90caf3b4c4e5668103cc535291be5439d6",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -398,14 +398,19 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:5f41ee3944741882389c575aec381c22950c4bc36f84d0c6634ad50c964d3212",
-        "seq": 4
+        "h": "sha256:ee9d78ba02b8c7267c836091b5abe02752a422f054199bb3e22313e6e4042ce4",
+        "seq": 5
       },
       "runs": [
         {
           "ended_at": "2026-09-25T17:01:56Z",
           "outcome": "abandoned",
           "run_id": "r-15"
+        },
+        {
+          "ended_at": "2026-09-25T20:00:58Z",
+          "outcome": "abandoned",
+          "run_id": "r-16"
         }
       ]
     },
@@ -547,17 +552,18 @@
       "06b3f1b1f880f50614ad480452b645667220539c62aa998be390f06245f3e28a",
       "4eb5a949674907ad45036ee2c15f7b8afa3ed20f97841b1a57387e13fa383f4c",
       "ab28026f97397dc49b4d000d275c257c9eb8ba94b8a7b392838ef78b95c7d141",
-      "9197fdc246b58588ab8337ce976d4ccf465e17b6fe8514602c530609de4b518e"
+      "9197fdc246b58588ab8337ce976d4ccf465e17b6fe8514602c530609de4b518e",
+      "60276c7b064da5919b348f66ad555386042ce89e8e5b08cd89cf23e456a3bf72"
     ],
     "overflow": 0,
     "run_id": "r-16"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:3529be20eaf28512b72bb8bd6e504f6ca1c8d7f1eba5913fff2ec21106525536",
-    "seq": 133
+    "h": "sha256:0351f786275bc79fa04da20e29a21936c1d9857cded01c2b342387542d0c1381",
+    "seq": 135
   },
-  "landed_at": "2026-09-25T17:04:33Z",
-  "ledger_cursor": "1e1d92b30b0df4683253a86730a6bf1ae9154df6",
+  "landed_at": "2026-09-25T20:00:58Z",
+  "ledger_cursor": "d921a79f7550f6a17254b2a444f548060276859c",
   "schema": 2
 }
