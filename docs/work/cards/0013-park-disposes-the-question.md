@@ -2,7 +2,7 @@
 schema = 1
 id = 13
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run"
 shape = "bdd"
@@ -142,5 +142,6 @@ history = [
   { seq = 3, at = "2026-09-25T17:01:56Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "scope", "status"], build = "sha256:35b165b4e17670e72b4f62e932a064c99938c2a5865ec234f96bbb724467ce5a", h = "sha256:257b6e4553ae000e9f144c478b1342e4b50f50be069b6b0db00a92fc1239dced", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:SYLVJTOfaL9ZAcY3ILgDERG/T/RZDhSRkvQHSsasprIAh5tJhcee7NUm6UGAet4tycYFZchRupr7/XvPlqhlDA==" },
   { seq = 4, at = "2026-09-25T17:03:14Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:35b165b4e17670e72b4f62e932a064c99938c2a5865ec234f96bbb724467ce5a", h = "sha256:5f41ee3944741882389c575aec381c22950c4bc36f84d0c6634ad50c964d3212", batch = 27 },
   { seq = 5, at = "2026-09-25T20:00:58Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "rules", "status", "surfaces"], build = "sha256:72482ece92d1fa3d1130dc12c04c43aa312684899e369bd6c95e08da4cb570e3", h = "sha256:ee9d78ba02b8c7267c836091b5abe02752a422f054199bb3e22313e6e4042ce4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:A9ERHSqkOv95CLX59gwdDtG12shDb5CFAZM3IZWhKbWBOVtkLWZW+oqLGPbKPoCOzgFdVniY3qnVnggYluNDCA==" },
+  { seq = 6, at = "2026-09-25T20:01:39Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:72482ece92d1fa3d1130dc12c04c43aa312684899e369bd6c95e08da4cb570e3", h = "sha256:c91a56af74820212e988ee2602a2a0f4f8aee63350048b993df841d2ecc47404", batch = 28 },
 ]
 ```
