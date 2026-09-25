@@ -1,11 +1,15 @@
-"""Card 7 — the fold records an abandoned run when a card with a run in flight is withdrawn or demoted.
+"""Card 7 — the fold records an abandoned run when a *dispatched* card is withdrawn or demoted.
 
-A `withdrawn` or `demoted` act observed on a card whose execution is `dispatched`, `parked` or `answered` used to
-change nothing in the sidecar: `execution` stayed whatever the run last reported, for ever, and a card re-ratified
-after such a run could never be dispatched again. R1/R2 make the fold set `execution` to `abandoned` and append a
-`runs[]` entry naming the abandoned run; R3 keeps `abandoned` from ever being its own projected label (a withdrawn
-or demoted card's own `status` shadows it first, at rows 3 and 4 — 03 §1.5); R4 leaves a card with nothing in
-flight untouched; R5 is the one `IN_FLIGHT` set every site that asks the question reads.
+A `withdrawn` or `demoted` act observed on a card whose execution is `dispatched` used to change nothing in the
+sidecar: `execution` stayed whatever the run last reported, for ever, and a card re-ratified after such a run could
+never be dispatched again. R1/R2 make the fold set `execution` to `abandoned` and append a `runs[]` entry naming
+the abandoned run; R3 keeps `abandoned` from ever being its own projected label (a withdrawn or demoted card's own
+`status` shadows it first, at rows 3 and 4 — 03 §1.5); R4 leaves a card with nothing in flight untouched; R5 is the
+one `IN_FLIGHT` set every site that asks the question reads.
+
+Card 13 narrowed R1/R2 to a *dispatched* run only: a withdrawal or demotion of a `parked` or `answered` card
+disposes of its question instead of abandoning a run that already ended. That half now lives in
+`test_fold_parks.py`; this file keeps only the dispatched-run cases R4 left untouched.
 
 What each test discriminates:
 
@@ -145,15 +149,23 @@ def test_nothing_in_flight_nothing_abandoned() -> None:
     assert card["execution"] == "complete" and len(card["runs"]) == 1, "K1: a finished run is not abandoned"
 
 
-def test_a_run_in_flight_with_no_dispatched_line_is_abandoned_without_a_run_id() -> None:
+def test_a_parked_card_with_no_dispatched_line_is_withdrawn_without_a_run_id() -> None:
     """Found reviewing `r-6`'s work (2026-09-15): the fold read the card's last `dispatched` run id without a guard, so
     an event file holding a card in flight with no `dispatched` line for it — a `parked` reported alone — raised inside
-    the fold, and every land after it would fail on the same file. The run is still abandoned; the entry carries the
-    id only when the file names one (canon has no null: an unknown id is an absent key)."""
-    evs = [_ev(1, 7, "parked", run_id="r-9"), _ev(2, 7, "withdrawn", seq=2)]
+    the fold, and every land after it would fail on the same file. That totality requirement is unchanged by card 13;
+    only the outcome is — a `parked` reported alone is no longer abandoned when it is withdrawn (R2), it is recorded
+    parked and gains a `withdrawn` response, and the entry still carries no `run_id` key when the file names none
+    (canon has no null: an unknown id is an absent key)."""
+    evs = [_ev(1, 7, "parked"), _ev(2, 7, "withdrawn", seq=2)]
     card = events_mod.fold(evs, "c", "2026-09-15T00:00:00Z", {"seq": 1, "h": "j"}, {})["cards"]["0007"]
-    assert card["execution"] == "abandoned"
-    assert card["runs"] == [{"outcome": "abandoned", "ended_at": "2026-09-15T00:00:02Z"}]
+    assert card["execution"] is None
+    assert card["runs"] == [
+        {
+            "outcome": "parked",
+            "ended_at": "2026-09-15T00:00:01Z",
+            "responses": [{"act": "withdrawn", "card_seq": 2, "at": "2026-09-15T00:00:02Z"}],
+        }
+    ]
 
 
 # ---- R5: the in-flight set has one home ------------------------------------------------------------------------------
