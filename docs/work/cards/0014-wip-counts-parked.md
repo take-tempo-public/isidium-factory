@@ -2,7 +2,7 @@
 schema = 1
 id = 14
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line"
 shape = "bdd"
@@ -105,5 +105,6 @@ history = [
   { seq = 5, at = "2026-09-26T05:17:33Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:59b2a453a7a6564a0f7dbd23bebb80baa0397e6e18806b9ba250cad79ad98d29" },
   { seq = 6, at = "2026-09-26T05:18:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:c58e5768bfea72fe85a8a52b6298b55a8680d1fc41ef7ab7b4f5be0797ebc431", batch = 31 },
   { seq = 7, at = "2026-09-26T16:18:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:0ed1c7a92ac41463ecf75f249ed49de71f4882f89cc5bc6ea55a4bc1c289757e", h = "sha256:27cd8aeae301a74977654dff447eb7cd6e625310aafba171a445a9a13bcf8d14", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:nu9jVeGMtQtNbuAUW2SB66eMTrOQ1cLJpFE7qNvzLsy6M0fAjxHoYG3QQSStMGDoQlVZOtPV22fwxzQjFlhHDA==" },
+  { seq = 8, at = "2026-09-26T16:19:36Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:0ed1c7a92ac41463ecf75f249ed49de71f4882f89cc5bc6ea55a4bc1c289757e", h = "sha256:9e3855974b6cef4f57a44fe1e4f13ef182a0fda9cdda253562acdf98cda4d280", batch = 32 },
 ]
 ```
