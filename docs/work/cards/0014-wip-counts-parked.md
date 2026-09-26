@@ -2,7 +2,7 @@
 schema = 1
 id = 14
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line"
 shape = "bdd"
@@ -112,5 +112,6 @@ history = [
   { seq = 7, at = "2026-09-26T16:18:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:0ed1c7a92ac41463ecf75f249ed49de71f4882f89cc5bc6ea55a4bc1c289757e", h = "sha256:27cd8aeae301a74977654dff447eb7cd6e625310aafba171a445a9a13bcf8d14", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:nu9jVeGMtQtNbuAUW2SB66eMTrOQ1cLJpFE7qNvzLsy6M0fAjxHoYG3QQSStMGDoQlVZOtPV22fwxzQjFlhHDA==" },
   { seq = 8, at = "2026-09-26T16:19:36Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:0ed1c7a92ac41463ecf75f249ed49de71f4882f89cc5bc6ea55a4bc1c289757e", h = "sha256:9e3855974b6cef4f57a44fe1e4f13ef182a0fda9cdda253562acdf98cda4d280", batch = 32 },
   { seq = 9, at = "2026-09-26T18:20:28Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:711b12a011e31c7be5f5c648c0b1c07119726500b4c91a6c69a7e606eb6d0b41", h = "sha256:d7abf844c26b0a51221c622f8e1826ef4cdc4e323e3bf791cb8c1f2679b15d3a", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:UWn1n8UayDW8SzxssObTVy3kV83swlxoP6GLMHh3M3Lchz0/nuSudQIDgnQPyhvNWG4I8wdKMqSYk2lV6mpODg==" },
+  { seq = 10, at = "2026-09-26T18:21:14Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:711b12a011e31c7be5f5c648c0b1c07119726500b4c91a6c69a7e606eb6d0b41", h = "sha256:87be2448c62d66190c2b4b5895047eac8a9d4a395d7d195233918813c90ef61b", batch = 33 },
 ]
 ```
