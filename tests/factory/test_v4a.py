@@ -1085,7 +1085,9 @@ def test_carry_from_refuses_the_runs_it_must_not_carry(disk: Disk, tmp_path: Pat
             return dispatch_mod.pick(
                 disk.ctx,
                 led,
-                lambda n, a: {"ready": []},
+                # Card 14 R4: the stub answers `in_flight` too, or the pick refuses `dispatch.store-behind` before
+                # ever reaching the carry-from checks this test is about.
+                lambda n, a: {"ready": [], "in_flight": []},
                 Branch(disk.work),
                 card=card,
                 carry_from=carry,
