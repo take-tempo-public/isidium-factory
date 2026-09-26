@@ -473,8 +473,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:3a47f0cc069112e42e1393ec4b92b47fc4f12cec8dcfe196f32b63f90eae9b6f",
-        "seq": 2
+        "h": "sha256:1fd45c0f57227fc47a9241572eefb0ae2ddbcf6524c3e5e0374603e466c860b9",
+        "seq": 3
       },
       "runs": []
     },
@@ -593,17 +593,18 @@
       "164ddccb756cfff2ee7d0e14fb4f133c5b92d3a09eddfe3f74f681eb9133e81f",
       "49a45bf436f9baf671d520745e86589380f21804f804c8c360bfb4561523fab0",
       "246b58bfbda6e734c84e86ebc8ec4f5464f9ceb0e899dcbd06038a2d51f9f740",
-      "d403dc48554931cbafecae4c941c55fd382857a59e30353aeae63b160750376c"
+      "d403dc48554931cbafecae4c941c55fd382857a59e30353aeae63b160750376c",
+      "ee662aa1305631fca7274bbf3bb27d5f8a7154e86087c8ca8e51544e8b255fbc"
     ],
     "overflow": 0,
     "run_id": "r-18"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:31cf5d070ba3ee1cc35ca1ebe385407822804326225e47a6c96323535c52663f",
-    "seq": 145
+    "h": "sha256:ac7e7575cf60d447384197a7e5eae68c9ed53f17cdb711d8e46119278e36be6d",
+    "seq": 147
   },
-  "landed_at": "2026-09-25T21:39:59Z",
-  "ledger_cursor": "d9fbaedc7f8585081245fb0e1f74b475f791db91",
+  "landed_at": "2026-09-26T03:57:27Z",
+  "ledger_cursor": "3667be2a9bf1935cb869b7fe907f4b935884c4e1",
   "schema": 2
 }
