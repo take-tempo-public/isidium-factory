@@ -2,13 +2,13 @@
 schema = 1
 id = 14
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line"
 shape = "bdd"
 effort = "default"
 refs = ["packages/isidium-store/src/isidium/store/server/store.py::Store", "packages/isidium-factory/src/isidium/factory/dispatch.py::_pick", "packages/isidium-store/src/isidium/store/core/events.py::fold"]
-surfaces = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-factory/src/isidium/factory/dispatch.py", "tests/factory/test_dispatch_counts_parked.py"]
+surfaces = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-factory/src/isidium/factory/dispatch.py", "tests/factory/test_dispatch_counts_parked.py", "tools/mutations/wip-union.toml"]
 priority = "P2"
 
 [narrative]
@@ -44,6 +44,11 @@ because = "the pick's store reads are one call by design (Store.dispatch's docst
 id = "C2"
 text = "the ledger's unended runs still count"
 because = "a run dispatched but not yet landed is in flight on the ledger before the store hears it"
+
+[[guidance.constraints]]
+id = "C3"
+text = "tools/mutations/wip-union.toml commits one mutation in v3.toml's shape that makes the pick count only the ledger's half of the union (the store's in-flight cards dropped from the count); the card's own tests must kill it, and `tools/mutate.py --show` must find its `find` text exactly once"
+because = "the owner, on r-20's question: M3 (the WIP cap ignored) covers the cap's limit, but no committed mutation names the union this card adds, so a regression that drops the store's half could pass"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -99,5 +104,6 @@ history = [
   { seq = 4, at = "2026-09-26T03:58:07Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:9959f5c350195356a3589f649eea2fd27e98856be134e9b060302e8b1199f5c9", batch = 30 },
   { seq = 5, at = "2026-09-26T05:17:33Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:59b2a453a7a6564a0f7dbd23bebb80baa0397e6e18806b9ba250cad79ad98d29" },
   { seq = 6, at = "2026-09-26T05:18:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:954ba04c1fb256a29742ce798b6ec40229c0bf20737498cad4cc57832ad9014e", h = "sha256:c58e5768bfea72fe85a8a52b6298b55a8680d1fc41ef7ab7b4f5be0797ebc431", batch = 31 },
+  { seq = 7, at = "2026-09-26T16:18:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:0ed1c7a92ac41463ecf75f249ed49de71f4882f89cc5bc6ea55a4bc1c289757e", h = "sha256:27cd8aeae301a74977654dff447eb7cd6e625310aafba171a445a9a13bcf8d14", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:nu9jVeGMtQtNbuAUW2SB66eMTrOQ1cLJpFE7qNvzLsy6M0fAjxHoYG3QQSStMGDoQlVZOtPV22fwxzQjFlhHDA==" },
 ]
 ```
