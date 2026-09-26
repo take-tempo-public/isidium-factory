@@ -144,7 +144,11 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     )
     (fd / "forge.token").write_text("ghp_test\n", encoding="utf-8")
     (fd / "tenant.toml").write_text(
-        'allow_software_grade_until = 2999-01-01\nwip = 1\nadapter = "container"\n\n'
+        # Card 14: `disk.picked` is dispatched through the pick and never ends (the point of "not dispatchable
+        # twice"), so it holds the cap on the store's own account forever after. `wip = 2` leaves room for the one
+        # other test in this module that dispatches a second card through the pick (`disk.phased`); no test here
+        # asserts the cap's own value.
+        'allow_software_grade_until = 2999-01-01\nwip = 2\nadapter = "container"\n\n'
         '[payload]\nmax_bytes = 1000000\n\n[runner]\nimage = "isidium-runner:test"\n',
         encoding="utf-8",
     )

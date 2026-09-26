@@ -1342,13 +1342,24 @@ class Store:
         Q-V11) with its software-grade flag (03 §1.12), from ONE projection pass (T-A4's *"one computation, two
         consumers"*: the board and the picker read the same labels). With `card_id`, that card's live `check` and
         its landed fingerprint ride the same answer — the pick's second call — so the lander holds one grant for
-        the pick, not `check` beside it. The ordering is the factory's (`isidium.factory.ordering`), not this."""
+        the pick, not `check` beside it. The ordering is the factory's (`isidium.factory.ordering`), not this.
+
+        **`in_flight` rides the same answer** [card 14 R1]: every card the store holds in flight, with its
+        execution — read off `self.state`'s `execution` field against `events_mod.IN_FLIGHT`, the set's one home
+        (card 14 A1), never re-derived from the sidecar or the event file by the caller. Always present, even when
+        empty, so the pick can tell a healthy store with nothing in flight from one whose answer is missing the key
+        (card 14 R4). Eager, like `ready`: the collection is the answer (C-13)."""
         n = len(self.merges_pending())
         if n:
             raise Refusal("dispatch.pending-land", "", f"merged, not landed: {n}")
         prs = self.projections()
         out: dict[str, Any] = {
-            "ready": [{"id": cid, "software_grade": p.software_grade} for cid, p in sorted(prs.items()) if p.ready]
+            "ready": [{"id": cid, "software_grade": p.software_grade} for cid, p in sorted(prs.items()) if p.ready],
+            "in_flight": [
+                {"card": int(k), "execution": str(c["execution"])}
+                for k, c in sorted(self.state.get("cards", {}).items())
+                if c.get("execution") in events_mod.IN_FLIGHT
+            ],
         }
         if card_id is not None:
             out["card"] = card_id

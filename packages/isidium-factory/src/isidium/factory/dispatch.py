@@ -2,9 +2,13 @@
 
 T-A6's seven matching conditions, in order, each a typed refusal:
 
-* **(a)** the store's precondition over the lander's channel — `dispatch.pending-land` fail-closed first — and the
-  ready-view in the same answer (the projection's `ready`: the tenant's leaf, ratified, unguarded; Q-V6, Q-V11);
-* **(b)** the WIP cap — `dispatch.wip` naming the runs in flight (the registration's `wip`, no code default);
+* **(a)** the store's precondition over the lander's channel — `dispatch.pending-land` fail-closed first — the
+  ready-view in the same answer (the projection's `ready`: the tenant's leaf, ratified, unguarded; Q-V6, Q-V11) and
+  the cards it holds in flight (`in_flight`, card 14 R1) — a store whose answer names neither is `dispatch.store-
+  behind`, refused before anything is picked or written (card 14 R4);
+* **(b)** the WIP cap — `dispatch.wip` naming every card counted and why (card 14 R3): the union of the ledger's
+  unended runs and the store's own in-flight names, a card held by both counted once (card 14 R2; the
+  registration's `wip`, no code default);
 * **(c)** the head of the ready-view under the ordering key (`ordering`), or `--card N` accepted **only if it is in
   the view** — `dispatch.not-ready` otherwise: the owner's *"run next"* is the head, never an override;
 * **(d)** the chosen card re-read on the store: its live `check` clean (`dispatch.integrity`), its ratification
@@ -30,7 +34,7 @@ commitment, for a human at the terminal.
 from __future__ import annotations
 
 import datetime as _dt
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Final, Protocol
 
 from isidium.store.core import telemetry
@@ -95,12 +99,28 @@ def _pick(
     reg = require(ctx.registration, ctx.home)
     # (a) the store's precondition and the ready-view, one call
     view = call("dispatch", {})
+    if "in_flight" not in view:
+        # Card 14 R4: a store whose answer carries no in-flight names cannot have its held cards counted, and an
+        # empty list (a healthy store with nothing in flight) must not read the same — so this tests key presence,
+        # never truthiness. No disclosure row is needed for this id: `dispatch` is a `full`, non-`declare` namespace
+        # (core/disclosure.py), so a new id there inherits its classification rather than requiring one.
+        raise Refusal(
+            "dispatch.store-behind",
+            ctx.tenant,
+            "the store's dispatch answer carries no in-flight names: the cards it holds in flight cannot be "
+            "counted — swap the store image",
+        )
     ready: dict[int, bool] = {int(r["id"]): bool(r["software_grade"]) for r in view["ready"]}
-    # (b) the WIP cap
-    flying = ledger.in_flight()
+    # (b) the WIP cap: the union of the ledger's unended runs (C2 — a run dispatched but not yet landed is in flight
+    # on the ledger before the store hears it) and the store's own in-flight names (R1 — a parked card holds the
+    # line although its run has ended on the ledger), a card counted by both counted once (R2).
+    runs = ledger.in_flight()
+    flying = _flying(runs, view["in_flight"])
+    sp.set_attribute("isidium.in_flight", len(flying))
+    # This guard line is pinned verbatim by tools/mutations/v3.toml M3, a file outside this card's surfaces
+    # (T-B5 (1)) — the union above is built into `flying` rather than reshaping the comparison itself.
     if len(flying) >= reg.wip:
-        names = ", ".join(f"{r['run_id']} (card {r['card']})" for r in flying)
-        raise Refusal("dispatch.wip", names, f"{len(flying)} in flight, the cap is {reg.wip}")
+        raise Refusal("dispatch.wip", _names(flying), f"{len(flying)} in flight, the cap is {reg.wip}")
     # (b2) [Q-V31 (c), owner 2026-09-20] the run whose work this one carries, checked before anything is spent on the
     # pick — and its card IS the card, so the operator names one thing and not two.
     #
@@ -129,7 +149,7 @@ def _pick(
     docs = checkout.heads(ctx.checkout, ctx.base_sha, ctx.root, sorted(ready), ctx.registry)
     limit = int(ctx.eff["prioritization"]["expedite_limit"])
     ranked = ordering.order(
-        [ordering.Head.of(cid, d) for cid, d in docs.items()], expedite_open=ordering.expedite_open(flying, limit)
+        [ordering.Head.of(cid, d) for cid, d in docs.items()], expedite_open=ordering.expedite_open(runs, limit)
     )
     chosen = next(r for r in ranked if card is None or r.card == card)
     sp.set_attribute("isidium.card", chosen.card)
@@ -221,6 +241,29 @@ def _pick(
     row = ledger.run(run_id)
     assert row is not None
     return {**row, "land": land}
+
+
+def _flying(
+    runs: Sequence[Mapping[str, Any]], named: Iterable[Mapping[str, Any]]
+) -> dict[int, tuple[tuple[str, ...], str | None]]:
+    """Card 14 R2's union, one entry per card so a card counted by both halves counts once: the ledger's unended
+    run ids for that card, alongside the store's own execution when it names one (`None` when the store does not
+    hold the card in flight)."""
+    by_card: dict[int, list[str]] = {}
+    for r in runs:
+        by_card.setdefault(int(r["card"]), []).append(str(r["run_id"]))
+    execution = {int(r["card"]): str(r["execution"]) for r in named}
+    return {c: (tuple(by_card.get(c, ())), execution.get(c)) for c in sorted(set(by_card) | set(execution))}
+
+
+def _names(flying: Mapping[int, tuple[tuple[str, ...], str | None]]) -> str:
+    """Card 14 R3's disclosure: each counted card, in id order, with why it counts — its ledger run id(s), the
+    store's execution, or both."""
+    parts: list[str] = []
+    for card, (run_ids, execution) in sorted(flying.items()):
+        reason = ", ".join([*run_ids, *([execution] if execution else [])])
+        parts.append(f"card {card} ({reason})")
+    return "; ".join(parts)
 
 
 def _drifted(recorded: list[Mapping[str, str]], now: list[dict[str, str]]) -> list[str]:

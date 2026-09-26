@@ -162,7 +162,12 @@ def disk(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Disk]:
     (fd / "claude.token").write_text(TOKEN + "\n", encoding="utf-8")
     until = (TODAY + _dt.timedelta(days=30)).isoformat()
     (fd / "tenant.toml").write_text(
-        f'allow_software_grade_until = {until}\nwip = 1\nadapter = "container"\n\n'
+        # Card 14: `r.id` is dispatched through the pick below and never ends, so it holds the cap on the store's
+        # own account forever after (the same shape as test_v5a.py's `disk.picked`). `wip = 2` leaves room for the
+        # one other test in this module that dispatches a second card through the pick
+        # (`test_a_prompt_the_executor_lacks_is_refused_before_anything_is_spent`); no test here asserts the cap's
+        # own value.
+        f'allow_software_grade_until = {until}\nwip = 2\nadapter = "container"\n\n'
         f'[payload]\nmax_bytes = 1000000\n\n[runner]\nimage = "{IMAGE}"\n',
         encoding="utf-8",
     )
@@ -1085,7 +1090,9 @@ def test_carry_from_refuses_the_runs_it_must_not_carry(disk: Disk, tmp_path: Pat
             return dispatch_mod.pick(
                 disk.ctx,
                 led,
-                lambda n, a: {"ready": []},
+                # Card 14 R4: the stub answers `in_flight` too, or the pick refuses `dispatch.store-behind` before
+                # ever reaching the carry-from checks this test is about.
+                lambda n, a: {"ready": [], "in_flight": []},
                 Branch(disk.work),
                 card=card,
                 carry_from=carry,
