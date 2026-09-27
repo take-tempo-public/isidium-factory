@@ -193,6 +193,10 @@ RULES: Final[Mapping[str, Row]] = MappingProxyType(
         # to the caller — and what is left is about *their* request, so it flows.
         "service.arguments": Row(400, FULL),
         "service.body": Row(422, FULL),
+        # ---- `inbox` --------------------------------------------------------------------------------------------
+        # `inbox`'s own `_VALIDATION` row already answers 422/FULL; this row states the same two facts by name so
+        # the door's newest id is declared where ids are read (C1). It re-prices nothing.
+        "inbox.note-no-card": Row(422, FULL),
         # ---- the four `declare` namespaces: every id spelled, because a new one must be ---------------------------
         "write.grant": Row(403, FULL),
         "write.requires-owner": Row(403, FULL),
