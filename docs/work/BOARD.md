@@ -35,7 +35,7 @@ none
 - **15** · A card's next plan is handed the question its last run parked on · ready · software-grade · (derived)
 - **16** · Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled · dispatched · software-grade · (derived)
 - **17** · Accepting a suggestion as a note on a suggestion that names no card is refused by its own rule, and nothing is written · closed · software-grade · (derived)
-- **18** · Only a blocking question parks a plan; a plan's non-blocking questions ride on to the refuter and judge · draft · (derived)
+- **18** · Only a blocking question parks a plan; a plan's non-blocking questions ride on to the refuter and judge · ready · software-grade · (derived)
 
 ## Blocked
 
