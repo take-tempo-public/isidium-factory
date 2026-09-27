@@ -2,7 +2,7 @@
 schema = 1
 id = 15
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A card's next plan is handed the question its last run parked on"
 shape = "bdd"
@@ -34,6 +34,10 @@ text = "A card whose latest run did not park is handed nothing new"
 id = "R5"
 text = "The plan author's prompt says what previous-park is and that the card as ratified now is the specification, the previous park being context for why it changed"
 
+[[rules]]
+id = "R6"
+text = "The plan author's prompt v2 also says that each question is marked blocking or not: blocking only when the plan cannot be written without the owner's answer, and otherwise the plan states the assumption it made in the question's place and carries on"
+
 [[guidance.avoid]]
 id = "A1"
 option = "carrying the parked run's plan or story branch into the new run"
@@ -53,6 +57,11 @@ because = "question.json is produced and hashed but has no reader today; this is
 id = "C2"
 text = "gate.inputs_for stays a function of its arguments: the previous park is found by the runner and passed in"
 because = "the gate decides from what it is given, and its tests call it with no ledger or disk"
+
+[[guidance.constraints]]
+id = "C3"
+text = "this card is built after card 18 merges: v2 names the question's fields as card 18's artifacts.Plan declares them, and changes no artifact or gate code of its own for R6"
+because = "the owner, 2026-09-27: card 18's prompt instruction rides in this card's v2, so one prompt version, one runner rebuild and one config act carry both; the plan author's answer schema is rendered from artifacts.Plan, so the fields must exist before the prompt asks for them"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -88,6 +97,13 @@ kind = "test-marker"
 title = "the plan author's v2 prompt names previous-park"
 rule = "R5"
 observable = { test = "tests/factory/test_plan_is_handed_the_previous_park.py::test_the_v2_prompt_names_previous_park" }
+
+[[acceptance.scenarios]]
+id = "S6"
+kind = "test-marker"
+title = "the v2 prompt asks for blocking and an assumption"
+rule = "R6"
+observable = { test = "tests/factory/test_plan_is_handed_the_previous_park.py::test_the_v2_prompt_asks_for_blocking_and_an_assumption" }
 ```
 
 ## Scope
@@ -104,5 +120,6 @@ Not in scope: re-dispatch after an answer (V6); carrying work. After the merge, 
 history = [
   { seq = 1, at = "2026-09-24T21:21:11Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:2ed4c5d4ed2828506354a8bac8e22db423f6fda798a2ce9418e937314f2fc4ee" },
   { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:866f82b4990867242d1522d11aa5bc78e7acbfb7d4d05dbcf89a2bd6ac4d8f85", batch = 26 },
+  { seq = 3, at = "2026-09-27T22:54:32Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "status"], build = "sha256:b860366050b28bd46806a0549cdcad0973032889d8b13db38130120b561c4506", h = "sha256:bbb62214909f2f8957674e258c264067faa4eee33ea81b5247075b499d006e53", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:bT/y4jSzbNIS+RWwyprWmo+mDuMgaS+/qxKGEq0lP4fYwAU+W1PbW5002S+FuiJPx9HJpHOkrgOMoYN2a3qXAg==" },
 ]
 ```
