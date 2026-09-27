@@ -272,7 +272,13 @@ def _phase(
         if phase in READ_ONLY:
             # [owner, 2026-09-23] a phase that may write nothing and wrote something ends the run uncommitted: there
             # is no work of its to keep, and a commit would put a read-only agent's edit on the story branch.
-            ledger.finish(run_id, at, "failed:scope", surfaces_actual=list(touched))
+            ledger.finish(
+                run_id,
+                at,
+                "failed:scope",
+                surfaces_actual=list(touched),
+                billing_class=drv.capabilities().billing_class,
+            )
             raise Refusal("run.read-only", outside[0], f"the {phase} phase writes nothing; it wrote {list(touched)}")
         head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
         ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
@@ -302,6 +308,10 @@ def _phase(
         lander.land_run(ledger, call, run_id)
     elif head is not None:
         ledger.advance(run_id, head, list(touched), res.billing_class)
+    else:
+        # A phase that ends ok and commits nothing (every read-only phase, or one whose `touched` was empty) still
+        # drew on a lane — `advance` is not this write, because it would blank the head an earlier phase committed.
+        ledger.bill(run_id, res.billing_class)
 
 
 def _history(ledger: Ledger, home: Path, run_id: str) -> list[gate.Done]:

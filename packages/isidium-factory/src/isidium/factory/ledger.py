@@ -393,6 +393,15 @@ class Ledger:
                 (through, run_id, through),
             )
 
+    def bill(self, run_id: str, billing_class: str) -> None:
+        """The lane a phase drew on when that phase committed nothing, so there is no head and no touched set to
+        write with it — `advance` is not this write, because it sets `head_sha` and `surfaces_actual` outright and a
+        phase with no commit has neither (A1)."""
+        with self.transaction():
+            cur = self.db.execute("UPDATE runs SET billing_class = ? WHERE run_id = ?", (billing_class, run_id))
+            if cur.rowcount == 0:
+                raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+
     def advance(self, run_id: str, head_sha: str, surfaces_actual: Any, billing_class: str | None) -> None:
         """A run that is further along but not over: the head its last phase committed, what it has touched so far
         (T-B7 (4): from the diff, never the plan), and the lane it drew on. `ended_at` is untouched — V5's close is
