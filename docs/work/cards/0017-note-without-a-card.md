@@ -2,7 +2,7 @@
 schema = 1
 id = 17
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Accepting a suggestion as a note on a suggestion that names no card is refused by its own rule, and nothing is written"
 shape = "bdd"
@@ -73,5 +73,6 @@ history = [
   { seq = 1, at = "2026-09-24T21:21:24Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:98e058ae7f0d56de8c93d6e8c2a3357d5edb143c22d4c9ca0b869fcde8177e75" },
   { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:6af7042368b1f7d2b00827eb205521fc6916b53d02b97c23a718ad0ff70fa2a3", batch = 26 },
   { seq = 3, at = "2026-09-27T02:04:41Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:de9448cfc8f52813ae6cc9ceca5f68694855cc2f53a9205c73564ae659a68e8b" },
+  { seq = 4, at = "2026-09-27T02:05:09Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:92bf8dfb77020d6ccf3cb20b18798ae43b81ef7e0a0bc69ffc70be3b83065b4d", h = "sha256:ba10dbaf2a9ac00575095e2f66ee45912cb0a0daefa2cdda97fc3b2f94769c11", batch = 34 },
 ]
 ```
