@@ -2,7 +2,7 @@
 schema = 1
 id = 15
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A card's next plan is handed the question its last run parked on"
 shape = "bdd"
@@ -121,5 +121,6 @@ history = [
   { seq = 1, at = "2026-09-24T21:21:11Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:2ed4c5d4ed2828506354a8bac8e22db423f6fda798a2ce9418e937314f2fc4ee" },
   { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ea14bb67f76eb2ad0117f436e5441c2f86df130243a21af4a6a44a4ead0272a6", h = "sha256:866f82b4990867242d1522d11aa5bc78e7acbfb7d4d05dbcf89a2bd6ac4d8f85", batch = 26 },
   { seq = 3, at = "2026-09-27T22:54:32Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "status"], build = "sha256:b860366050b28bd46806a0549cdcad0973032889d8b13db38130120b561c4506", h = "sha256:bbb62214909f2f8957674e258c264067faa4eee33ea81b5247075b499d006e53", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:bT/y4jSzbNIS+RWwyprWmo+mDuMgaS+/qxKGEq0lP4fYwAU+W1PbW5002S+FuiJPx9HJpHOkrgOMoYN2a3qXAg==" },
+  { seq = 4, at = "2026-09-27T22:54:52Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:b860366050b28bd46806a0549cdcad0973032889d8b13db38130120b561c4506", h = "sha256:52e86d69b05baf021a3bdc4aca80d7cc97f482b3aeda11c9b95d89c0d50140cb", batch = 36 },
 ]
 ```
