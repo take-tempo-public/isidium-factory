@@ -301,7 +301,9 @@ def test_the_dispatch_call_answers_the_ready_view_and_one_cards_check_and_finger
     a = ratified(hz, "a")
     hz.draft("still-a-draft")
     view = st.dispatch()
-    assert view == {"ready": [{"id": a, "software_grade": True}]}, view
+    # Card 14 R4: `in_flight` rides every answer, even one naming nothing — its absence, not its emptiness, is
+    # what tells a caller the store is behind.
+    assert view == {"ready": [{"id": a, "software_grade": True}], "in_flight": []}, view
     one = st.dispatch(a)
     assert one["card"] == a and one["check"]["id"] == a and one["check"]["integrity"] == []
     assert one["fingerprint"] is None, "not landed yet"

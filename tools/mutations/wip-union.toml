@@ -1,0 +1,11 @@
+# Card 14 (2026-09-24) — the WIP cap's own union, C3: a regression that drops the store's half of the union (the
+# cards it holds in flight) from the count, leaving only the ledger's unended runs. tests/factory/test_v3.py and
+# tests/store/test_v3.py's M3 already pins the comparison line itself (`if len(flying) >= reg.wip:`); this spec
+# names the union that feeds it, which no committed mutation covered before this card.
+
+[[mutation]]
+id = "M1"
+label = "the union's store half dropped -- the WIP cap counts only the ledger's unended runs"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''    flying = _flying(runs, view["in_flight"])'''
+replace = '''    flying = _flying(runs, ())'''
