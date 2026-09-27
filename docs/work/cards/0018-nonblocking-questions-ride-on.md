@@ -2,7 +2,7 @@
 schema = 1
 id = 18
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Only a blocking question parks a plan; a plan's non-blocking questions ride on to the refuter and judge"
 shape = "bdd"
@@ -89,5 +89,6 @@ Not in scope: the prompt telling the plan author to mark questions (C2, card 15'
 ```toml
 history = [
   { seq = 1, at = "2026-09-26T16:22:33Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:0938be5a6bb066c6355e2eddbefd70ece3bc3d9e7f820a3211db2e8734c2019d", h = "sha256:61d71342329560901628dd247e77d7d63f1e511b3c0dfe93098e5310eb322fe4" },
+  { seq = 2, at = "2026-09-27T22:53:44Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:0938be5a6bb066c6355e2eddbefd70ece3bc3d9e7f820a3211db2e8734c2019d", h = "sha256:42ff1652151a49b651a5e515a9f6a7c514fb525f80f4057a1dca730cdbedffc1", batch = 35 },
 ]
 ```
