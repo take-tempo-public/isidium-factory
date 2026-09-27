@@ -364,8 +364,15 @@
       },
       "runs": [
         {
-          "ended_at": "2026-09-24T14:38:31Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-24T03:34:21Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-24T14:38:31Z",
+              "card_seq": 3
+            }
+          ],
           "run_id": "r-13"
         },
         {
@@ -425,18 +432,39 @@
       },
       "runs": [
         {
-          "ended_at": "2026-09-25T17:01:56Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-25T15:10:29Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-25T17:01:56Z",
+              "card_seq": 3
+            }
+          ],
           "run_id": "r-15"
         },
         {
-          "ended_at": "2026-09-25T20:00:58Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-25T17:17:12Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-25T20:00:58Z",
+              "card_seq": 5
+            }
+          ],
           "run_id": "r-16"
         },
         {
-          "ended_at": "2026-09-25T20:19:30Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-25T20:09:51Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-25T20:19:30Z",
+              "card_seq": 7
+            }
+          ],
           "run_id": "r-17"
         },
         {
@@ -498,13 +526,27 @@
       },
       "runs": [
         {
-          "ended_at": "2026-09-26T16:18:21Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-26T05:25:58Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-26T16:18:21Z",
+              "card_seq": 7
+            }
+          ],
           "run_id": "r-20"
         },
         {
-          "ended_at": "2026-09-26T18:20:28Z",
-          "outcome": "abandoned",
+          "ended_at": "2026-09-26T16:26:29Z",
+          "outcome": "parked",
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-09-26T18:20:28Z",
+              "card_seq": 9
+            }
+          ],
           "run_id": "r-21"
         },
         {
@@ -595,8 +637,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:6af7042368b1f7d2b00827eb205521fc6916b53d02b97c23a718ad0ff70fa2a3",
-        "seq": 2
+        "h": "sha256:de9448cfc8f52813ae6cc9ceca5f68694855cc2f53a9205c73564ae659a68e8b",
+        "seq": 3
       },
       "runs": []
     },
@@ -654,17 +696,18 @@
       "c93971e104b1a4e3520a450f10ba769066ecc84ea62a0158281de01873d0ba13",
       "c5db801544e8dfc28d750f71f5935253f2feb0255fa2f6560660a83e26145170",
       "9812614a9632c74ac01e9f43873cc52b5306a2fc50759f3cb053c35314618f61",
-      "bc1c12cf9ba4f0aeeb329812e4e686ee0af84f0a79e7baa2157fa30f08567a87"
+      "bc1c12cf9ba4f0aeeb329812e4e686ee0af84f0a79e7baa2157fa30f08567a87",
+      "ab4bfd7d6112cc1ac095b3abbba50dab5fc667853b7dffd77f18a4b895b752ca"
     ],
     "overflow": 0,
     "run_id": "r-22"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:f8031b54b37e979a1540626022f39b7b4a995add7c3e0c699f6066b4b8e8549b",
-    "seq": 170
+    "h": "sha256:a072cb86aa57470bdae83b370bf6b863f3344f8295f3d8d18f1b8d7ed7762aab",
+    "seq": 172
   },
-  "landed_at": "2026-09-27T01:54:28Z",
-  "ledger_cursor": "9bd97884ea1fb93e077cf62e59a56f212e388436",
+  "landed_at": "2026-09-27T02:04:41Z",
+  "ledger_cursor": "a5f58befb9934013d3c46bc441a6a86323585a64",
   "schema": 2
 }
