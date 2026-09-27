@@ -621,12 +621,12 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "d786b84ce0e9a8701cb4380e1af269f9fbe72434",
+        "commit": "bbd810646228569556cf9a5f407b90ef6944eb11",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
-            "blob": "91ab16087276e073dc564f439bf9ec3b7079867a",
+            "blob": "d75450e3dfce54dfc2d1065f2e2ae9ea4a8984a3",
             "path": "packages/isidium-store/src/isidium/store/server/store.py"
           },
           {
@@ -637,8 +637,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:de9448cfc8f52813ae6cc9ceca5f68694855cc2f53a9205c73564ae659a68e8b",
-        "seq": 3
+        "h": "sha256:ba10dbaf2a9ac00575095e2f66ee45912cb0a0daefa2cdda97fc3b2f94769c11",
+        "seq": 4
       },
       "runs": []
     },
@@ -704,10 +704,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:a072cb86aa57470bdae83b370bf6b863f3344f8295f3d8d18f1b8d7ed7762aab",
-    "seq": 172
+    "h": "sha256:989baf3d09b8b999fa2fd1181bf385f2449cff05464c2d7a3d6dda0866fb6938",
+    "seq": 174
   },
-  "landed_at": "2026-09-27T02:04:41Z",
-  "ledger_cursor": "a5f58befb9934013d3c46bc441a6a86323585a64",
+  "landed_at": "2026-09-27T02:05:09Z",
+  "ledger_cursor": "bbd810646228569556cf9a5f407b90ef6944eb11",
   "schema": 2
 }
