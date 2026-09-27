@@ -2,7 +2,7 @@
 schema = 1
 id = 19
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours"
 shape = "bdd"
@@ -114,5 +114,6 @@ Not in scope: an imputed dollar cost (A2, its own card); the builder prompt; the
 ```toml
 history = [
   { seq = 1, at = "2026-09-27T23:10:02Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:1c57a32f29b655d8f589b55b1d3b14e06ed886f8b3e930591b161466c1e0763b" },
+  { seq = 2, at = "2026-09-27T23:52:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:2913941ab768cccdaed2a269468a2f6d865ce1f463fbe00adf879fecfad21feb", batch = 37 },
 ]
 ```
