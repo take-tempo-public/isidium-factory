@@ -2254,7 +2254,18 @@ class Store:
                 out["card"] = self.write(NewCard(slug), doc, None, None, caller)
                 rec["card"] = out["card"].id
             elif as_ == "note":
-                cid = int(intake["proposed_for"])
+                # Found 2026-09-23: a suggestion with no `proposed_for` raised KeyError here, which reached the
+                # owner as a generic `service.arguments` refusal rather than a typed one naming the suggestion.
+                # Raised as this arm's first statement (C2): nothing below has written anything yet, so a refused
+                # note leaves no card update and no disposition record.
+                proposed = intake.get("proposed_for")
+                if proposed is None:
+                    raise Refusal(
+                        "inbox.note-no-card",
+                        "proposed_for",
+                        f"{s_id} proposes no card; a note is filed on the card the suggestion names",
+                    )
+                cid = int(proposed)
                 out["note"] = self.write_set(cid, [f"updates+=suggestion {s_id}|see {s_id}"], caller)
                 rec["card"] = cid
         elif outcome == "declined":
