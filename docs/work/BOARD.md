@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox 0
+WIP 1/1 · inbox 0
 
 ## Queue
 
@@ -33,7 +33,7 @@ none
 - **13** · A park is a run's end and a question on its card; the owner's response disposes of the question and abandons no run · closed · software-grade · (derived)
 - **14** · The dispatcher's WIP cap counts the cards the store holds in flight, so a parked card holds the line · closed · software-grade · (derived)
 - **15** · A card's next plan is handed the question its last run parked on · ready · software-grade · (derived)
-- **16** · Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled · ready · software-grade · (derived)
+- **16** · Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled · dispatched · software-grade · (derived)
 - **17** · Accepting a suggestion as a note on a suggestion that names no card is refused by its own rule, and nothing is written · closed · software-grade · (derived)
 - **18** · Only a blocking question parks a plan; a plan's non-blocking questions ride on to the refuter and judge · draft · (derived)
 
