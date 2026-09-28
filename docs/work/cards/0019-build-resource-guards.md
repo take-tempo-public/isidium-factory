@@ -2,13 +2,13 @@
 schema = 1
 id = 19
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours"
 shape = "bdd"
 effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/guard.py::main", "packages/isidium-factory/src/isidium/factory/render.py::settings", "packages/isidium-factory/src/isidium/factory/harness.py::stream_out", "packages/isidium-factory/src/isidium/factory/container.py"]
-surfaces = ["packages/isidium-factory/src/isidium/factory/guard.py", "packages/isidium-factory/src/isidium/factory/render.py", "packages/isidium-factory/src/isidium/factory/harness.py", "packages/isidium-factory/src/isidium/factory/container.py", "tests/factory/test_build_resource_guards.py"]
+surfaces = ["packages/isidium-factory/src/isidium/factory/guard.py", "packages/isidium-factory/src/isidium/factory/render.py", "packages/isidium-factory/src/isidium/factory/harness.py", "packages/isidium-factory/src/isidium/factory/container.py", "tests/factory/test_build_resource_guards.py", "packages/isidium-factory/src/isidium/factory/adapter.py", "tools/mutations/build-guards.toml"]
 priority = "P1"
 
 [narrative]
@@ -57,6 +57,16 @@ because = "the block count is read from outside the phase and a phase must not b
 id = "C2"
 text = "the runner image carries the guard, so the change reaches runs only after a runner image rebuild with deploy/build-runner.sh"
 because = "operational, not part of this card; it rides card 15's rebuild"
+
+[[guidance.constraints]]
+id = "C3"
+text = "adapter.py changes only PhaseResult.cost_micro: it becomes int | None with a comment saying None means unknown (a harness that died with no result), and every reader already tolerating a null is left as it is"
+because = "the owner, on r-26's question: a null cost must cross the adapter seam or R5 loses the whole crashed-attempt record"
+
+[[guidance.constraints]]
+id = "C4"
+text = "tools/mutations/build-guards.toml commits one mutation for R1's block (the whole-suite check never matching) and one for R6's limit (the --pids-limit argument dropped), ids M1 and M2, each killed by this card's tests and found exactly once by tools/mutate.py --show"
+because = "the owner, on r-26's question: the project's rule is that a guard is mutation-checked with a committed spec, as card 14's wip-union.toml"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -115,5 +125,6 @@ Not in scope: an imputed dollar cost (A2, its own card); the builder prompt; the
 history = [
   { seq = 1, at = "2026-09-27T23:10:02Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:1c57a32f29b655d8f589b55b1d3b14e06ed886f8b3e930591b161466c1e0763b" },
   { seq = 2, at = "2026-09-27T23:52:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:2913941ab768cccdaed2a269468a2f6d865ce1f463fbe00adf879fecfad21feb", batch = 37 },
+  { seq = 3, at = "2026-09-28T19:00:51Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:e211098bb59b041ed68e3134b5bd751f6a491ef87afcfcc2d0f5c15ba8df7886", h = "sha256:2b076ed1141ddafe330f66683b278230027d99cd8684d4315ac22a261866dbf4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:90Cwbl2T3EPtv834pkS/EXYgve6DAmvl8FBaq2/ULk8nzox7Hi2s+rEsiKTO3buQVSnPnDDOy/xUxou7wH3eAg==" },
 ]
 ```
