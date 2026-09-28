@@ -2,7 +2,7 @@
 schema = 1
 id = 16
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "session"
 title = "Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled"
 shape = "bdd"
@@ -67,6 +67,14 @@ kind = "test-marker"
 title = "recording the class leaves the head and surfaces alone"
 rule = "R4"
 observable = { test = "tests/factory/test_every_phase_records_its_billing_class.py::test_recording_the_class_leaves_the_head_and_surfaces_alone" }
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass" }
+evidence = ["sha256:936470e291b5f3bdaf5be3eeef09bd195539870ee72c94516bc10382dc3d91ca"]
+retracted = false
 ```
 
 ## Scope
@@ -83,5 +91,6 @@ Not in scope: r-13's own row, which stays null as the record of the gap; close's
 history = [
   { seq = 1, at = "2026-09-24T21:21:17Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:b236678f23868412d9cb9a7d8c189642709ec7c6a4ad24977a7821f3326a8904", h = "sha256:43f2ba901dda081ca4ce1f4c70dc10dae748d00dc63556db600fb33057d3b890" },
   { seq = 2, at = "2026-09-24T21:22:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:b236678f23868412d9cb9a7d8c189642709ec7c6a4ad24977a7821f3326a8904", h = "sha256:58ec5cb49bc7404abc7eeb9224ece42cba1395d6d27745cafdc092cf04391cf4", batch = 26 },
+  { seq = 3, at = "2026-09-28T01:02:40Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:b236678f23868412d9cb9a7d8c189642709ec7c6a4ad24977a7821f3326a8904", ref = "c1:sha256:8b7e03df6bb60388f05339f23321f0d0268f3c34bbf7fe9266baf8676eebb5e7", h = "sha256:44f1adca7c6176b4d3460ac2e33efd3feac5a3e8d9857e2aa0a670a55b5ada02", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:WF0X1ORA4Gh08qjaJz28YWdJ1ikDjXQaQEbxHofRhdlpLLYV+JuBCSPDot+JvWdMHBRuCPGfW6TzXQK5/rNQDQ==" },
 ]
 ```
