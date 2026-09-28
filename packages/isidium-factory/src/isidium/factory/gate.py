@@ -13,8 +13,10 @@ The rules, each where it was ruled:
   refused plan goes back to its author **once** — the same one revision a blocking finding buys — and a second refused
   plan parks. A plan reaching outside the card's surfaces is one of these refusals, not an immediate park [owner,
   2026-09-23].
-* **A plan with `questions` parks at once**, before any refuter or judge call, `card-ambiguity` [owner, 2026-09-23]:
-  the author saying the card cannot be planned without the owner (the plan author's prompt §4).
+* **A plan with a *blocking* question parks at once**, before the lint or any refuter or judge call, `card-ambiguity`
+  [owner, 2026-09-23]: the author saying the card cannot be planned without the owner (the plan author's prompt §4).
+  A **non-blocking** question rides on instead, with the assumption the plan made in its place, in the plan artifact
+  the refuter and judge read — a wrong assumption is a finding there, not a park of its own [card 18].
 * **The floor** (T-B4 (5), 7bd.13): any `blocking` finding ⇒ revise, whatever the judge said. The judge is still
   called on a blocked round [owner, 2026-09-23] — its `revise` tells the author what must change — and its verdict is
   recorded as it said it; the floor is applied here, not written over its verdict.
@@ -108,12 +110,13 @@ def next_step(history: Sequence[Done], payload: Mapping[str, Any]) -> Step:
     rounds = sum(1 for d in history if d.phase == "plan")
     if last.phase == "plan":
         plan = artifacts.Plan.model_validate(last.artifact)
-        if plan.questions:
+        blocking = tuple(q for q in plan.questions if q.blocking)
+        if blocking:
             return Step(
                 "park",
                 source_tag=CARD_AMBIGUITY,
-                question="; ".join(plan.questions),
-                why_blocked="the plan author found questions the card does not answer",
+                question="; ".join(q.text for q in blocking),
+                why_blocked="the plan author found questions the card cannot be planned without",
             )
         refused = lint(plan, payload)
         if not refused:
