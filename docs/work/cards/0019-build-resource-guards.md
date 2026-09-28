@@ -2,7 +2,7 @@
 schema = 1
 id = 19
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours"
 shape = "bdd"
@@ -126,5 +126,6 @@ history = [
   { seq = 1, at = "2026-09-27T23:10:02Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:1c57a32f29b655d8f589b55b1d3b14e06ed886f8b3e930591b161466c1e0763b" },
   { seq = 2, at = "2026-09-27T23:52:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:2913941ab768cccdaed2a269468a2f6d865ce1f463fbe00adf879fecfad21feb", batch = 37 },
   { seq = 3, at = "2026-09-28T19:00:51Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:e211098bb59b041ed68e3134b5bd751f6a491ef87afcfcc2d0f5c15ba8df7886", h = "sha256:2b076ed1141ddafe330f66683b278230027d99cd8684d4315ac22a261866dbf4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:90Cwbl2T3EPtv834pkS/EXYgve6DAmvl8FBaq2/ULk8nzox7Hi2s+rEsiKTO3buQVSnPnDDOy/xUxou7wH3eAg==" },
+  { seq = 4, at = "2026-09-28T19:01:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e211098bb59b041ed68e3134b5bd751f6a491ef87afcfcc2d0f5c15ba8df7886", h = "sha256:8ebc441ee646d4fb5c5ed814eac906b1e33236e64f981e030e910e99dfd4124b", batch = 39 },
 ]
 ```
