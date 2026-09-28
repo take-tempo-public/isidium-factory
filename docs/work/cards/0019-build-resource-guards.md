@@ -2,7 +2,7 @@
 schema = 1
 id = 19
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours"
 shape = "bdd"
@@ -65,8 +65,8 @@ because = "the owner, on r-26's question: a null cost must cross the adapter sea
 
 [[guidance.constraints]]
 id = "C4"
-text = "tools/mutations/build-guards.toml commits one mutation for R1's block (the whole-suite check never matching) and one for R6's limit (the --pids-limit argument dropped), ids M1 and M2, each killed by this card's tests and found exactly once by tools/mutate.py --show"
-because = "the owner, on r-26's question: the project's rule is that a guard is mutation-checked with a committed spec, as card 14's wip-union.toml"
+text = "tools/mutations/build-guards.toml commits one mutation for R1's block (the whole-suite check never matching) and one for R6's limit (the --pids-limit argument dropped), ids M1 and M2. Each kill is checked against this card's own test file only: apply the mutation in place, run tests/factory/test_build_resource_guards.py, restore. tools/mutate.py is run with --show only and never runs a mutation inside the container"
+because = "the owner, on r-26's question: the project's rule is that a guard is mutation-checked with a committed spec; and on r-27: mutate.py runs the whole suite per mutation, which exhausted the build container's processes twice (Cannot fork, signal 6) — the very failure this card fixes; the suite is green-bar's"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -127,5 +127,6 @@ history = [
   { seq = 2, at = "2026-09-27T23:52:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c84eaeb9c471a91ee342cafbd953a7257861a5ca808b235b60ca1dfa59d615be", h = "sha256:2913941ab768cccdaed2a269468a2f6d865ce1f463fbe00adf879fecfad21feb", batch = 37 },
   { seq = 3, at = "2026-09-28T19:00:51Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:e211098bb59b041ed68e3134b5bd751f6a491ef87afcfcc2d0f5c15ba8df7886", h = "sha256:2b076ed1141ddafe330f66683b278230027d99cd8684d4315ac22a261866dbf4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:90Cwbl2T3EPtv834pkS/EXYgve6DAmvl8FBaq2/ULk8nzox7Hi2s+rEsiKTO3buQVSnPnDDOy/xUxou7wH3eAg==" },
   { seq = 4, at = "2026-09-28T19:01:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e211098bb59b041ed68e3134b5bd751f6a491ef87afcfcc2d0f5c15ba8df7886", h = "sha256:8ebc441ee646d4fb5c5ed814eac906b1e33236e64f981e030e910e99dfd4124b", batch = 39 },
+  { seq = 5, at = "2026-09-28T20:20:20Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status"], build = "sha256:5233a7f17a06a3f23d23dc5a37e8b41676cc39777c6f7708f2335031a337941d", h = "sha256:598f7c0c9ce3eb29d5542375a96aacb760918405e2aa9df609a3f31f52d747ee", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:tK205E0mjBUDeqey+qy32ptugKpE8UF/en09xqbeTWNqAxpS0ei8wiDz2m4opmOXENlH32bwvEckkcil+PsXCw==" },
 ]
 ```
