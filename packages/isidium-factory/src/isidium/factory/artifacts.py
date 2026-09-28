@@ -16,6 +16,10 @@ still the harness's claim.
 An artifact lands in the run directory as `<name>.json`, canonical bytes, and is referenced by its `sha256` (T-B7
 (3): *"every artifact referenced exists at its hash"*). It is handed to the next phase inline in the job and
 re-hashed before it is — never copied into the store.
+
+T-B4's `questions` is typed from card 18 (`Question`): a question carries whether it is blocking and, when it is
+not, the assumption the plan made in its place. A bare string — every plan artifact's form before card 18 — reads
+as blocking, so a chain resumed over an older plan takes the path it took.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ import json
 from collections.abc import Mapping
 from typing import Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _Artifact(BaseModel):
@@ -53,13 +57,41 @@ class Trace(_Artifact):
     note: str = ""
 
 
+class Question(_Artifact):
+    """A plan's question, typed since card 18 (T-B4's `questions`): what it asks, whether the card cannot be
+    planned without the owner's answer, and — when it can — the reading the plan took in its place. `blocking` is
+    required (a default would put the policy in the binary, C-1); `assumption` is required exactly when the
+    question is not blocking (R1). A bare string, every plan artifact's form before this card, reads as `blocking`
+    with no assumption (R4), so a chain resumed over an older plan takes the path it took."""
+
+    text: str = Field(min_length=1)
+    blocking: bool = Field(description="whether the card cannot be planned without the owner's answer")
+    assumption: str = Field(
+        default="",
+        description="the reading the plan took in place of an answer; required exactly when blocking is false",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _bare_string_reads_as_blocking(cls, value: Any) -> Any:
+        """R4: a question written as a bare string is an older plan's, and it parked at once before this card — so
+        it still does, and a chain resumed over it takes the path it took."""
+        return {"text": value, "blocking": True, "assumption": ""} if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _non_blocking_carries_its_assumption(self) -> Question:
+        if not self.blocking and not self.assumption:
+            raise ValueError("a non-blocking question must carry the assumption the plan made in its place (R1)")
+        return self
+
+
 class Plan(_Artifact):
     steps: tuple[Step, ...] = Field(min_length=1)
     touched: tuple[str, ...] = Field(min_length=1)  # required (T-B4): feeds the build's write guard
     tests: tuple[PlannedTest, ...] = ()
     traceability: tuple[Trace, ...] = ()
     risks: tuple[str, ...] = ()
-    questions: tuple[str, ...] = ()
+    questions: tuple[Question, ...] = ()
 
 
 class Finding(_Artifact):
