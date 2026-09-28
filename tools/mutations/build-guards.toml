@@ -1,0 +1,26 @@
+# Card 19 (2026-09-28) — a build phase cannot run the whole test suite, and podman's process limit is ours, not
+# inherited. Both properties are checked against this card's own test file only, never the whole suite: mutate.py
+# runs the whole suite per mutation by default, and that is exactly the failure this card exists to fix (C4).
+#
+#     python tools/mutate.py tools/mutations/build-guards.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_build_resource_guards.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "R1's whole-suite check never matches -- a whole-suite pytest reaches the container's shell unblocked (killed by test_a_whole_suite_pytest_is_blocked_and_counted, S1)"
+file = "packages/isidium-factory/src/isidium/factory/guard.py"
+find = '''        if command is not None and whole_suite(command):'''
+replace = '''        if command is not None and False and whole_suite(command):'''
+
+[[mutation]]
+id = "M2"
+label = "R6's --pids-limit is dropped -- the phase runs under whatever podman's host happens to default to (killed by test_the_adapter_passes_an_explicit_pids_limit, S6)"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''            "--rm",
+            "--pids-limit",
+            str(PIDS_LIMIT),
+            "--name",'''
+replace = '''            "--rm",
+            "--name",'''

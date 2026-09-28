@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from .adapter import ExecutorPolicy, RunJob
-from .guard import ALLOW_ENV, BLOCKS_ENV, WRITING_TOOLS
+from .guard import ALLOW_ENV, BLOCKS_ENV, HOOKED
 
 # Where the run's mounts land inside the container. The adapter binds to these; the rendered settings name them.
 WORK: Final = "/work"
@@ -33,7 +33,7 @@ JOB_FILE: Final = f"{RUN}/job.json"
 RESULT_FILE: Final = f"{RUN}/result.json"
 
 GUARD_COMMAND: Final = "python -m isidium.factory.guard"
-MATCHER: Final = "|".join(sorted(WRITING_TOOLS))
+MATCHER: Final = "|".join(sorted(HOOKED))
 
 
 def settings(policy: ExecutorPolicy, agent: str) -> dict[str, Any]:
@@ -44,7 +44,11 @@ def settings(policy: ExecutorPolicy, agent: str) -> dict[str, Any]:
     `deny` carries nothing: everything absent from `allow` is already denied by construction, and a deny list beside
     a closed allow list is a second home for the same fact. A policy whose `guard` is `post-hoc` renders **no hook**
     — that is what declared degradation means, and the capability row says so out loud rather than the settings
-    quietly omitting it."""
+    quietly omitting it.
+
+    The matcher is `HOOKED`, not `WRITING_TOOLS` (card 19): `Bash` rides the same PreToolUse hook so the guard can
+    apply R1's whole-suite check to it, one hook command either way — the write rule inside `guard.main` still
+    judges a write's target against the writing tools alone, never against a `Bash` call."""
     out: dict[str, Any] = {"permissions": {"allow": list(policy.agent(agent).tools)}}
     if policy.guard == "write-time":
         out["hooks"] = {"PreToolUse": [{"matcher": MATCHER, "hooks": [{"type": "command", "command": GUARD_COMMAND}]}]}

@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
+from typing import TYPE_CHECKING, Annotated, Any, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -261,7 +261,9 @@ class PhaseResult(_Wire):
     # beside it, never inside it — `r-3` counted 42,147 against 3,689,226 read from the cache.
     cache_read_tokens: int = Field(default=0, ge=0)
     cache_write_tokens: int = Field(default=0, ge=0)
-    cost_micro: int = Field(default=0, ge=0)
+    # None means unknown, never 0 (C3, card 19): a harness that died before its result line carries no cost, and a
+    # died phase's spend must cross this seam as unknown rather than laundered into free.
+    cost_micro: Annotated[int, Field(ge=0)] | None = 0
     duration_ms: int = Field(default=0, ge=0)
     artifacts: tuple[Artifact, ...] = ()
     guard_blocks: int = Field(default=0, ge=0)
