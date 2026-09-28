@@ -102,3 +102,4 @@
 {"at":"2026-09-28T19:00:51Z","card":19,"id":"e102","kind":"demoted","seq":3}
 {"at":"2026-09-28T19:01:41Z","card":19,"commit":"fc5fa991fe0731320428bb903773310a4a1f0f92","ext_schema_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","id":"e103","kind":"ratified","refs_resolved":[{"blob":"13652a110d867b56afffde4d862e69ae3f9aa3e4","path":"packages/isidium-factory/src/isidium/factory/guard.py"},{"blob":"9783024662bc0180e737c8e406bb9a3edf14f3e6","path":"packages/isidium-factory/src/isidium/factory/render.py"},{"blob":"912a0f21a5b2d0204c88de95de2dd4cda45eff9a","path":"packages/isidium-factory/src/isidium/factory/harness.py"},{"blob":"8dccb12ed70114452f13f8ad53354e70d58d929d","path":"packages/isidium-factory/src/isidium/factory/container.py"}],"seq":4}
 {"at":"2026-09-28T19:02:44Z","card":19,"id":"e104","kind":"dispatched","run_id":"r-27"}
+{"at":"2026-09-28T20:13:11Z","card":19,"class":"infra","id":"e105","kind":"failed","run_id":"r-27"}
