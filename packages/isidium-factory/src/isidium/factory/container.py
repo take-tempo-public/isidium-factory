@@ -58,6 +58,12 @@ FINAL: Final[frozenset[str]] = frozenset({"failed:budget", "failed:malformed-pla
 # Seconds, not minutes: the harness is stopping, not working, and the retry waits on this.
 STOP_GRACE_S: Final = 10
 
+# Named rather than inherited (R6, card 19): podman's own default, and the value the clean builds ran under. r-18
+# and r-19 both ran the whole test suite in the background and exhausted the container's process table at this same
+# number when it was merely podman's unstated default — stating it here means no host or podman version can hand a
+# phase a smaller one without it being a visible change to this file.
+PIDS_LIMIT: Final = 2048
+
 # The provider's own words for "you are out of window". A limit is `environment`: the run backs off and the picker
 # does not burn its one retry on it (the adapter-auth note, 2026-08-17).
 RATE_LIMIT_MARKERS: Final[tuple[str, ...]] = ("rate limit", "rate_limit", "429", "usage limit")
@@ -201,6 +207,8 @@ class Container:
             self._podman,
             "run",
             "--rm",
+            "--pids-limit",
+            str(PIDS_LIMIT),
             "--name",
             _name(job),
             "--volume",
@@ -328,11 +336,16 @@ def _keep(rundir: Path, attempt: int) -> None:
 
 def _total(last: PhaseResult, earlier: Sequence[PhaseResult]) -> PhaseResult:
     """The phase's spend is every attempt's: the last attempt's answer, with the earlier attempts' tokens, cache
-    counts, cost and time added to it."""
+    counts and time added to it. Cost is folded separately (card 19, C3): it is the sum of whichever attempts
+    measured one, and `None` only when none did — the alternative (null if any attempt is unknown) would discard a
+    known attempt's spend because one attempt crashed before it could report its own."""
     if not earlier:
         return last
-    keys = ("tokens", "cache_read_tokens", "cache_write_tokens", "cost_micro", "duration_ms")
-    return last.model_copy(update={k: getattr(last, k) + sum(getattr(r, k) for r in earlier) for k in keys})
+    keys = ("tokens", "cache_read_tokens", "cache_write_tokens", "duration_ms")
+    update: dict[str, Any] = {k: getattr(last, k) + sum(getattr(r, k) for r in earlier) for k in keys}
+    known = [r.cost_micro for r in (last, *earlier) if r.cost_micro is not None]
+    update["cost_micro"] = sum(known) if known else None
+    return last.model_copy(update=update)
 
 
 def _sum(spent: Sequence[PhaseResult]) -> PhaseResult | None:

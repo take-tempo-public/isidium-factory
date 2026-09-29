@@ -12,6 +12,13 @@ argument (an argument list is readable by anything in the container, and the set
 one JSON line to `ISIDIUM_GUARD_BLOCKS`, which is how `PhaseResult.guard_blocks` is counted from outside: the guard
 does not report its own score.
 
+**Card 19: a second rule rides the same hook, and it is not about paths.** `r-18` and `r-19` both ran the whole test
+suite inside the build container, which outlived their tool timeout, kept running in the background, and exhausted
+the container's own process table (`signal 6`, `Cannot fork`) before either could write a result — see
+`container.PIDS_LIMIT` for the other half of that fix. `whole_suite` reads a `Bash` call's command the way a shell
+would split it, and a pytest invocation naming no test file and no test node is blocked here, mechanically, rather
+than left to a prompt a crashed run already ignored twice.
+
 Exit code 2 is the block — the PreToolUse contract's "deny and tell the model why", with the reason on stderr.
 """
 
@@ -19,6 +26,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import PurePosixPath
@@ -27,11 +36,49 @@ from typing import Any, Final
 ALLOW_ENV: Final = "ISIDIUM_GUARD_ALLOW"
 BLOCKS_ENV: Final = "ISIDIUM_GUARD_BLOCKS"
 
+BASH: Final = "Bash"
+
 # The tools that write. A tool absent from the allowlist never reaches a hook at all (the harness denies it first),
 # so this set is the belt for the ones that are allowed to write *somewhere*.
 WRITING_TOOLS: Final[frozenset[str]] = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
+# render.py's PreToolUse matcher: every tool this hook is asked about. Bash rides it for R1's process-limit rule,
+# never for the write rule below — `main` still judges a write's target against `WRITING_TOOLS` alone (R3).
+HOOKED: Final[frozenset[str]] = WRITING_TOOLS | {BASH}
 
 BLOCK_EXIT: Final = 2
+
+# A shell's own separators between commands, read the same way here so a whole-suite run hidden behind one — `cd x
+# && pytest`, r-18's and r-19's own shape — is judged on the segment that actually runs pytest.
+_SEPARATORS: Final = re.compile(r"&&|\|\||[;|\n]")
+_PYTEST_NAMES: Final[frozenset[str]] = frozenset({"pytest", "py.test"})
+
+
+def whole_suite(command: str) -> bool:
+    """R1: a pytest invocation that names no test file (an argument ending `.py`) and no test node (one carrying
+    `::`) is the whole suite, whatever runs beside it on the line. Read per shell segment, so `cd x && pytest` and
+    `pytest a || pytest b` are each judged on the segment that actually invokes pytest."""
+    return any(_segment_is_whole_suite(seg) for seg in _SEPARATORS.split(command))
+
+
+def _segment_is_whole_suite(segment: str) -> bool:
+    tokens = _tokens(segment)
+    return _invokes_pytest(tokens) and not any(t.endswith(".py") or "::" in t for t in tokens)
+
+
+def _tokens(segment: str) -> list[str]:
+    try:
+        return shlex.split(segment)
+    except ValueError:  # an unbalanced quote: a shell would refuse this too; read it word by word rather than raise
+        return segment.split()
+
+
+def _invokes_pytest(tokens: Sequence[str]) -> bool:
+    for i, tok in enumerate(tokens):
+        if tok in _PYTEST_NAMES or tok.endswith(("/pytest", "/py.test")):
+            return True
+        if tok == "-m" and i + 1 < len(tokens) and tokens[i + 1] == "pytest":
+            return True
+    return False
 
 
 def normalize(path: str, root: str) -> str | None:
@@ -98,6 +145,37 @@ def _target(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _bash_command(payload: dict[str, Any]) -> str | None:
+    inp = payload.get("tool_input")
+    if not isinstance(inp, dict):
+        return None
+    command = inp.get("command")
+    return command if isinstance(command, str) else None
+
+
+def _is_test_surface(path: str) -> bool:
+    p = PurePosixPath(path.replace("\\", "/"))
+    return p.name.startswith("test_") or "tests" in p.parts
+
+
+def _card_tests(allowed: Sequence[str]) -> list[str]:
+    """The declared surfaces that are this card's own tests, for the block's reason — a basename starting `test_`,
+    or a path with a `tests` segment. Falls back to the whole declared set when nothing matches, so the reason
+    never names nothing."""
+    matches = sorted(a for a in allowed if _is_test_surface(a))
+    return matches or sorted(allowed)
+
+
+def _whole_suite_reason(spec: dict[str, Any]) -> str:
+    tests = _card_tests(spec.get("allow") or [])
+    return (
+        f"a whole-suite pytest run is not this phase's to make: this phase's own tests are {tests}, and the rest "
+        "of the project's gate — the whole suite, mypy, ruff — is green-bar's, checked outside this container on "
+        "the pull request. Running the whole suite here is what starved r-18's and r-19's containers (signal 6, "
+        "'Cannot fork') before either could write a result. Run the tests this phase names, by file or by node."
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """The hook. Reads the PreToolUse payload on stdin; blocks with exit 2 and a reason the model can act on."""
     del argv
@@ -114,6 +192,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return BLOCK_EXIT
 
     tool = payload.get("tool_name")
+    if tool == BASH:
+        command = _bash_command(payload)
+        if command is not None and whole_suite(command):
+            reason = _whole_suite_reason(spec)
+            _record(spec, "", reason)
+            print(reason, file=sys.stderr)
+            return BLOCK_EXIT
+        return 0
     if isinstance(tool, str) and tool not in WRITING_TOOLS:
         return 0
     target = _target(payload)

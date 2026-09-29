@@ -25,6 +25,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
@@ -136,8 +137,12 @@ def report(job: RunJob, out: Mapping[str, Any], ok: bool, harness_version: str) 
     `tokens` is **input + output** — its definition, written at its writer (Q-V26 (a)); the cached context the harness
     read and wrote is not in it and rides beside it as `cache_read_tokens` and `cache_write_tokens` (`r-3`: 42,147
     against 3,689,226 read from the cache). `effort` is the row's, because the harness reports none: what the record
-    holds is what was passed on the argv, which `argv` is tested to carry."""
+    holds is what was passed on the argv, which `argv` is tested to carry.
+
+    `cost_micro` is **null when `out` carries no cost**, never 0 (R5, card 19) — a harness that died before its
+    result line never wrote `total_cost_usd`, and a died phase's spend is unknown, not free."""
     usage = out.get("usage") or {}
+    cost = out.get("total_cost_usd")
     return {
         "run_id": job.run_id,
         "phase": job.phase,
@@ -148,7 +153,7 @@ def report(job: RunJob, out: Mapping[str, Any], ok: bool, harness_version: str) 
         "tokens": int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0),
         "cache_read_tokens": int(usage.get("cache_read_input_tokens") or 0),
         "cache_write_tokens": int(usage.get("cache_creation_input_tokens") or 0),
-        "cost_micro": round(float(out.get("total_cost_usd") or 0.0) * 1_000_000),
+        "cost_micro": None if cost is None else round(float(cost) * 1_000_000),
         "duration_ms": int(out.get("duration_ms") or 0),
         "outcome": outcome_of(out, ok),
         "harness": HARNESS,
@@ -186,12 +191,18 @@ def outcome_of(out: Mapping[str, Any], ok: bool) -> str:
     return "ok" if ok and not out.get("is_error") else "failed:infra"
 
 
-def stream_out(lines: Iterable[str], code: int | None, cores: Sequence[str] = ()) -> dict[str, Any]:
+def stream_out(
+    lines: Iterable[str], code: int | None, cores: Sequence[str] = (), *, elapsed_ms: int | None = None
+) -> dict[str, Any]:
     """The harness's answer, from its stream. The `result` line when there is one — the object `--output-format json`
     gave. When the harness died first, what the stream proves instead: the usage of every message it finished
     (counted once each — a message is streamed once per content block, with the same usage on every line, measured
     2026-09-15), the models that produced it, and a sentence naming how the process ended. Either way the exit status
-    rides along, and a core dump kept beside the run is named."""
+    rides along, and a core dump kept beside the run is named.
+
+    `elapsed_ms` is what the caller measured from spawn to exit — a caller that measured nothing claims nothing, so
+    it is only used in the no-result branch (R4, card 19): a stream that reached its result line keeps the harness's
+    own `duration_ms`, whatever this process's own clock says."""
     result: dict[str, Any] | None = None
     messages: dict[str, Mapping[str, Any]] = {}
     for line in lines:
@@ -220,6 +231,8 @@ def stream_out(lines: Iterable[str], code: int | None, cores: Sequence[str] = ()
             "modelUsage": {k: {"outputTokens": v} for k, v in by_model.items()},
             "errors": [f"the harness {_ended(code)} and wrote no result"],
         }
+        if elapsed_ms is not None:
+            out["duration_ms"] = elapsed_ms
     if cores:
         out["errors"] = [*(out.get("errors") or []), "a core dump is kept in the run directory: " + ", ".join(cores)]
     out["exit_status"] = code
@@ -279,29 +292,33 @@ def run(
     spawn: Spawn = subprocess.Popen,
     install: Callable[[int, Callable[[int, Any], None]], Any] = signal.signal,
     work: Path | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> int:
     """One phase: the harness spawned once with the job on stdin, the signals forwarded while it runs, the result
     written from its output. Exit 0 for `ok`, 1 otherwise — the adapter reads the run directory either way.
 
     The raw stream is kept as `harness.jsonl`; `harness.json` is the answer read from it, so what the adapter reads is
-    one object whether the harness finished or died."""
+    one object whether the harness finished or died. `clock` measures spawn to exit (R4, card 19), so a harness that
+    dies with no result still gets a real `duration_ms` rather than 0."""
     (rundir / "input.md").write_text(prompt_input(job, prompts), encoding="utf-8")
     stream_path, err_path = rundir / "harness.jsonl", rundir / "harness.err"
     forward = Forward()
     for sig in FORWARDED:
         install(sig, forward)
     code: int | None = None
+    started = clock()
     with (rundir / "input.md").open("rb") as stdin, stream_path.open("wb") as stdout, err_path.open("wb") as stderr:
         if forward.stopped is None:
             child = spawn(argv(job, str(rundir / "settings.json")), stdin=stdin, stdout=stdout, stderr=stderr)
             forward.child = child
             code = child.wait()
+    elapsed_ms = round((clock() - started) * 1000)
     cores = keep_cores(work or Path.cwd(), rundir)
     try:
         lines = stream_path.read_text(encoding="utf-8").splitlines()
     except OSError:
         lines = []
-    out = stream_out(lines, code, cores)
+    out = stream_out(lines, code, cores, elapsed_ms=elapsed_ms)
     (rundir / "harness.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     result = report(job, out, code == 0, harness_version)
     if result["outcome"] == "ok":
