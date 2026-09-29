@@ -32,6 +32,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
+from pydantic import ValidationError
+
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
@@ -164,6 +166,9 @@ def _drive(
     p = _payload(ctx, reg, row, call, run_id)
     history = _history(ledger, ctx.home, run_id)
     carry = not history
+    # Card 15, R1/R3: found once per drive, on the same predicate as `carry` — a resumed chain has its own round-one
+    # plan already on the record and reads none of this. `None` when the card's latest other run did not park (R4).
+    park = _previous_park(ledger, ctx.home, row, run_id) if carry else None
 
     tree = ctx.home / "worktrees" / run_id
     work = checkout.worktree(ctx.checkout, str(row["story_branch"]), tree)
@@ -198,7 +203,7 @@ def _drive(
                 phase = step.phase
             with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
                 sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
-                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, now)
+                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now)
             carried = None  # the carry is told to the phase it was replayed for, and to no later one
             history = _history(ledger, ctx.home, run_id)
             after = ledger.run(run_id)
@@ -229,12 +234,24 @@ def _phase(
     p: payload_mod.Payload,
     history: Sequence[gate.Done],
     carried: adapter_mod.Carried | None,
+    previous_park: artifacts_mod.ParkQuestion | None,
     now: Now,
 ) -> None:
     """One phase in a worktree that already exists: the job, the adapter, the recompute, the record."""
     run_id = str(row["run_id"])
     agent = AGENT_OF[phase]
-    job = _job(ctx, row, p, run_id=run_id, phase=phase, agent=agent, policy=policy, work=work, history=history)
+    job = _job(
+        ctx,
+        row,
+        p,
+        run_id=run_id,
+        phase=phase,
+        agent=agent,
+        policy=policy,
+        work=work,
+        history=history,
+        previous_park=previous_park,
+    )
     if carried is not None:
         job = job.model_copy(update={"carried": carried})
     try:
@@ -374,6 +391,25 @@ def _park(
     ledger.end(run_id, now().strftime("%Y-%m-%dT%H:%M:%SZ"), "parked", text=text, detail={"question": sha})
 
 
+def _previous_park(
+    ledger: Ledger, home: Path, row: Mapping[str, Any], run_id: str
+) -> artifacts_mod.ParkQuestion | None:
+    """Card 15, R1/R2/R4: the card's latest other run, in the ledger's own order — `None` when there is none, or it
+    did not end `parked` (R4). A `question.json` that is missing, unreadable or does not validate as a park question
+    is R2's three misses: none of them fail this run, and the path is named on the record rather than raised, since
+    a question the plan author cannot read is not this run's question to fail over."""
+    card = int(row["card"])
+    prior = [r for r in ledger.runs() if int(r["card"]) == card and str(r["run_id"]) != run_id]
+    if not prior or prior[-1]["outcome"] != "parked":
+        return None
+    path = home / "runs" / str(prior[-1]["run_id"]) / "question.json"
+    try:
+        return artifacts_mod.ParkQuestion.model_validate_json(path.read_bytes())
+    except (OSError, ValidationError) as e:
+        telemetry.note("run.previous-park", f"{path}: {e}")
+        return None
+
+
 def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, home: Path) -> None:
     """A structured phase that says `ok` answered with exactly its artifact, and the bytes at the path hash to what it
     claims — the adapter's word is not taken for either (the gajae follow-up's rule, applied to artifacts). Refused
@@ -433,12 +469,13 @@ def _job(
     policy: adapter_mod.ExecutorPolicy,
     work: Path,
     history: Sequence[gate.Done] = (),
+    previous_park: artifacts_mod.ParkQuestion | None = None,
 ) -> adapter_mod.RunJob:
     """The job for one phase: what it reads (the payload, and the earlier artifacts the gate names for it — refused if
     a phase that cannot run without one has none) and where it may write — nothing for a read-only phase; for the build,
     the approved plan's `touched` ∪ the test paths (T-B5 (1): the plan narrows, nothing widens — the lint already
     proved it ⊆ the card's), or the card's `surfaces` ∪ the test paths for a build with no plan behind it."""
-    named = gate.inputs_for(phase, history, p.value)
+    named = gate.inputs_for(phase, history, p.value, previous_park=previous_park)
     have = {n for n, _ in named}
     missing = [n for n in artifacts_mod.INPUTS.get(phase, ()) if n not in have]
     if missing:

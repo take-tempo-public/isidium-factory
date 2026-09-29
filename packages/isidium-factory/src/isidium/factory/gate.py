@@ -22,6 +22,9 @@ The rules, each where it was ruled:
   recorded as it said it; the floor is applied here, not written over its verdict.
 * **Exactly one revision.** On the second round the judge's `approve` proceeds to the build and anything else parks
   (7bd.10: the second failure parks, the judge's reasoning its `why_blocked`). There is no third plan.
+* **Round one's plan is handed the card's previous park, when it has one** (card 15, R1/R3): the runner finds it —
+  the gate stays a function of what it is given, no ledger and no disk — and only round one reads it; a revision
+  reads what its own round produced, as it always did.
 """
 
 from __future__ import annotations
@@ -151,10 +154,21 @@ def next_step(history: Sequence[Done], payload: Mapping[str, Any]) -> Step:
     return Step("done")  # the build ran: the review gate is V4a-ii-b's
 
 
-def inputs_for(phase: str, history: Sequence[Done], payload: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+def inputs_for(
+    phase: str,
+    history: Sequence[Done],
+    payload: Mapping[str, Any],
+    *,
+    previous_park: artifacts.ParkQuestion | None = None,
+) -> list[tuple[str, dict[str, Any]]]:
     """What each phase reads, by name — the plan to the refuter; the plan and its refutation to the judge; the plan to
     the builder; and to the plan author's one revision, its own plan with whatever sent it back: the lint's findings, or
-    the refutation and the verdict. A judge on the second round also sees what the revision was answering."""
+    the refutation and the verdict. A judge on the second round also sees what the revision was answering.
+
+    Round one's plan — no earlier plan in the history — reads `previous_park` instead, named `previous-park`, when
+    the caller found one (card 15, R1/R3): the card's last run parked, and its question is context for why the card
+    reads as it does now. `None` means no previous park, not a policy (C-1); a revision never reads it, because by
+    then the plan has its own round to answer to."""
     plan = _latest(history, "plan")
     named: list[tuple[str, dict[str, Any] | None]] = []
     if phase == "refute" or phase == "build":
@@ -164,12 +178,16 @@ def inputs_for(phase: str, history: Sequence[Done], payload: Mapping[str, Any]) 
         earlier = _answered(history, payload)
         if earlier is not None:
             named.append(earlier)
-    elif phase == "plan" and plan is not None:
-        named = [("plan", plan)]
-        if _latest(history, "judge") is not None:
-            named += [("refutation", _latest(history, "refute")), ("verdict", _latest(history, "judge"))]
+    elif phase == "plan":
+        if plan is None:
+            park = None if previous_park is None else previous_park.model_dump(mode="json")
+            named = [("previous-park", park)]
         else:
-            named.append(("lint", _lint_doc(plan, payload)))
+            named = [("plan", plan)]
+            if _latest(history, "judge") is not None:
+                named += [("refutation", _latest(history, "refute")), ("verdict", _latest(history, "judge"))]
+            else:
+                named.append(("lint", _lint_doc(plan, payload)))
     return [(n, v) for n, v in named if v is not None]
 
 
