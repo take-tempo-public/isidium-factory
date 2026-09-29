@@ -2,13 +2,13 @@
 schema = 1
 id = 20
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed jobs"
 shape = "bdd"
 effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/close.py", "packages/isidium-factory/src/isidium/factory/forge.py::Forge", "packages/isidium-factory/src/isidium/factory/github.py"]
-surfaces = ["packages/isidium-factory/src/isidium/factory/close.py", "packages/isidium-factory/src/isidium/factory/forge.py", "packages/isidium-factory/src/isidium/factory/github.py", "tests/factory/test_close_reruns_a_red_gate.py"]
+surfaces = ["packages/isidium-factory/src/isidium/factory/close.py", "packages/isidium-factory/src/isidium/factory/forge.py", "packages/isidium-factory/src/isidium/factory/github.py", "tests/factory/test_close_reruns_a_red_gate.py", "tests/factory/test_v5a.py", "tests/factory/test_close_records_left_results.py", "tools/mutations/close-rerun.toml"]
 priority = "P1"
 
 [narrative]
@@ -53,6 +53,16 @@ because = "a close that waits must not hammer the forge's API; the bound keeps a
 id = "C3"
 text = "if the forge identity lacks permission to rerun, that is R4's refusal, never failed:gate"
 because = "a missing permission says nothing about the work"
+
+[[guidance.constraints]]
+id = "C4"
+text = "the two test doubles close() is handed as its Reader (test_v5a.py's Forge double, test_close_records_left_results.py's NoForge) each gain the rerun method as one stub; no other line of those files changes"
+because = "the owner, on r-31's question: mypy --strict runs over tests on green-bar, and a Protocol member is required whether or not it has a body"
+
+[[guidance.constraints]]
+id = "C5"
+text = "tools/mutations/close-rerun.toml commits one mutation for the single-rerun bound (a second rerun allowed) and one for the wait's bound (the wait never ending), ids M1 and M2. Each kill is checked against this card's own test file only: apply the mutation in place, run tests/factory/test_close_reruns_a_red_gate.py, restore. tools/mutate.py is run with --show only and never runs a mutation inside the container"
+because = "the owner, on r-31's question: AGENTS.md requires a committed spec for a limit; and card 19's r-27: mutate.py runs the whole suite per mutation, which the guard now blocks and which starved two builds"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -104,5 +114,6 @@ Not in scope: fixing the copytree flakes themselves (their own card); rerunning 
 history = [
   { seq = 1, at = "2026-09-28T01:03:52Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c9657172169a4016d2f1487c76729c283b06370029a40d3acbd42c5f148122bb", h = "sha256:da526c753a7df8c3c54a55da803e0ba0584de573079dd13003a9c598e0eab606" },
   { seq = 2, at = "2026-09-29T00:43:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c9657172169a4016d2f1487c76729c283b06370029a40d3acbd42c5f148122bb", h = "sha256:d23c3f58b330091380c4660eddaf1ceb6b0c6aaba3214a9a4477705de6a5001a", batch = 42 },
+  { seq = 3, at = "2026-09-29T03:00:51Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:1b5dfb4cc357d16aefb82f3eeec69e38eb766fcd5c0d52c34ed6dc19a76346c0", h = "sha256:ea317674dfbe9e6a9742952672151d0c31a89c0cd130bf55e450f9c3b1d807cd", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:n9ScClZMl+6+B9t1TlC6akJ1ZR840O1ynpn46pSm7KwGtum2yIcZDDvRmcOBvg40bvUUisscZijb3JG6PaekAQ==" },
 ]
 ```
