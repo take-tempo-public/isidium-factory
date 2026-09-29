@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -36,8 +36,8 @@ none
 - **16** · Every phase that ends records the billing class it drew on, so a parked or read-only run is not left unbilled · closed (unverified) · software-grade · (derived)
 - **17** · Accepting a suggestion as a note on a suggestion that names no card is refused by its own rule, and nothing is written · closed · software-grade · (derived)
 - **18** · Only a blocking question parks a plan; a plan's non-blocking questions ride on to the refuter and judge · closed · software-grade · (derived)
-- **19** · A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours · dispatched · software-grade · (derived)
-- **20** · Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed j… · draft · (derived)
+- **19** · A phase cannot run the whole test suite, a harness that dies records what it spent, and the process limit is ours · closed · software-grade · (derived)
+- **20** · Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed j… · ready · software-grade · (derived)
 
 ## Blocked
 
