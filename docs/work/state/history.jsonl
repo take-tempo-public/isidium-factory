@@ -119,3 +119,4 @@
 {"at":"2026-09-29T03:00:51Z","card":20,"id":"e119","kind":"demoted","seq":3}
 {"at":"2026-09-29T03:01:34Z","card":20,"commit":"f3c1aaaf23cc5dae27c5717c5458bdb3d034b5bf","ext_schema_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","id":"e120","kind":"ratified","refs_resolved":[{"blob":"85e1a6e4d73ba19feff607d91febe849aeeaedbc","path":"packages/isidium-factory/src/isidium/factory/close.py"},{"blob":"2adbfd97496c1d10383814adf342b59a1626aa13","path":"packages/isidium-factory/src/isidium/factory/forge.py"},{"blob":"68e3a6cf9c5d94e4cb8985ff2a22ba9387d07af9","path":"packages/isidium-factory/src/isidium/factory/github.py"}],"seq":4}
 {"at":"2026-09-29T03:02:12Z","card":20,"id":"e121","kind":"dispatched","run_id":"r-32"}
+{"at":"2026-09-29T04:03:05Z","card":20,"class":"budget","id":"e122","kind":"failed","run_id":"r-32"}
