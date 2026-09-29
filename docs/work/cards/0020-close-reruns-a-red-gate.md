@@ -2,7 +2,7 @@
 schema = 1
 id = 20
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed jobs"
 shape = "bdd"
@@ -103,5 +103,6 @@ Not in scope: fixing the copytree flakes themselves (their own card); rerunning 
 ```toml
 history = [
   { seq = 1, at = "2026-09-28T01:03:52Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c9657172169a4016d2f1487c76729c283b06370029a40d3acbd42c5f148122bb", h = "sha256:da526c753a7df8c3c54a55da803e0ba0584de573079dd13003a9c598e0eab606" },
+  { seq = 2, at = "2026-09-29T00:43:41Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c9657172169a4016d2f1487c76729c283b06370029a40d3acbd42c5f148122bb", h = "sha256:d23c3f58b330091380c4660eddaf1ceb6b0c6aaba3214a9a4477705de6a5001a", batch = 42 },
 ]
 ```
