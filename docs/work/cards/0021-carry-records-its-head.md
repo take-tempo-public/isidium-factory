@@ -2,7 +2,7 @@
 schema = 1
 id = 21
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A carried run records the carry commit as its head, so a carry whose later phases write nothing can still be closed"
 shape = "bdd"
@@ -87,5 +87,6 @@ Not in scope: the carry of a parked run (V4a-ii-b Q-B3); a carried patch that ca
 ```toml
 history = [
   { seq = 1, at = "2026-09-30T17:12:14Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e71c8581ac0789a2a7f32a596d9b44f0eac7a28efcd8d02cba2bd9bb6c08953a", h = "sha256:c8fd9bdfe50ddfc14e03df60e33905a547b562a97267228b193d381f8ede4d40" },
+  { seq = 2, at = "2026-09-30T17:12:40Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e71c8581ac0789a2a7f32a596d9b44f0eac7a28efcd8d02cba2bd9bb6c08953a", h = "sha256:bc0cfa8752c4b05241d4fcf591b8920be79d9de2b406bfecf94bd8ee78d0a821", batch = 47 },
 ]
 ```
