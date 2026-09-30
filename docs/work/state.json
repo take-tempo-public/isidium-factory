@@ -856,8 +856,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:26841c1349f6a7ad3eeb71afb0ae0b4352d2bf40957cfe3150dcb864e8153b30",
-        "seq": 4
+        "h": "sha256:bd94ef9d5a50b2d17345895a5d96bed44f77ae2fb63a6a45009d73e423f68457",
+        "seq": 5
       },
       "runs": [
         {
@@ -945,17 +945,18 @@
       "eb8cf88750cd59205534d42eb5f6bb3676fa6c8f9ed3c4cd468d8e662c147c72",
       "cafe29c9e2e6dca663fb1fe67ab56a5055acd913782d9aa209c79a121bc377e5",
       "627044849f1b5154ea04737bfc2c72fc92a99cea3fa2bc50c85168814ffc1af9",
-      "0efdf037d96952b109fbf4fe90e38f9e110ed02aa29f14f658139358e9d70b13"
+      "0efdf037d96952b109fbf4fe90e38f9e110ed02aa29f14f658139358e9d70b13",
+      "776270bf2f7678fadd0642517baa8f9a54a1397249e908210d1efbf08c680ef5"
     ],
     "overflow": 0,
     "run_id": "r-32"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:4b7f8ae73aff032b1d623bb3833ab733a702fc65d3904752079c47e9958478fa",
-    "seq": 224
+    "h": "sha256:3fc43a2c9fd35404be1b3b925f09438306ef1f7b43a074be4a4ec0f13016fb3a",
+    "seq": 226
   },
-  "landed_at": "2026-09-29T03:02:21Z",
-  "ledger_cursor": "767bc6374749cb11b74fa3952725a6e481167fc1",
+  "landed_at": "2026-09-30T14:59:38Z",
+  "ledger_cursor": "f0034fa138cb32e8124e3694b276d5424f23accd",
   "schema": 2
 }
