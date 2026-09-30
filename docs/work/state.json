@@ -834,11 +834,11 @@
     },
     "0020": {
       "closures": [],
-      "execution": "failed(budget)",
+      "execution": null,
       "fingerprint": {
-        "commit": "f3c1aaaf23cc5dae27c5717c5458bdb3d034b5bf",
+        "commit": "e03c5fe9a7169498fc9bfd8c9f4e74c9036aeba6",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 4,
+        "ratified_seq": 6,
         "refs_resolved": [
           {
             "blob": "85e1a6e4d73ba19feff607d91febe849aeeaedbc",
@@ -856,8 +856,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:bd94ef9d5a50b2d17345895a5d96bed44f77ae2fb63a6a45009d73e423f68457",
-        "seq": 5
+        "h": "sha256:7381afbf1c7013cefdb8c6d7fcc7f273876c6e0c998cf612a5cb78193c3674cb",
+        "seq": 6
       },
       "runs": [
         {
@@ -953,10 +953,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:3fc43a2c9fd35404be1b3b925f09438306ef1f7b43a074be4a4ec0f13016fb3a",
-    "seq": 226
+    "h": "sha256:68ccb514d896766c26d56a92138ea1cac430fd6effad09d3fbd4dbdfc071d74a",
+    "seq": 228
   },
-  "landed_at": "2026-09-30T14:59:38Z",
-  "ledger_cursor": "f0034fa138cb32e8124e3694b276d5424f23accd",
+  "landed_at": "2026-09-30T15:00:25Z",
+  "ledger_cursor": "e03c5fe9a7169498fc9bfd8c9f4e74c9036aeba6",
   "schema": 2
 }
