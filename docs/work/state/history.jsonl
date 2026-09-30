@@ -122,3 +122,4 @@
 {"at":"2026-09-29T04:03:05Z","card":20,"class":"budget","id":"e122","kind":"failed","run_id":"r-32"}
 {"at":"2026-09-30T15:00:25Z","card":20,"commit":"e03c5fe9a7169498fc9bfd8c9f4e74c9036aeba6","ext_schema_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","id":"e123","kind":"ratified","refs_resolved":[{"blob":"85e1a6e4d73ba19feff607d91febe849aeeaedbc","path":"packages/isidium-factory/src/isidium/factory/close.py"},{"blob":"2adbfd97496c1d10383814adf342b59a1626aa13","path":"packages/isidium-factory/src/isidium/factory/forge.py"},{"blob":"68e3a6cf9c5d94e4cb8985ff2a22ba9387d07af9","path":"packages/isidium-factory/src/isidium/factory/github.py"}],"seq":6}
 {"at":"2026-09-30T15:01:22Z","card":20,"id":"e124","kind":"dispatched","run_id":"r-33"}
+{"at":"2026-09-30T16:52:51Z","card":20,"id":"e125","kind":"demoted","seq":7}
