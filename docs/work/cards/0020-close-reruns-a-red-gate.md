@@ -2,7 +2,7 @@
 schema = 1
 id = 20
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed jobs"
 shape = "bdd"
@@ -119,5 +119,6 @@ history = [
   { seq = 5, at = "2026-09-30T14:59:38Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:1b5dfb4cc357d16aefb82f3eeec69e38eb766fcd5c0d52c34ed6dc19a76346c0", h = "sha256:bd94ef9d5a50b2d17345895a5d96bed44f77ae2fb63a6a45009d73e423f68457" },
   { seq = 6, at = "2026-09-30T15:00:25Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1b5dfb4cc357d16aefb82f3eeec69e38eb766fcd5c0d52c34ed6dc19a76346c0", h = "sha256:7381afbf1c7013cefdb8c6d7fcc7f273876c6e0c998cf612a5cb78193c3674cb", batch = 45 },
   { seq = 7, at = "2026-09-30T16:52:51Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:1b5dfb4cc357d16aefb82f3eeec69e38eb766fcd5c0d52c34ed6dc19a76346c0", h = "sha256:cdd709cf5d01a27e51b71a1357500e0384ae635dfa8ad01aaa00a7bcb9696f52", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:1ZTsATWWpjBdp6b6tJmcfOB203Lz3MnqbESrebDJi07MsW9q9IMYfv18dWTEExXDxAjFdGHGrpduKYle+4jIAQ==" },
+  { seq = 8, at = "2026-09-30T16:53:21Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1b5dfb4cc357d16aefb82f3eeec69e38eb766fcd5c0d52c34ed6dc19a76346c0", h = "sha256:09f15a2d47128a35e982e9a3f930c314e99c2a7ab8bfda56872b7f1ed9d0826b", batch = 46 },
 ]
 ```
