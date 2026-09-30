@@ -58,6 +58,9 @@ class NoForge:
     def checks(self, sha: str) -> Any:
         raise AssertionError("an abandoning close reads no forge")
 
+    def rerun_failed(self, sha: str) -> Any:
+        raise AssertionError("an abandoning close reads no forge")
+
 
 def _withdrawn(disk: Disk) -> Any:
     """`close`'s one `show` read, answered as a withdrawn card — the abandoning end, needing no forge, no merge and

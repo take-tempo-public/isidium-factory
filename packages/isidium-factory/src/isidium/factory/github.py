@@ -2,8 +2,10 @@
 
 **Two halves, one identity.** The git half runs in the tenant checkout the context names, spawn-counted as V1's
 gatherer is: `fetch` is two spawns (`git fetch` and the tip out of `FETCH_HEAD`), `branch` one, `changed` one (the
-diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is four calls over one
-`httpx.Client`: open a pull request, the ruleset's required contexts, a head's check runs, a pull request's state.
+diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is five calls over one
+`httpx.Client`: open a pull request, the ruleset's required contexts, a head's check runs, a pull request's state,
+and — through the Actions API — a commit's failed workflow runs re-requested (`GET .../actions/runs` then one
+`POST .../actions/runs/{id}/rerun-failed-jobs` per failed run).
 
 **The token is never in `argv` and never in the checkout's config.** git receives it as an `http.<origin>.extraheader`
 through the `GIT_CONFIG_COUNT` environment (a process list shows a command line, not an environment); the API
@@ -36,6 +38,7 @@ from isidium.store.core.refusal import Refusal
 
 from .context import ForgeKind, TenantContext
 from .forge import (
+    PASSING,
     Capabilities,
     Changed,
     CheckRun,
@@ -260,7 +263,8 @@ class GitHub:
                 if r.status_code >= 400:
                     raise Refusal("forge.api", path, f"{r.status_code}: {_message(r)}")
                 sp.set_attribute("isidium.forge.tries", i + 1)
-                return r.json()
+                # `rerun-failed-jobs` answers 201 with no body; every other call here answers a JSON object.
+                return r.json() if r.content else None
         raise AssertionError("unreachable: the loop returns or raises")  # pragma: no cover
 
     def open_pr(self, spec: PullRequestSpec) -> PullRequest:
@@ -301,6 +305,20 @@ class GitHub:
         return MergeState(
             str(pr["head"]["sha"]), pr.get("mergeable"), ms, bool(pr.get("merged")), pr.get("merge_commit_sha")
         )
+
+    def rerun_failed(self, sha: str) -> tuple[int, ...]:
+        """R1's rerun request: every completed, failed workflow run at this commit, re-requested through
+        `rerun-failed-jobs`. The ids returned are the ones re-requested — `close` waits on them, not on `sha`'s
+        checks again read fresh."""
+        runs = self._call("GET", f"{self._repo}/actions/runs", head_sha=sha, per_page=PAGE)
+        failed = tuple(
+            int(r["id"])
+            for r in runs.get("workflow_runs", [])
+            if r.get("status") == "completed" and r.get("conclusion") not in PASSING
+        )
+        for run_id in failed:
+            self._call("POST", f"{self._repo}/actions/runs/{run_id}/rerun-failed-jobs")
+        return failed
 
     def capabilities(self) -> Capabilities:
         return GITHUB

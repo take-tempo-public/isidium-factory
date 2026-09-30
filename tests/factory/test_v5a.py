@@ -240,6 +240,9 @@ class Forge:
         self.seen.append(("checks", sha))
         return self.gate
 
+    def rerun_failed(self, sha: str) -> tuple[int, ...]:
+        return ()
+
 
 def forge_for(run: Run, **over: Any) -> Forge:
     return Forge(run.head, run.merge, **over)

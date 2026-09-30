@@ -12,14 +12,19 @@ refused**: the run record's `phases[]` already names every phase that ran, and t
   acceptance runs **in the tenant's checkout**, because a runner is the tenant's toolchain and, in a worktree, an
   editable install imports the checkout's source rather than the merge's (the finding that ruled it);
 * the gate still running, or a required check absent (`close.gate-pending`) — the gate is **the ruleset's required
-  checks on the merge commit, read from the forge** [Q-V21 (a)].
+  checks on the merge commit, read from the forge** [Q-V21 (a)];
+* a red gate's rerun the forge refuses, or one that has not completed within its bound (`close.gate-rerun`)
+  [card 20, 2026-09-27] — a flaky failed job costs one rerun of the merge commit's failed jobs, waited out with a
+  bounded backoff, before the gate is answered; a rerun that could not be asked for or waited out says so and leaves
+  the run in flight, so close can be run again.
 
 **What fails the run, in the catalog's order** — T-A9's hard conditions, each a typed class the store holds since
 Q-V22 (a), each ending the run and landing its end: **drift** — the card's build now is not the build dispatched
 (condition 4, `failed:card-drift`); **identity** — a commit in `base_sha..head_sha` not authored by the run's
 identity or without its `Factory-Run` trailer (condition 3, `failed:identity`); **the gate red** (condition 2,
-`failed:gate`); **acceptance** — no scenario ran, or one did not `pass` (condition 1, *"none skipped"*,
-`failed:acceptance`). Each is checked only when the one before it held.
+`failed:gate`) — still red after its one rerun, and both conclusions ride on the end's detail as `rerun`;
+**acceptance** — no scenario ran, or one did not `pass` (condition 1, *"none skipped"*, `failed:acceptance`). Each is
+checked only when the one before it held.
 
 **Green is `complete` then `closed`**, in one ledger transaction and one land. Whose closure it verifies is the card's:
 a human who closed it (T-A12, *"the human raced the line"*) has their newest closure verified — `closure_kind: human`
@@ -44,6 +49,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import subprocess
+import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -58,7 +64,7 @@ from . import adapter as adapter_mod
 from . import artifacts as artifacts_mod
 from . import lander, render
 from .context import TenantContext
-from .forge import Checks, MergeState, Verdict
+from .forge import PASSING, CheckRun, Checks, MergeState, Verdict
 from .ledger import ABANDONED, CLOSED, Ledger
 from .runner import TRAILER_RUN
 
@@ -74,6 +80,19 @@ BLOCKS: Final = "blocks.jsonl"
 LEFT_SPAN: Final = "isidium.factory.close.left"
 RECORDED: Final = "isidium.close.recorded"
 UNREADABLE: Final = "isidium.close.unreadable"
+
+# R1's rerun of a red gate's failed jobs (card 20): one rerun, waited out with a bounded, doubling backoff.
+RERUN_SPAN: Final = "isidium.factory.close.rerun"
+# The floor: a close that waits must not hammer the forge's API faster than this (C2).
+RERUN_POLL_S: Final = 15.0
+# The doubling's ceiling — a rerun that takes minutes should not be polled once a second.
+RERUN_POLL_CAP_S: Final = 120.0
+# The whole wait's bound, over the waits close spends, not wall clock — a stuck rerun must not hold close forever.
+RERUN_BOUND_S: Final = 1800.0
+RERUN_WORKFLOWS: Final = "isidium.close.rerun_workflows"
+RERUN_JOBS: Final = "isidium.close.rerun_jobs"
+RERUN_POLLS: Final = "isidium.close.rerun_polls"
+RERUN_VERDICT: Final = "isidium.close.rerun_verdict"
 
 Call = Callable[[str, Mapping[str, Any]], Any]
 Accept = Callable[[Call, Path, str, int], Mapping[str, Any]]
@@ -111,10 +130,12 @@ class Left:
 
 
 class Reader(Protocol):
-    """The two forge reads a close makes (`forge.Forge`'s own): nothing written, and nothing merged."""
+    """The forge reads a close makes (`forge.Forge`'s own): two reads and, only on a red gate, one rerun request.
+    Nothing written, and nothing merged."""
 
     def merge_state(self, number: int) -> MergeState: ...
     def checks(self, sha: str) -> Checks: ...
+    def rerun_failed(self, sha: str) -> tuple[int, ...]: ...
 
 
 def _now() -> _dt.datetime:
@@ -237,6 +258,59 @@ def _record_left(ctx: TenantContext, ledger: Ledger, row: Mapping[str, Any], at:
         )
 
 
+def _rerun_gate(forge: Reader, sha: str, gate: Checks, sleep: Callable[[float], None]) -> tuple[Checks, dict[str, Any]]:
+    """R1's single rerun of a red gate's failed jobs, and R4's two refusals — called only when `gate.verdict` is
+    already `RED`. A read taken before any wait might still carry the pre-rerun conclusion, so no first read is
+    trusted: this waits first, then polls (R1's "waits for them to complete").
+
+    An empty answer means the forge re-requested nothing rerunnable — a required context that is not a workflow run,
+    say — and there is nothing to wait for: the gate stays exactly as it read, `failed:gate` still reachable, rather
+    than parked in a refusal no repeat of close could ever clear (C3's sibling case). A refusal the rerun request
+    itself raises — most often a missing permission — is never `failed:gate`; it is R4's, translated here so it
+    names the rule that actually fired."""
+    with telemetry.span(RERUN_SPAN, **{"isidium.forge.sha": sha}) as sp:
+        try:
+            workflows = forge.rerun_failed(sha)
+        except Refusal as r:
+            raise Refusal("close.gate-rerun", sha, f"{r.rule}: {r.detail}") from None
+        first = gate.latest()
+        failing = tuple(
+            name for name in gate.required if (run := first.get(name)) is None or run.conclusion not in PASSING
+        )
+        final = gate
+        second: dict[str, CheckRun] | None = None
+        if workflows:
+            spent = 0.0
+            polls = 0
+            while True:
+                wait = min(RERUN_POLL_S * 2**polls, RERUN_POLL_CAP_S)
+                if spent + wait > RERUN_BOUND_S:
+                    raise Refusal("close.gate-rerun", sha, f"the rerun did not complete within {RERUN_BOUND_S:.0f}s")
+                sleep(wait)
+                spent += wait
+                polls += 1
+                final = forge.checks(sha)
+                if final.verdict is not Verdict.PENDING:
+                    break
+            second = final.latest()
+            sp.set_attribute(RERUN_POLLS, polls)
+        record = {
+            "workflows": list(workflows),
+            "jobs": [
+                {
+                    "job": name,
+                    "first": first[name].conclusion if name in first else None,
+                    "second": second[name].conclusion if second is not None and name in second else None,
+                }
+                for name in failing
+            ],
+        }
+        sp.set_attribute(RERUN_WORKFLOWS, len(workflows))
+        sp.set_attribute(RERUN_JOBS, len(failing))
+        sp.set_attribute(RERUN_VERDICT, final.verdict.value)
+        return final, record
+
+
 def close(
     ctx: TenantContext,
     ledger: Ledger,
@@ -247,12 +321,13 @@ def close(
     pr: int | None = None,
     accept: Accept = _accept,
     now: Callable[[], _dt.datetime] = _now,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     """One run, closed or failed or abandoned — or refused, and still in flight. The run's row back, its phases, and
     what the land answered."""
     with telemetry.span(SPAN, **{"isidium.tenant": ctx.tenant, "isidium.run_id": run_id}) as sp:
         try:
-            out = _close(ctx, ledger, call, forge, run_id, pr, accept, now)
+            out = _close(ctx, ledger, call, forge, run_id, pr, accept, now, sleep)
         except Refusal as r:
             telemetry.record_refusal_on(sp, r.rule)
             raise
@@ -270,6 +345,7 @@ def _close(
     pr: int | None,
     accept: Accept,
     now: Callable[[], _dt.datetime],
+    sleep: Callable[[float], None],
 ) -> dict[str, Any]:
     row = ledger.run(run_id)
     if row is None:
@@ -321,15 +397,19 @@ def _close(
     elif foreign := _foreign(ctx.checkout, str(row["base_sha"]), str(row["head_sha"]), run_id, ctx.identity.email):
         failure = "identity"
         detail["commits"] = foreign
-    elif gate.verdict is Verdict.RED:
-        failure = "gate"
     else:
-        res = accept(call, ctx.checkout, ctx.root, cid)
-        verdicts = {str(v["scenario_id"]): str(v["verdict"]) for v in res["verdicts"]}
-        detail["verdicts"] = verdicts
-        detail["manifest_hash"] = str(res["manifest_hash"])
-        if not verdicts or not res["passed"]:
-            failure = "acceptance"
+        if gate.verdict is Verdict.RED:
+            gate, rerun = _rerun_gate(forge, state.merge_commit, gate, sleep)
+            detail["rerun"] = rerun
+        if gate.verdict is Verdict.RED:
+            failure = "gate"
+        else:
+            res = accept(call, ctx.checkout, ctx.root, cid)
+            verdicts = {str(v["scenario_id"]): str(v["verdict"]) for v in res["verdicts"]}
+            detail["verdicts"] = verdicts
+            detail["manifest_hash"] = str(res["manifest_hash"])
+            if not verdicts or not res["passed"]:
+                failure = "acceptance"
     at = _stamp(now())
     left = _record_left(ctx, ledger, row, at)
     detail.update(left.detail())

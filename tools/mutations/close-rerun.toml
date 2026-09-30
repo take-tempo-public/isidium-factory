@@ -1,0 +1,25 @@
+# Card 20 (2026-09-27) — the single-rerun property and the wait's bound are both checked against this card's own
+# test file only, never the whole suite (C5): mutate.py runs the whole suite per mutation by default, and that is
+# exactly the failure card 19's r-27 exists to avoid.
+#
+#     python tools/mutate.py tools/mutations/close-rerun.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_close_reruns_a_red_gate.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "a second rerun is allowed -- one flake's retry becomes a retry loop (killed by S1/S3's exactly-one-request assertion)"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''        if workflows:
+            spent = 0.0'''
+replace = '''        if workflows:
+            forge.rerun_failed(sha)
+            spent = 0.0'''
+
+[[mutation]]
+id = "M2"
+label = "the wait never ends -- a stuck rerun holds close for ever (killed by S4's unfinished-rerun case, the double's poll allowance turning an unbounded wait into a failure)"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''                if spent + wait > RERUN_BOUND_S:'''
+replace = '''                if False and spent + wait > RERUN_BOUND_S:'''
