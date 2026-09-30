@@ -2,7 +2,7 @@
 
 T-C7's contract, verbatim: *"fetch/clone (read creds); push (bot identity); … PR/MR open with generated body, CI
 status read, merge status read; … each driver publishes a capability matrix"*. What v1c's line needs of it through
-V6 is here as a `Protocol` of eight methods; what it does not need is **absent from the type, not refused at
+V6 is here as a `Protocol` of nine methods; what it does not need is **absent from the type, not refused at
 runtime**: there is no `merge` (X2 [owner-ratified]: *"the PR merge stays the forge's button — round 14"*), no force
 push (the store's rule, *"a store must never hold a force path at all"*, is the factory's too), no delete. A driver
 that cannot merge cannot be asked to.
@@ -65,11 +65,18 @@ class Checks:
     required: tuple[str, ...]
     runs: tuple[CheckRun, ...]
 
+    def latest(self) -> dict[str, CheckRun]:
+        """The newest run per name — the API lists the newest first, so the first seen per name is the one that
+        counts. The one home for that rule: `verdict` reads it here, and a rerun's before/after comparison reads the
+        same accessor rather than re-deriving it."""
+        out: dict[str, CheckRun] = {}
+        for run in self.runs:
+            out.setdefault(run.name, run)
+        return out
+
     @property
     def verdict(self) -> Verdict:
-        latest: dict[str, CheckRun] = {}
-        for run in self.runs:  # the API lists the newest first; the first seen per name is the one that counts
-            latest.setdefault(run.name, run)
+        latest = self.latest()
         pending = False
         for name in self.required:
             got = latest.get(name)
@@ -142,6 +149,7 @@ class Forge(Protocol):
     def open_pr(self, spec: PullRequestSpec) -> PullRequest: ...
     def checks(self, sha: str) -> Checks: ...
     def merge_state(self, number: int) -> MergeState: ...
+    def rerun_failed(self, sha: str) -> tuple[int, ...]: ...
     def capabilities(self) -> Capabilities: ...
 
 
