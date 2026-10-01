@@ -951,10 +951,25 @@
     "0022": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "ea61e51c1d0c830b694d70c960808b1154621cc8",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "85e7d72b61e51e1ed7041b34501917fd8eccffdc",
+            "path": "tests/store/conftest.py"
+          },
+          {
+            "blob": "424f40db66a76c6cf41a1b0815e5c619bb5521e5",
+            "path": "tests/store/test_verify_chain.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:46604c6e4c1875af04e082a606667faa5c3c35ba29e1b2155bb0496713fc28a7",
-        "seq": 1
+        "h": "sha256:27a999c3f78d47379c16a30992e727ace636a62333f89e0b1ca1dee5097f967b",
+        "seq": 3
       },
       "runs": []
     }
@@ -1045,10 +1060,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:62da0e814216142821002f168ca8a9767bdffc66ae6b681c0c8de9392bc9e4c1",
-    "seq": 250
+    "h": "sha256:1f2d9863d47da6f00b93b6091a1661552569982a1fdd0ba2f2fdbbacc02d0b9c",
+    "seq": 253
   },
-  "landed_at": "2026-10-01T02:42:19Z",
-  "ledger_cursor": "8bbcd2cc1117197a23d1dba1aecc8fcaf989c3aa",
+  "landed_at": "2026-10-01T02:44:38Z",
+  "ledger_cursor": "ea61e51c1d0c830b694d70c960808b1154621cc8",
   "schema": 2
 }
