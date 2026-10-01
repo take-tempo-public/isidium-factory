@@ -87,7 +87,7 @@ def argv(job: RunJob, settings: str) -> list[str]:
     spec = job.policy.agent(job.identity.agent)
     # A phase that answers with an artifact is handed its schema: the harness validates the answer and re-asks the model
     # inside the call when it does not conform (measured 2026-09-23) — T-B4 (1)'s one retry [owner, 2026-09-23].
-    shaped = artifacts.OF_PHASE.get(job.phase)
+    shaped = artifacts.artifact_of(job.phase, job.round)  # the review's second round rules rather than finds
     structured = ["--json-schema", json.dumps(artifacts.schema(shaped[1]), sort_keys=True)] if shaped else []
     return [
         "claude",
@@ -169,18 +169,46 @@ def harvest(job: RunJob, out: Mapping[str, Any], rundir: Path) -> tuple[str | No
     **A null `structured_output` is malformed, not `ok`.** Measured 2026-09-23: a model that never satisfied the
     schema ends the call `subtype: success`, `is_error: false`, exit 0, with `structured_output: null` and its
     explanation in `result` — so `outcome_of` alone would record it as a success. `path` is relative to the run
-    directory; the adapter makes it relative to the deploy home, where the wrapper reads it."""
-    shaped = artifacts.OF_PHASE.get(job.phase)
+    directory; the adapter makes it relative to the deploy home, where the wrapper reads it.
+
+    **The review gate's answers are also checked against what they answer** (V4a-ii-b) — a function, because the
+    schema cannot see the card or the earlier artifacts: a review whose traceability field skips one of the card's
+    scenarios, a reconcile report that leaves a blocking finding unanswered, and a second pass that does not rule on
+    every reconciled finding are each malformed, `failed:malformed-review` like a schema miss."""
+    shaped = artifacts.artifact_of(job.phase, job.round)
     if shaped is None:
         return None, []
     name, model = shaped
     try:
-        value = model.model_validate(out.get("structured_output")).model_dump(mode="json")
+        answer = model.model_validate(out.get("structured_output"))
     except ValidationError:
-        return MALFORMED, []
+        return artifacts.malformed(job.phase), []
+    if _incomplete(job, answer):
+        return artifacts.malformed(job.phase), []
+    value = answer.model_dump(mode="json")
     data = artifacts.canonical(value)
     (rundir / f"{name}.json").write_bytes(data)
     return None, [{"name": name, "sha256": artifacts.sha256(data), "path": f"{name}.json"}]
+
+
+def _incomplete(job: RunJob, answer: Any) -> bool:
+    """Whether a review-gate answer leaves out what it was asked to answer (see `harvest`). Any other answer is
+    complete by its schema alone."""
+    given = {i.name: i.content for i in job.inputs}
+    if isinstance(answer, artifacts.Findings):
+        gated: Mapping[str, Any] = job.payload.get("gated") or {}
+        scenarios = [str(s["id"]) for s in (gated.get("acceptance") or {}).get("scenarios") or ()]
+        return bool(answer.untraced(scenarios))
+    if isinstance(answer, artifacts.ReconcileReport):
+        findings = given.get("findings")
+        return findings is not None and bool(answer.unanswered(artifacts.Findings.model_validate(findings)))
+    if isinstance(answer, artifacts.Ruling):
+        report = given.get("reconcile-report")
+        if report is None:
+            return False
+        ruled = {r.id for r in answer.rulings}
+        return any(r.id not in ruled for r in artifacts.ReconcileReport.model_validate(report).rows)
+    return False
 
 
 def outcome_of(out: Mapping[str, Any], ok: bool) -> str:

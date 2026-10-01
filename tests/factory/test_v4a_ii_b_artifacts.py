@@ -26,13 +26,24 @@ FINDING = {
     "why": "the assertion reads the length of what it should compare",
     "bears_on": "S2",
 }
+TRACE = [{"id": "S1", "evidence": "tests/x.py:3"}, {"id": "S2", "evidence": "tests/x.py:12"}]
 
 
 def test_findings_name_their_blocking_ones_and_empty_is_a_real_answer() -> None:
     minor = {**FINDING, "id": "F2", "severity": "minor"}
-    found = artifacts.Findings.model_validate({"findings": [FINDING, minor]})
+    found = artifacts.Findings.model_validate({"traceability": TRACE, "findings": [FINDING, minor]})
     assert [f.id for f in found.blocking] == ["F1"], "only blocking findings send the run to reconcile"
-    assert artifacts.Findings.model_validate({}).blocking == (), "reviewed, nothing found: reconcile is skipped"
+    assert artifacts.Findings.model_validate({"traceability": TRACE}).blocking == (), "nothing found: no reconcile"
+
+
+def test_a_review_must_trace_every_scenario_it_was_handed() -> None:
+    """The reviewer prompt's rule — an approval it cannot fill the traceability field for is not available — as a
+    function: the schema demands the field, `untraced` names the scenarios it leaves out."""
+    with pytest.raises(ValidationError):
+        artifacts.Findings.model_validate({"findings": []})  # no traceability field at all
+    found = artifacts.Findings.model_validate({"traceability": TRACE[:1]})
+    assert found.untraced(["S1", "S2"]) == ("S2",)
+    assert artifacts.Findings.model_validate({"traceability": TRACE}).untraced(["S1", "S2"]) == ()
 
 
 def test_a_finding_must_say_what_it_bears_on() -> None:
@@ -46,7 +57,10 @@ def test_a_reconcile_report_is_checked_against_the_blocking_findings() -> None:
     """The schema cannot see the findings, so `unanswered` is the check: every blocking finding answered, a minor one
     never required — and an extra row for a finding that does not exist is not this check's to refuse."""
     found = artifacts.Findings.model_validate(
-        {"findings": [FINDING, {**FINDING, "id": "F3"}, {**FINDING, "id": "F2", "severity": "minor"}]}
+        {
+            "traceability": TRACE,
+            "findings": [FINDING, {**FINDING, "id": "F3"}, {**FINDING, "id": "F2", "severity": "minor"}],
+        }
     )
     report = artifacts.ReconcileReport.model_validate(
         {"rows": [{"id": "F1", "disposition": "fixed", "note": "compared the list"}]}
@@ -91,16 +105,18 @@ def test_each_phase_and_round_answers_with_its_own_artifact() -> None:
     assert artifacts.artifact_of("build") is None
 
 
-def test_the_review_gate_is_typed_but_not_yet_read_by_the_wrapper() -> None:
-    """PR 1 is inert: `OF_PHASE`, which the harness and the wrapper read, is unchanged, so the review phase reachable
-    today is handled as it was. PR 2 moves both readers to `artifact_of`."""
-    assert set(artifacts.OF_PHASE) == {"plan", "refute", "judge"}
-    assert not set(artifacts.OF_PHASE) & set(artifacts.OF_REVIEW_GATE)
+def test_the_review_gate_is_read_by_the_wrapper_and_ends_malformed_in_its_own_class() -> None:
+    """PR 2: the review gate's phases are in `OF_PHASE`, which the harness and the wrapper read through `artifact_of`;
+    a malformed answer in them is the review gate's class, in the plan gate's phases the plan gate's (Q-B1 (a))."""
+    assert {"review", "reconcile"} <= set(artifacts.OF_PHASE)
+    assert [artifacts.malformed(p) for p in ("plan", "refute", "judge")] == ["failed:malformed-plan"] * 3
+    assert [artifacts.malformed(p) for p in ("review", "reconcile")] == ["failed:malformed-review"] * 2
 
 
 def test_each_review_gate_schema_is_self_contained_and_closed() -> None:
     """The same contract as the plan gate's schemas: no `$ref` for the harness to resolve, deterministic, closed."""
-    models = [m for _, m in artifacts.OF_REVIEW_GATE.values()] + [m for _, m in artifacts.OF_LATER_ROUND.values()]
+    gate = [artifacts.OF_PHASE["review"], artifacts.OF_PHASE["reconcile"], *artifacts.OF_LATER_ROUND.values()]
+    models = [m for _, m in gate]
     for model in models:
         text = json.dumps(artifacts.schema(model), sort_keys=True)
         assert "$ref" not in text and "$defs" not in text, model.__name__

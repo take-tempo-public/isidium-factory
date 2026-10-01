@@ -132,9 +132,14 @@ def _pick(
         source = ledger.run(carry_from)
         if source is None:
             raise Refusal("dispatch.carry-unknown", carry_from, "no such run in this ledger")
-        if not str(source["outcome"]).startswith(FAILED):
+        # A parked run's work is carried too (V4a-ii-b Q-B3 (a), [owner, 2026-09-27]): a review that parks
+        # `review-disputed` has a build behind it, and the owner's answer should not cost that build. A plan-gate park
+        # committed nothing, so the `carry-empty` check below answers it as it always did.
+        if not (str(source["outcome"]).startswith(FAILED) or source["outcome"] == "parked"):
             raise Refusal(
-                "dispatch.carry-outcome", carry_from, f"ended {source['outcome']}: only a failed run's work is carried"
+                "dispatch.carry-outcome",
+                carry_from,
+                f"ended {source['outcome']}: only a failed or parked run's work is carried",
             )
         if not source["head_sha"]:
             raise Refusal("dispatch.carry-empty", carry_from, "committed no work; there is nothing to carry")

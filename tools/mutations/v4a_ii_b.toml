@@ -28,3 +28,65 @@ label = "the round ignored -- the second pass answers with findings, not a rulin
 file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
 find = '''    if round_ > 1 and phase in OF_LATER_ROUND:'''
 replace = '''    if False:'''
+
+# ---- PR 2 of 3 — the review gate driven. Each killed by tests/factory/test_v4a_ii_b_chain.py alone.
+
+[[mutation]]
+id = "M5"
+label = "the chain stops at the build -- the review never runs"
+file = "packages/isidium-factory/src/isidium/factory/gate.py"
+find = '''    if last.phase == "build":
+        return Step("phase", "review")'''
+replace = '''    if last.phase == "build":
+        return Step("done")'''
+
+[[mutation]]
+id = "M6"
+label = "a blocking finding is ignored -- no reconcile"
+file = "packages/isidium-factory/src/isidium/factory/gate.py"
+find = '''        return Step("phase", "reconcile") if found.blocking else Step("done")'''
+replace = '''        return Step("done")'''
+
+[[mutation]]
+id = "M7"
+label = "a finding still asserted is let through -- no review-disputed park"
+file = "packages/isidium-factory/src/isidium/factory/gate.py"
+find = '''        if not ruling.disputed:'''
+replace = '''        if True:'''
+
+[[mutation]]
+id = "M8"
+label = "the reviewer reconciles -- the agent with no writes is handed the fix"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    "reconcile": "builder",'''
+replace = '''    "reconcile": "reviewer",'''
+
+[[mutation]]
+id = "M9"
+label = "the completeness check skipped -- a review that skips a scenario is accepted"
+file = "packages/isidium-factory/src/isidium/factory/harness.py"
+find = '''    if _incomplete(job, answer):'''
+replace = '''    if False:'''
+
+[[mutation]]
+id = "M10"
+label = "a malformed review answer ends in the plan gate's class"
+file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
+find = '''    return "failed:malformed-review" if phase in REVIEW_GATE else "failed:malformed-plan"'''
+replace = '''    return "failed:malformed-plan"'''
+
+[[mutation]]
+id = "M11"
+label = "a parked run's work is refused for carrying"
+file = "packages/isidium-factory/src/isidium/factory/dispatch.py"
+find = '''        if not (str(source["outcome"]).startswith(FAILED) or source["outcome"] == "parked"):'''
+replace = '''        if not str(source["outcome"]).startswith(FAILED):'''
+
+[[mutation]]
+id = "M12"
+label = "the second pass reads the plan, not the findings and the report -- it may sweep again"
+file = "packages/isidium-factory/src/isidium/factory/gate.py"
+find = '''        if _count(history, "review") == 0:
+            named = [("plan", plan)]'''
+replace = '''        if True:
+            named = [("plan", plan)]'''

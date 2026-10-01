@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -127,12 +127,28 @@ class ReviewFinding(Finding):
     bears_on: str = Field(min_length=1, description="the card's scenario, rule or guidance id it reads against")
 
 
+class Evidence(_Artifact):
+    """One row of the reviewer's traceability field: an acceptance scenario and where, in the diff or the tests, the
+    evidence that it is met is — or that it is not. The reviewer prompt's own rule: *"An approval you cannot fill that
+    field for is not available to you."*"""
+
+    id: str = Field(min_length=1, description="the acceptance scenario's id")
+    evidence: str = Field(min_length=1, description="where in the diff or the tests it is shown met, or why it is not")
+
+
 class Findings(_Artifact):
+    traceability: tuple[Evidence, ...] = Field(min_length=1)  # every scenario, checked by `untraced` against the card
     findings: tuple[ReviewFinding, ...] = ()  # empty is a real answer: reviewed, nothing found — reconcile skipped
+    suggestions: tuple[str, ...] = ()  # real but beyond this card: the run report's suggestions[], never a finding
 
     @property
     def blocking(self) -> tuple[ReviewFinding, ...]:
         return tuple(f for f in self.findings if f.severity == "blocking")
+
+    def untraced(self, scenarios: Sequence[str]) -> tuple[str, ...]:
+        """The card's scenarios the traceability field leaves out — a review that skipped one is not a review of it."""
+        traced = {e.id for e in self.traceability}
+        return tuple(s for s in scenarios if s not in traced)
 
 
 class Reconciled(_Artifact):
@@ -176,13 +192,6 @@ OF_PHASE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
     "plan": ("plan", Plan),
     "refute": ("refutation", Refutation),
     "judge": ("verdict", Verdict),
-}
-
-# The review gate's answers, by phase — **not yet read by the harness or the wrapper** (V4a-ii-b PR 1 of 3 types them;
-# PR 2 drives the chain past the build and switches both readers to `artifact_of`). Kept out of `OF_PHASE` until then,
-# because the wrapper refuses an `ok` phase that does not answer with the artifact `OF_PHASE` names, and the review
-# phase reachable today (`run_phase(phase="review")`) answers with none.
-OF_REVIEW_GATE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
     "review": ("findings", Findings),
     "reconcile": ("reconcile-report", ReconcileReport),
 }
@@ -193,19 +202,30 @@ OF_LATER_ROUND: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
     "review": ("ruling", Ruling),
 }
 
+# The phases whose malformed answer is the review gate's class, not the plan gate's (Q-B1 (a), [owner, 2026-09-27]).
+REVIEW_GATE: Final[frozenset[str]] = frozenset({"review", "reconcile"})
+
 
 def artifact_of(phase: str, round_: int = 1) -> tuple[str, type[_Artifact]] | None:
-    """The artifact a phase answers with in this round, or None for a phase that answers with its commit."""
+    """The artifact a phase answers with in this round, or None for a phase that answers with its commit. The one
+    reader of the two tables — the harness (which schema to pass) and the wrapper (what to expect back) both ask it."""
     if round_ > 1 and phase in OF_LATER_ROUND:
         return OF_LATER_ROUND[phase]
-    return OF_PHASE.get(phase) or OF_REVIEW_GATE.get(phase)
+    return OF_PHASE.get(phase)
+
+
+def malformed(phase: str) -> str:
+    """The end of a structured call with no conforming answer, by the gate it belongs to."""
+    return "failed:malformed-review" if phase in REVIEW_GATE else "failed:malformed-plan"
 
 
 # What a phase cannot run without, by artifact name — the plan for the refuter; the plan and its refutation for the
-# judge (both prompts' "What you are given"). What each is actually handed is `gate.inputs_for`'s, from the history.
+# judge (both prompts' "What you are given"); the findings for reconcile, which answers them. What each is actually
+# handed is `gate.inputs_for`'s, from the history.
 INPUTS: Final[Mapping[str, tuple[str, ...]]] = {
     "refute": ("plan",),
     "judge": ("plan", "refutation"),
+    "reconcile": ("findings",),
 }
 
 

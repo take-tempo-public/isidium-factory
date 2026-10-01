@@ -839,7 +839,14 @@ def test_the_prompt_version_is_the_agents_signed_row(disk: Disk, led: Ledger) ->
     build = fresh_run(disk, led)
     runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=build, phase="build", factory=lambda h, r: fake)
     review = fresh_run(disk, led)
-    runner_mod.run_phase(disk.ctx, _reg(disk), led, disk.call, run_id=review, phase="review", factory=lambda h, r: fake)
+    # The review phase answers with findings since V4a-ii-b; this fake answers with none, so the wrapper refuses its
+    # `ok` (`run.artifact`) — after the job was handed over, which is all this test reads.
+    refuses(
+        "run.artifact",
+        lambda: runner_mod.run_phase(
+            disk.ctx, _reg(disk), led, disk.call, run_id=review, phase="review", factory=lambda h, r: fake
+        ),
+    )
     assert {j.identity.agent: j.prompt_version for j in fake.seen} == {"builder": "v3", "reviewer": "v1"}
     assert not hasattr(runner_mod, "PROMPT_VERSIONS"), "one home: the signed row, never a map beside it"
 

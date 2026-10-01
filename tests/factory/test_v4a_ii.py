@@ -43,7 +43,16 @@ PLAN: dict[str, Any] = {
 }
 REFUTATION: dict[str, Any] = {"findings": []}
 VERDICT: dict[str, Any] = {"verdict": "approve", "reasoning": "every scenario maps to a test that fails today"}
-ANSWERS: dict[str, Any] = {"plan": PLAN, "refute": REFUTATION, "judge": VERDICT}
+# V4a-ii-b: the review gate follows the build, so a chain that reaches the build reaches the review — a clean one
+# (every scenario traced, nothing found) is the chain's end, as the build was before.
+CLEAN: dict[str, Any] = {
+    "traceability": [
+        {"id": "S1", "evidence": "tests/test_validator.py fails without the validator"},
+        {"id": "S2", "evidence": "the validator's refusal path is covered"},
+    ],
+    "findings": [],
+}
+ANSWERS: dict[str, Any] = {"plan": PLAN, "refute": REFUTATION, "judge": VERDICT, "review": CLEAN}
 
 
 @pytest.fixture
@@ -70,13 +79,13 @@ class Shaped(Fake):
         spec = job.policy.agent(job.identity.agent)
         made: list[dict[str, str]] = []
         outcome = "ok"
-        shaped = artifacts.OF_PHASE.get(job.phase)
+        shaped = artifacts.artifact_of(job.phase, job.round)
         if shaped is not None:
             value = self.answers.get(job.phase)
             if isinstance(value, list):
                 value = value.pop(0) if len(value) > 1 else value[0]
             if value is None:
-                outcome = "failed:malformed-plan"
+                outcome = artifacts.malformed(job.phase)
             else:
                 data = artifacts.canonical(value)
                 rel = f"runs/{job.run_id}/{job.step}/{shaped[0]}.json"
@@ -253,7 +262,7 @@ def test_an_approved_plan_runs_plan_refute_judge_build_in_one_worktree(
     run_id = fresh_run(disk, led)
     drv = Shaped(home=disk.home)
     row = chain(disk, led, run_id, drv)
-    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge", "build"]
+    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge", "build", "review"]
     assert len(made) == 1, f"one worktree per run, not per phase: {made}"
     have = led.artifacts_of(run_id)
     judge, build = drv.seen[2], drv.seen[3]
@@ -274,7 +283,7 @@ def test_the_chain_resumes_from_the_last_phase_the_ledger_holds(disk: Disk, led:
     one(disk, led, run_id, "plan", Shaped(home=disk.home))
     drv = Shaped(home=disk.home)
     chain(disk, led, run_id, drv)
-    assert [j.phase for j in drv.seen] == ["refute", "judge", "build"]
+    assert [j.phase for j in drv.seen] == ["refute", "judge", "build", "review"]
 
 
 def test_a_malformed_answer_ends_the_chain_failed_malformed_plan(disk: Disk, led: Ledger) -> None:
@@ -319,7 +328,7 @@ def test_the_chain_span_wraps_its_phases(disk: Disk, led: Ledger, monkeypatch: p
     monkeypatch.setattr(telemetry, "span", spying)
     chain(disk, led, fresh_run(disk, led), Shaped(home=disk.home))
     ran = [n for n in names if n.startswith("isidium.factory.run.")]  # the ledger's own spans ride the same module
-    assert ran == [runner_mod.CHAIN_SPAN, *[runner_mod.SPAN] * 4], ran
+    assert ran == [runner_mod.CHAIN_SPAN, *[runner_mod.SPAN] * 5], ran
 
 
 # ------------------------------------------------------------------------------------------ the gate, end to end
@@ -340,10 +349,16 @@ def test_a_blocked_round_is_revised_once_and_the_revision_reads_what_sent_it_bac
     run_id = fresh_run(disk, led)
     drv = Shaped(
         home=disk.home,
-        answers={"plan": PLAN, "refute": [BLOCKED, REFUTATION], "judge": [verdict("approve"), verdict("approve")]},
+        answers={
+            "plan": PLAN,
+            "refute": [BLOCKED, REFUTATION],
+            "judge": [verdict("approve"), verdict("approve")],
+            "review": CLEAN,
+        },
     )
     row = chain(disk, led, run_id, drv)
-    assert [p["phase"] for p in row["phases"]] == ["plan", "refute", "judge", "plan", "refute", "judge", "build"]
+    phases = [p["phase"] for p in row["phases"]]
+    assert phases == ["plan", "refute", "judge", "plan", "refute", "judge", "build", "review"]
     revision, second_judge = drv.seen[3], drv.seen[5]
     assert [i.name for i in revision.inputs] == ["plan", "refutation", "verdict"]
     assert [i.name for i in second_judge.inputs] == ["plan", "refutation", "answered-refutation"]
