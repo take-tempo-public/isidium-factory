@@ -2,7 +2,7 @@
 schema = 1
 id = 21
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A carried run records the carry commit as its head, so a carry whose later phases write nothing can still be closed"
 shape = "bdd"
@@ -94,5 +94,6 @@ history = [
   { seq = 1, at = "2026-09-30T17:12:14Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e71c8581ac0789a2a7f32a596d9b44f0eac7a28efcd8d02cba2bd9bb6c08953a", h = "sha256:c8fd9bdfe50ddfc14e03df60e33905a547b562a97267228b193d381f8ede4d40" },
   { seq = 2, at = "2026-09-30T17:12:40Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e71c8581ac0789a2a7f32a596d9b44f0eac7a28efcd8d02cba2bd9bb6c08953a", h = "sha256:bc0cfa8752c4b05241d4fcf591b8920be79d9de2b406bfecf94bd8ee78d0a821", batch = 47 },
   { seq = 3, at = "2026-10-01T00:05:43Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status", "surfaces"], build = "sha256:2b835597b5747b53489b54dffbc7b84ab5a083d664a24738aaa6804f0c779f47", h = "sha256:dec178e162adedd6d61f9df2b6090cbfbd09dc84692f9811f5a3a7646545bc2b", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:KBM1/4mcR6x1Aa7qsTYRXGsCDxD0i1EMusSeDwworX6t1K/t9WPJtIrLvhGbfBVneNxV+EqnqArxMvpMrNbNCw==" },
+  { seq = 4, at = "2026-10-01T00:06:06Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:2b835597b5747b53489b54dffbc7b84ab5a083d664a24738aaa6804f0c779f47", h = "sha256:e113b84d0f1b851ee0e73bb5dc34e00b51b5b47b6c8642a72fabc1496c8898b4", batch = 48 },
 ]
 ```
