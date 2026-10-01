@@ -591,9 +591,16 @@ def _carry(
     **Committed separately, and that is what makes the record honest.** The touched set is recomputed from
     `git status` in this worktree, so work left uncommitted would read as this run's: its files would be judged
     against *this* card's surfaces (a re-ratification may have narrowed them, and the phase would fail scope for
-    work it did not do), and `surfaces_actual` would claim them. Its own commit, under the run's identity with a
-    trailer naming where it came from, leaves the tree clean before the agent starts — so everything after it is
-    genuinely this run's.
+    work it did not do). Its own commit, under the run's identity with a trailer naming where it came from, leaves
+    the tree clean before the agent starts — so everything after it is genuinely this run's, and nothing it did
+    not do is judged as its scope.
+
+    **The run claims the carried files from this commit, before any phase runs** (card 21; the owner's 2026-09-30
+    ruling on r-33/#89: the pull request holds those files, so the run produced them on its branch). `advance`
+    records this commit as the run's head the moment it exists, so a build that goes on to write nothing still
+    leaves `close` a head equal to the branch tip it compares against — the gap that left r-33's `close.pr-mismatch`
+    refusing a head of `None` against a pushed carry commit. What the separate commit still buys is narrower than
+    before: the carried files are never judged as *this phase's own* writes against a possibly-narrowed `surfaces`.
     """
     carried_from = row.get("carried_from")
     if not carried_from:
@@ -607,7 +614,15 @@ def _carry(
             f"{agent}: {run_id} carries {carried_from}\n\n"
             f"{TRAILER_RUN}: {run_id}\n{TRAILER_AGENT}: {agent}\n{TRAILER_CARRIED}: {carried_from}\n"
         )
-        _commit_message(work, message, ctx.identity.name, ctx.identity.email)
+        head = _commit_message(work, message, ctx.identity.name, ctx.identity.email)
+        if head is not None:
+            # R1: the carry's own commit becomes the run's head and `surfaces_actual` the moment it exists — not
+            # only once a later phase commits more — so R2 holds (a build that writes nothing still leaves `close`
+            # a head equal to the pushed branch tip). `None` here mirrors `_phase`'s own guard on the same
+            # impossible case (runner.py:326's `if head is not None`) rather than inventing a second shape for it.
+            # The billing class is `None`: the carry draws on no lane, and `advance`'s COALESCE leaves an earlier
+            # or later phase's class standing (C1).
+            ledger.advance(run_id, head, list(files), None)
     return adapter_mod.Carried(
         run_id=str(carried_from),
         outcome=str(source["outcome"]),

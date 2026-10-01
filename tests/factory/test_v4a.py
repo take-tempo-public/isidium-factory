@@ -957,9 +957,10 @@ def test_a_carried_run_replays_the_work_commits_it_apart_and_tells_the_agent(dis
 
     **The load-bearing assertion is `surfaces_actual`.** Carried work left uncommitted would be indistinguishable
     from this run's own: `touched` is recomputed from `git status` in the worktree, so the inherited files would be
-    judged against this card's surfaces and claimed as this run's change set. Its own commit is what makes the
-    record say who did what — so a phase that itself writes nothing must come back with nothing claimed, even
-    though its tree was full when it started.
+    judged against this card's surfaces as though this phase itself had written them. Its own commit is what keeps
+    that from happening — the run does claim the files its carry commit carried, from that commit, before the
+    phase starts (card 21; the owner's 2026-09-30 ruling on r-33/#89); what the separate commit buys is that a
+    phase which itself writes nothing still comes back having added nothing of its own.
 
     **And the block is on the job, not in the payload** — the second half of the ruling, asserted here because the
     payload's hash is what proves the substrate did not move, and it must not start depending on the ledger."""
@@ -988,7 +989,9 @@ def test_a_carried_run_replays_the_work_commits_it_apart_and_tells_the_agent(dis
     assert (job.carried.run_id, job.carried.outcome, job.carried.head_sha) == (source, "failed:budget", src["head_sha"])
     assert job.carried.files == (INSIDE,)
     assert "carried" not in job.payload, "the payload stays a pure function of the card at a commit (Q-V33 (c))"
-    assert row["surfaces_actual"] is None, "a phase that wrote nothing claims nothing, carried tree or not"
+    tip = git(disk.work, "rev-parse", f"story/{run_id}").strip()
+    assert row["head_sha"] == tip, "the carry commit is the run's head when the build itself commits nothing"
+    assert row["surfaces_actual"] == [INSIDE], "the run claims the files its carry commit carried"
     log = git(disk.work, "log", "--format=%s%x1f%b%x1e", f"{row['base_sha']}..story/{run_id}")
     carried_commits = [c for c in log.split("\x1e") if "Factory-Carried" in c]
     assert len(carried_commits) == 1 and source in carried_commits[0], "one commit, and it says whose work it was"
