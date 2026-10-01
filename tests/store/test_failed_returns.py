@@ -68,9 +68,9 @@ def test_the_failure_classes_are_one_closed_set_and_merge_is_in_it() -> None:
     """
     assert get_args(events_mod.FailureClass) == get_args(status_mod.FailureClass), "one set, written twice"
     assert get_args(status_mod.FailureClass) == status_mod.FAILURE_CLASSES, "the tuple is derived, not retyped"
-    assert {"merge", "malformed-plan"} <= set(status_mod.FAILURE_CLASSES)
+    assert {"merge", "malformed-plan", "malformed-review"} <= set(status_mod.FAILURE_CLASSES)
 
-    for cls in ("merge", "malformed-plan"):
+    for cls in ("merge", "malformed-plan", "malformed-review"):  # the last: V4a-ii-b Q-B1 (a) [owner, 2026-09-27]
         ev = events_mod.parse_event({"card": 7, "kind": "failed", "class": cls, "run_id": "r-7"})
         assert isinstance(ev, events_mod.Failed) and ev.class_ == cls
     with pytest.raises(Refusal) as ei:

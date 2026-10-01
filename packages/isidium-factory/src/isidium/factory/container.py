@@ -51,8 +51,9 @@ PROMPTS_LABEL: Final = "org.isidium.prompts"
 # more, because a phase that died twice is an environment to fix, not a thing to keep paying a model to re-attempt.
 ATTEMPTS: Final = 2
 # The ends a second attempt would only repeat, returned to the wrapper as they are. A budget end would spend the same
-# turns again (T-A7); a malformed plan-gate answer was already re-asked inside the call (T-B4 (1), [owner, 2026-09-23]).
-FINAL: Final[frozenset[str]] = frozenset({"failed:budget", "failed:malformed-plan"})
+# turns again (T-A7); a malformed plan-gate answer was already re-asked inside the call (T-B4 (1), [owner, 2026-09-23]),
+# and a malformed review-gate answer the same way (V4a-ii-b Q-B1).
+FINAL: Final[frozenset[str]] = frozenset({"failed:budget", "failed:malformed-plan", "failed:malformed-review"})
 
 # How long `podman rm --force` lets a stopped phase's harness finish writing its result before it kills the container.
 # Seconds, not minutes: the harness is stopping, not working, and the retry waits on this.
