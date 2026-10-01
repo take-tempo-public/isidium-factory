@@ -949,8 +949,25 @@
       ]
     },
     "0022": {
-      "closures": [],
-      "execution": "dispatched",
+      "closures": [
+        {
+          "at": "2026-10-01T20:14:51Z",
+          "closure_id": "f-r-36",
+          "evidence": [
+            "sha256:e29c50985121a19187ef71c49f77e2ec61083c5514fc21aff364d8da1c8bef92",
+            "63c0a83c7232c231aab06638d05b5e1b644a87cc"
+          ],
+          "kind": "factory",
+          "outcome": "met",
+          "verdicts": {
+            "S1": "pass",
+            "S2": "pass"
+          },
+          "verified": true,
+          "verified_against": "sha256:bb1e0ec6de6a20b7eb46aa029d7dae583b2643ed7640c6d070aa27c43ef117c3"
+        }
+      ],
+      "execution": "closed",
       "fingerprint": {
         "commit": "ea61e51c1d0c830b694d70c960808b1154621cc8",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -971,7 +988,16 @@
         "h": "sha256:27a999c3f78d47379c16a30992e727ace636a62333f89e0b1ca1dee5097f967b",
         "seq": 3
       },
-      "runs": []
+      "runs": [
+        {
+          "batch": null,
+          "build_hash": "sha256:bb1e0ec6de6a20b7eb46aa029d7dae583b2643ed7640c6d070aa27c43ef117c3",
+          "cost_micro": 6817904,
+          "duration_ms": 2210947,
+          "outcome": "complete",
+          "run_id": "r-36"
+        }
+      ]
     }
   },
   "ingest": {
@@ -1054,17 +1080,18 @@
       "56bda2d41d02141e86a2af6125271254a728e53b9a5154b00949917d74dbb65c",
       "42855babb218a86ead0f2a9a084477637f4b9b2a01f575eccee82de224af83e9",
       "5622bb1eb48ad120869d5e2d5a6498551c6f9b26d0371acdd64f903fecbb3e40",
-      "fd8a13e40d3a987da4be67492ae25f2ef3c4c5b32266e2c2915d1574bdc13cc5"
+      "fd8a13e40d3a987da4be67492ae25f2ef3c4c5b32266e2c2915d1574bdc13cc5",
+      "c167d3830c064b7f8064b4c9754f6381cebf9c77bfc6872b059cea6f94a88207"
     ],
     "overflow": 0,
     "run_id": "r-36"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:31cb982cdf477e9ff74231795a94fe877f62bc05bce12d9e6d0b17f043c76f53",
-    "seq": 254
+    "h": "sha256:f00bd2838fe6e57626a727430ced4ce5622203cbb150cc56c0e9e3f9c36159c2",
+    "seq": 255
   },
-  "landed_at": "2026-10-01T02:44:48Z",
-  "ledger_cursor": "8e4f1df506647e3e8dc31d69e83ee8252e461828",
+  "landed_at": "2026-10-01T20:07:39Z",
+  "ledger_cursor": "63c0a83c7232c231aab06638d05b5e1b644a87cc",
   "schema": 2
 }
