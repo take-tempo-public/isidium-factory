@@ -124,7 +124,7 @@ class ReviewFinding(Finding):
     """A reviewer's finding: the refuter's shape plus what it bears on (T-B6 (1)–(2)) — the scenario, rule or guidance
     id it reads against, so a finding is traceable to the card the way a plan's matrix row is."""
 
-    bears_on: str = Field(min_length=1, description="the card's scenario, rule or guidance id this finding reads against")
+    bears_on: str = Field(min_length=1, description="the card's scenario, rule or guidance id it reads against")
 
 
 class Findings(_Artifact):
@@ -199,6 +199,7 @@ def artifact_of(phase: str, round_: int = 1) -> tuple[str, type[_Artifact]] | No
     if round_ > 1 and phase in OF_LATER_ROUND:
         return OF_LATER_ROUND[phase]
     return OF_PHASE.get(phase) or OF_REVIEW_GATE.get(phase)
+
 
 # What a phase cannot run without, by artifact name — the plan for the refuter; the plan and its refutation for the
 # judge (both prompts' "What you are given"). What each is actually handed is `gate.inputs_for`'s, from the history.
