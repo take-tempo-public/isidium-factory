@@ -76,6 +76,20 @@ def test_a_scenario_in_the_matrix_with_nothing_covering_it_is_refused() -> None:
 
 H = Done  # a shorter name for the history rows below
 
+# The review gate's answers (V4a-ii-b): a build behind them, a clean review, a blocking and a minor finding, the
+# builder's report and the second pass's ruling.
+BUILT: list[Done] = [H("plan", PLAN), H("refute", CLEAN), H("judge", verdict("approve")), H("build", None)]
+TRACED = [{"id": "S1", "evidence": "a test"}, {"id": "S2", "evidence": "a test"}]
+REVIEWED: dict[str, Any] = {"traceability": TRACED, "findings": []}
+NOTED: dict[str, Any] = {"id": "F2", "severity": "minor", "claim": "c", "location": "l", "why": "w", "bears_on": "S1"}
+FOUND: dict[str, Any] = {"traceability": TRACED, "findings": [{**NOTED, "id": "F1", "severity": "blocking"}]}
+REPORT: dict[str, Any] = {"rows": [{"id": "F1", "disposition": "fixed", "note": "n"}]}
+
+
+def RULED(r: str) -> dict[str, Any]:  # named like a constant: it is read as one, beside the others in the table
+    return {"rulings": [{"id": "F1", "ruling": r, "reason": "r"}]}
+
+
 CASES: list[tuple[str, list[Done], tuple[str, str | None, str]]] = [
     ("nothing yet: plan", [], ("phase", "plan", "")),
     ("a clean plan: refute", [H("plan", PLAN)], ("phase", "refute", "")),
@@ -152,10 +166,25 @@ CASES: list[tuple[str, list[Done], tuple[str, str | None, str]]] = [
         ],
         ("phase", "build", ""),
     ),
+    # The review gate after the build (V4a-ii-b, [owner, 2026-09-25/27]): the build no longer ends the chain.
     (
-        "the build ran: done",
-        [H("plan", PLAN), H("refute", CLEAN), H("judge", verdict("approve")), H("build", None)],
+        "the build ran: review",
+        [*BUILT],
+        ("phase", "review", ""),
+    ),
+    ("a clean review: done", [*BUILT, H("review", REVIEWED)], ("done", None, "")),
+    ("a minor finding alone: done", [*BUILT, H("review", {**REVIEWED, "findings": [NOTED]})], ("done", None, "")),
+    ("a blocking finding: reconcile", [*BUILT, H("review", FOUND)], ("phase", "reconcile", "")),
+    ("reconciled: the second pass", [*BUILT, H("review", FOUND), H("reconcile", REPORT)], ("phase", "review", "")),
+    (
+        "every finding concurred: done",
+        [*BUILT, H("review", FOUND), H("reconcile", REPORT), H("review", RULED("concur"))],
         ("done", None, ""),
+    ),
+    (
+        "a finding still asserted: park review-disputed",
+        [*BUILT, H("review", FOUND), H("reconcile", REPORT), H("review", RULED("still-asserted"))],
+        ("park", None, "review-disputed"),
     ),
 ]
 
