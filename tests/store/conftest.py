@@ -186,12 +186,20 @@ def tenant_checkout(parent: Path) -> Path:
 
     **`uploadpack.allowFilter` is set on the remote and it is not optional** (S-9): without it the store's
     `--filter=blob:none` clone is answered with every blob and the footprint tests assert nothing while passing.
+
+    **`maintenance.auto=false` and `gc.auto=0` are not optional either** (card 22): without them, a later `commit`,
+    `fetch` or `pull` in this checkout can spawn git's detached auto-maintenance, which creates and removes
+    `.git/objects/maintenance.lock` (and `tmp_pack_*` files) in the background — the race behind four red CI runs
+    (2026-09-27 to 2026-10-01) where `test_verify_chain.py`'s `tenant` fixture copied such a checkout with
+    `shutil.copytree` while the detached child was still touching it. They are passed to `clone` rather than set
+    afterwards because `clone --config` writes them into the new repository as it initializes it — in place before
+    this function's own `add`/`commit`/`push` and before any later command a caller runs here.
     """
     bare = parent / "origin.git"
     git(parent, "init", "--bare", "-b", "main", str(bare))
     git(bare, "config", "uploadpack.allowFilter", "true")
     work = parent / "tenant"
-    git(parent, "clone", "-q", str(bare), str(work))
+    git(parent, "clone", "-q", "-c", "maintenance.auto=false", "-c", "gc.auto=0", str(bare), str(work))
     git(work, "config", "user.name", "seed")
     git(work, "config", "user.email", "seed@example")
     (work / "README.md").write_text("a tenant\n", encoding="utf-8")
