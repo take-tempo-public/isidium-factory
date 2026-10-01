@@ -52,6 +52,7 @@ FailureClass = Literal[
     "identity",
     "merge",
     "malformed-plan",
+    "malformed-review",
 ]
 ExecutionState = Literal["complete", "reverted", "parked", "answered", "dispatched", "failed", "abandoned"]
 GuardKind = Literal["has-questions", "held", "held_by", "blocked_by", "deferred_by", "below-threshold"]
@@ -65,7 +66,8 @@ INTEGRITY_REASONS: Final[tuple[IntegrityReason, ...]] = (
     "attribution",
     "time",
 )
-# 03 §1.5's four, the six V5a widened it by (Q-V22 (a)), and `merge` + `malformed-plan` [owner, 2026-09-20].
+# 03 §1.5's four, the six V5a widened it by (Q-V22 (a)), `merge` + `malformed-plan` [owner, 2026-09-20], and
+# `malformed-review` (V4a-ii-b Q-B1 (a) [owner, 2026-09-27]).
 #
 # **Derived from the Literal rather than written twice** [2026-09-20]: this tuple and the type above were two
 # hand-maintained copies of one set, and widening them was the second time both had to be edited in step. It is now

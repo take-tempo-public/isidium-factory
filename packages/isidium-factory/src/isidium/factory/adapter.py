@@ -53,7 +53,10 @@ Phase = Literal["plan", "refute", "judge", "build", "review", "reconcile"]
 # does not close a card. `failed:budget` is T-A7's *"`budget`/`timeout` ⇒ design queue with the telemetry attached"*:
 # a phase that spent its turns ended on the work's own terms, and a second attempt spends them again (found live on
 # `r-4`, 2026-09-14, where a turn limit was called `failed:infra` and retried).
-Outcome = Literal["ok", "failed:infra", "failed:scope", "failed:budget", "failed:malformed-plan", "parked"]
+# `failed:malformed-review` is the review gate's beside the plan gate's (V4a-ii-b Q-B1 (a), [owner, 2026-09-27]).
+Outcome = Literal[
+    "ok", "failed:infra", "failed:scope", "failed:budget", "failed:malformed-plan", "failed:malformed-review", "parked"
+]
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 

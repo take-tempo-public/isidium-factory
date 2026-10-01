@@ -36,6 +36,9 @@ from .refusal import Refusal
 # retried once for nothing, and a class that does not say what happened costs exactly that.
 # **`malformed-plan`** — Q-V29 (a), ruled 2026-09-13 and not yet built. It rides this widening rather than its own
 # because the two would otherwise cost two store images and two recreates for one edit to one tuple.
+# **`malformed-review`** — V4a-ii-b Q-B1 (a) [owner, 2026-09-27]: a review-gate answer (findings, reconcile report,
+# second-pass ruling) still malformed after the in-call re-ask. A failure, not a park, so the build it reviewed stays
+# carryable; its own name beside `malformed-plan`, because the gate it failed is a different gate.
 FailureClass = Literal[
     "scope",
     "ambiguity",
@@ -49,6 +52,7 @@ FailureClass = Literal[
     "identity",
     "merge",
     "malformed-plan",
+    "malformed-review",
 ]
 Verdict = Literal["pass", "fail", "manual"]
 

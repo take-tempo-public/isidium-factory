@@ -1,0 +1,30 @@
+# V4a-ii-b PR 1 of 3 — the review gate's artifacts. Each mutation is killed by tests/factory/test_v4a_ii_b_artifacts.py
+# alone (checked in place against that one file, never a whole-suite run).
+
+[[mutation]]
+id = "M1"
+label = "every finding counts as blocking -- a minor finding would send the run to reconcile"
+file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
+find = '''        return tuple(f for f in self.findings if f.severity == "blocking")'''
+replace = '''        return tuple(f for f in self.findings)'''
+
+[[mutation]]
+id = "M2"
+label = "a reconcile report that skips a blocking finding reads as complete"
+file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
+find = '''        return tuple(f.id for f in findings.blocking if f.id not in answered)'''
+replace = '''        return ()'''
+
+[[mutation]]
+id = "M3"
+label = "a finding still asserted is not named disputed -- the second pass could never park"
+file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
+find = '''        return tuple(r.id for r in self.rulings if r.ruling == "still-asserted")'''
+replace = '''        return ()'''
+
+[[mutation]]
+id = "M4"
+label = "the round ignored -- the second pass answers with findings, not a ruling"
+file = "packages/isidium-factory/src/isidium/factory/artifacts.py"
+find = '''    if round_ > 1 and phase in OF_LATER_ROUND:'''
+replace = '''    if False:'''

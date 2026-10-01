@@ -111,6 +111,65 @@ class Verdict(_Artifact):
     reasoning: str = Field(min_length=1)
 
 
+# ---- the review gate [V4a-ii-b, owner-ruled 2026-09-25/27] -------------------------------------------------------
+#
+# The flow, ruled: the **reviewer** reads the build and files `Findings`, writing nothing; any `blocking` finding sends
+# the run to **reconcile**, where the **builder** fixes or refutes each one and answers a `ReconcileReport`; the
+# reviewer's **second pass**, bounded to those findings, answers a `Ruling` per finding. A finding still asserted after
+# it parks the run (`review-disputed`); none does → the chain goes on to its end. The review's outcome lives on these
+# artifacts and the run's outcome, never in `verdicts[]`, which stays the judge's (ruling 3).
+
+
+class ReviewFinding(Finding):
+    """A reviewer's finding: the refuter's shape plus what it bears on (T-B6 (1)–(2)) — the scenario, rule or guidance
+    id it reads against, so a finding is traceable to the card the way a plan's matrix row is."""
+
+    bears_on: str = Field(min_length=1, description="the card's scenario, rule or guidance id this finding reads against")
+
+
+class Findings(_Artifact):
+    findings: tuple[ReviewFinding, ...] = ()  # empty is a real answer: reviewed, nothing found — reconcile skipped
+
+    @property
+    def blocking(self) -> tuple[ReviewFinding, ...]:
+        return tuple(f for f in self.findings if f.severity == "blocking")
+
+
+class Reconciled(_Artifact):
+    id: str = Field(min_length=1, description="the finding's id, as the reviewer filed it")
+    disposition: Literal["fixed", "refuted", "deferred-as-suggestion"]
+    note: str = Field(min_length=1, description="what was changed, why the finding is wrong, or what is deferred")
+
+
+class ReconcileReport(_Artifact):
+    """The builder's answer in reconcile: one row per blocking finding it was handed (T-B6: *"fixed | refuted |
+    deferred-as-suggestion"*). That every blocking finding is answered is checked against the findings by
+    `unanswered`, a function — the schema cannot see the findings."""
+
+    rows: tuple[Reconciled, ...] = Field(min_length=1)
+
+    def unanswered(self, findings: Findings) -> tuple[str, ...]:
+        answered = {r.id for r in self.rows}
+        return tuple(f.id for f in findings.blocking if f.id not in answered)
+
+
+class Ruled(_Artifact):
+    id: str = Field(min_length=1, description="the finding's id")
+    ruling: Literal["concur", "still-asserted"]
+    reason: str = Field(min_length=1)
+
+
+class Ruling(_Artifact):
+    """The reviewer's second pass, bounded to the reconciled findings: concur with each fix or refutation, or say the
+    finding still stands. Any `still-asserted` parks the run `review-disputed` [owner, 2026-09-25]."""
+
+    rulings: tuple[Ruled, ...] = Field(min_length=1)
+
+    @property
+    def disputed(self) -> tuple[str, ...]:
+        return tuple(r.id for r in self.rulings if r.ruling == "still-asserted")
+
+
 # The phase → the artifact it answers with, by name. A phase absent here answers with no artifact (the build's work is
 # its commit). One table, read by the harness (which schema to pass) and the wrapper (what to expect back).
 OF_PHASE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
@@ -118,6 +177,28 @@ OF_PHASE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
     "refute": ("refutation", Refutation),
     "judge": ("verdict", Verdict),
 }
+
+# The review gate's answers, by phase — **not yet read by the harness or the wrapper** (V4a-ii-b PR 1 of 3 types them;
+# PR 2 drives the chain past the build and switches both readers to `artifact_of`). Kept out of `OF_PHASE` until then,
+# because the wrapper refuses an `ok` phase that does not answer with the artifact `OF_PHASE` names, and the review
+# phase reachable today (`run_phase(phase="review")`) answers with none.
+OF_REVIEW_GATE: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
+    "review": ("findings", Findings),
+    "reconcile": ("reconcile-report", ReconcileReport),
+}
+
+# A phase whose later round answers with a different artifact than its first: the review's second pass is the same
+# agent, phase and prompt, bounded to the reconciled findings, and it rules rather than finds.
+OF_LATER_ROUND: Final[Mapping[str, tuple[str, type[_Artifact]]]] = {
+    "review": ("ruling", Ruling),
+}
+
+
+def artifact_of(phase: str, round_: int = 1) -> tuple[str, type[_Artifact]] | None:
+    """The artifact a phase answers with in this round, or None for a phase that answers with its commit."""
+    if round_ > 1 and phase in OF_LATER_ROUND:
+        return OF_LATER_ROUND[phase]
+    return OF_PHASE.get(phase) or OF_REVIEW_GATE.get(phase)
 
 # What a phase cannot run without, by artifact name — the plan for the refuter; the plan and its refutation for the
 # judge (both prompts' "What you are given"). What each is actually handed is `gate.inputs_for`'s, from the history.
