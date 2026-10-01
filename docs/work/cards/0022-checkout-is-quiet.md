@@ -2,7 +2,7 @@
 schema = 1
 id = 22
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A test tenant checkout runs no background git maintenance, so copying it never races a lock"
 shape = "bdd"
@@ -66,5 +66,6 @@ Not in scope: close's rerun of a red gate (card 20, done); any change to the sto
 history = [
   { seq = 1, at = "2026-10-01T02:42:19Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:a12e5d1210873417fb637b37a08f0448ca7579f9ba9bf736587f8d899f51db21", h = "sha256:46604c6e4c1875af04e082a606667faa5c3c35ba29e1b2155bb0496713fc28a7" },
   { seq = 2, at = "2026-10-01T02:44:22Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["effort"], build = "sha256:bb1e0ec6de6a20b7eb46aa029d7dae583b2643ed7640c6d070aa27c43ef117c3", h = "sha256:ac467e0c12fbf34f90fedb38a964d1b545bdef7ffb16db04524392b69116550a" },
+  { seq = 3, at = "2026-10-01T02:44:38Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:bb1e0ec6de6a20b7eb46aa029d7dae583b2643ed7640c6d070aa27c43ef117c3", h = "sha256:27a999c3f78d47379c16a30992e727ace636a62333f89e0b1ca1dee5097f967b", batch = 49 },
 ]
 ```
