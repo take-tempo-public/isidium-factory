@@ -40,7 +40,7 @@ none
 - **20** · Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed j… · closed (unverified) · software-grade · (derived)
 - **21** · A carried run records the carry commit as its head, so a carry whose later phases write nothing can still be closed · closed · software-grade · (derived)
 - **22** · A test tenant checkout runs no background git maintenance, so copying it never races a lock · closed · software-grade · (derived)
-- **23** · A phase that ends with a mutation still held restores the pristine file before its work is committed · dispatched · software-grade · (derived)
+- **23** · A phase that ends with a mutation still held restores the pristine file before its work is committed · parked · software-grade · (derived)
 
 ## Blocked
 
