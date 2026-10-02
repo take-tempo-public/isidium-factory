@@ -34,6 +34,7 @@ from typing import Any
 
 import pytest
 
+from isidium.factory import artifacts as artifacts_mod
 from isidium.factory import checkout as checkout_mod
 from isidium.factory import cli as cli_mod
 from isidium.factory import close as close_mod
@@ -274,10 +275,13 @@ def a_run(
     trailer: bool = True,
     merge: bool = True,
     build: str | None = None,
+    reviewed: bool = True,
 ) -> Run:
     """A run as the line leaves one: dispatched at the checkout's head, its `dispatched` landed, one commit by the
-    wrapper's identity in a worktree on its story branch, one `build` phase on the row — and, unless `merge` is
-    false, its story branch merged into the checkout the way the forge's button merges it."""
+    wrapper's identity in a worktree on its story branch, one `build` phase on the row and — unless `reviewed` is
+    false — one clean `review` after it, its findings artifact where the ledger says (V4a-ii-b: a tenant that declares
+    a reviewer is owed the review gate before close); and, unless `merge` is false, its story branch merged into the
+    checkout the way the forge's button merges it."""
     base = git(disk.work, "rev-parse", "HEAD").strip()
     run_id = led.dispatch(dataclasses.replace(new_run(cid), build_hash=build or build_of(disk, cid), base_sha=base))
     branch = f"story/{run_id}"
@@ -305,6 +309,13 @@ def a_run(
         AT,
         {"phase": "build", "agent": "builder", "tokens": 10, "cost_micro": 300, "duration_ms": 2000, "outcome": "ok"},
     )
+    if reviewed:
+        clean = artifacts_mod.canonical({"traceability": [{"id": "S1", "evidence": "a test"}], "findings": []})
+        rel = f"runs/{run_id}/review/findings.json"
+        (disk.home / rel).parent.mkdir(parents=True, exist_ok=True)
+        (disk.home / rel).write_bytes(clean)
+        made = [{"name": "findings", "sha256": artifacts_mod.sha256(clean), "path": rel}]
+        led.phase(run_id, AT, {"phase": "review", "agent": "reviewer", "tokens": 5, "outcome": "ok", "artifacts": made})
     assert lander.land_run(led, disk.call, run_id)["sent"] == 1
     if not merge:
         return Run(run_id, head, None)
@@ -613,7 +624,9 @@ def test_a_green_close_with_no_human_closure_lands_the_factorys_own(disk: Disk, 
     [complete] = [e for e in disk.store.events if e["kind"] == "complete" and int(e["card"]) == disk.factory]
     assert complete["run_id"] == run.run_id and complete["cost_micro"] == 300 and complete["duration_ms"] == 2000
     [ended] = [e for e in led.events_of(run.run_id) if e["kind"] == "ended"]
-    assert ended["data"]["phases"] == ["build"], "a build-only close, declared (Q-V18)"
+    # Q-V18's build-only close, narrowed by V4a-ii-b Q-B2 (a): this tenant declares a reviewer, so the run as the line
+    # leaves one now carries its review, and the close's record names both.
+    assert ended["data"]["phases"] == ["build", "review"]
     [sp] = otel.spans(close_mod.SPAN)
     assert sp.attributes["isidium.run_id"] == run.run_id and sp.attributes["isidium.outcome"] == "closed"
 
