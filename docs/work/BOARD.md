@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -40,7 +40,7 @@ none
 - **20** · Close ends a run failed:gate only when the merge commit's required checks are still red after one rerun of the failed j… · closed (unverified) · software-grade · (derived)
 - **21** · A carried run records the carry commit as its head, so a carry whose later phases write nothing can still be closed · closed · software-grade · (derived)
 - **22** · A test tenant checkout runs no background git maintenance, so copying it never races a lock · closed · software-grade · (derived)
-- **23** · A phase that ends with a mutation still held restores the pristine file before its work is committed · dispatched · software-grade · (derived)
+- **23** · A phase that ends with a mutation still held restores the pristine file before its work is committed · closed · software-grade · (derived)
 - **24** · The builder checks every file it changed with ruff and mypy before it finishes · closed · software-grade · (derived)
 - **25** · The reviewer is handed the run's diff, computed by the wrapper, on both passes · ready · software-grade · (derived)
 - **26** · A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator · ready · software-grade · (derived)
