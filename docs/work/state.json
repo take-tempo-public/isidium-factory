@@ -1158,8 +1158,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:29122abead03378a07b6751bcdca49a884414a47c23641466966050ce38f6aff",
-        "seq": 2
+        "h": "sha256:f191a81316c44b0b1b579430c3e196ad521876b9dcbd3d4583839a6a769d5579",
+        "seq": 3
       },
       "runs": []
     },
@@ -1195,8 +1195,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:24f4e7bc52c0c69d72ced59f5e70ea25fd7f552a630a64fd2cd28f0d49a0e430",
-        "seq": 2
+        "h": "sha256:fce96f874422693d356c15da7b06e7a42ce18de46362f0f80acd9cd5f72e3522",
+        "seq": 3
       },
       "runs": []
     }
@@ -1297,14 +1297,14 @@
       "0b0b4c54250e6920ceb4abfc893d3041be66c8f0567ec81176f46c19234c00d7"
     ],
     "overflow": 0,
-    "run_id": "r-41"
+    "run_id": "r-39"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:48fe9b9cc08b5ddf610aca79e03d007c54909d018be6457fb36aefd19e35a4bc",
-    "seq": 294
+    "h": "sha256:88cfcfa10f108b46e4a63ac1ba6be74c5f01c396fcbd1bebb0180f1e9988e8c0",
+    "seq": 297
   },
-  "landed_at": "2026-10-02T23:07:00Z",
-  "ledger_cursor": "af7ff4e20d7f0cf94311b6785aaa74a154bf97d3",
+  "landed_at": "2026-10-02T23:34:37Z",
+  "ledger_cursor": "424721b6ecb16b8b45595f6eb2a5d28e401b0fd8",
   "schema": 2
 }
