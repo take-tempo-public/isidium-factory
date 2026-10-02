@@ -2,7 +2,7 @@
 schema = 1
 id = 25
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The reviewer is handed the run's diff, computed by the wrapper, on both passes"
 shape = "bdd"
@@ -91,5 +91,6 @@ Not in scope: selecting v3 (a signed config act and a runner rebuild); running t
 history = [
   { seq = 1, at = "2026-10-02T18:15:58Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:1746481cbc78f527b6fca87299252c3337da4caa62129544b7aab1adb3535174", h = "sha256:f9386b5cec7981d34d0a113fcf82e770369b33626f1f6d4864d2aa65d744fb0f" },
   { seq = 2, at = "2026-10-02T18:41:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1746481cbc78f527b6fca87299252c3337da4caa62129544b7aab1adb3535174", h = "sha256:29122abead03378a07b6751bcdca49a884414a47c23641466966050ce38f6aff", batch = 55 },
+  { seq = 3, at = "2026-10-02T23:34:29Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:1746481cbc78f527b6fca87299252c3337da4caa62129544b7aab1adb3535174", h = "sha256:f191a81316c44b0b1b579430c3e196ad521876b9dcbd3d4583839a6a769d5579" },
 ]
 ```
