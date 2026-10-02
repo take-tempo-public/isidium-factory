@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -16,11 +16,11 @@ feature = "when the owner withdraws or demotes a card while a run is in flight, 
 
 [[rules]]
 id = "R1"
-text = "A withdrawn or demoted event on a card whose execution is in flight (dispatched, parked or answered) sets execution to abandoned"
+text = "A withdrawn or demoted event on a card whose execution is dispatched sets execution to abandoned; on a card whose execution is parked or answered the same event abandons no run — the parked run's entry gains a response instead (card 13)"
 
 [[rules]]
 id = "R2"
-text = "The same event appends a runs[] entry {run_id, outcome: abandoned, ended_at}: run_id from the card's last dispatched event, ended_at the withdrawn or demoted event's at"
+text = "On a dispatched card the same event appends a runs[] entry {run_id, outcome: abandoned, ended_at}: run_id from the card's last dispatched event, ended_at the withdrawn or demoted event's at"
 
 [[rules]]
 id = "R3"
@@ -142,6 +142,8 @@ reason = "Closed over a failed run with no run-verified evidence; reopened to pu
 
 When a card is withdrawn or demoted while a run is in flight on it, the store's fold records that run as abandoned: the card's `execution` becomes `abandoned`, and its `runs[]` gains an entry naming the abandoned run. In scope: the fold, the projection's typed execution state, and the card schema's text for the new state. Not in scope: the factory ledger's own `abandoned` outcome (it already exists), any other execution state, re-dispatching an abandoned card, and the per-agent allowlist planned for config@7. Also in scope: one in-flight set that the land's act events, the board's WIP count and the neighborhood block read, and a card re-ratified after its run was abandoned reading ratified and ready.
 
+Amended 2026-10-02 [owner: "Amend R1/R2, then accept --close"]: R1 and R2 were written when parked and answered runs were abandoned on a withdrawal or demotion; card 13 (ruled 2026-09-24) made those a response on the parked run's entry instead, so R1 and R2 now state the dispatched case only and point at card 13 for the rest. The code has been on main since #64 (2026-09-16, landed by hand); R3-R5 are unchanged.
+
 ## History
 
 ```toml
@@ -157,5 +159,6 @@ history = [
   { seq = 9, at = "2026-09-21T21:40:31Z", by = "amodal1@users.noreply.github.com", act = "reopened", fields = ["reopens", "status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:5ac33796c52f02e29abfa6dda1b336441b081a1344fa70a1e95a40cb65b9ee3b", batch = 16 },
   { seq = 10, at = "2026-09-21T21:44:44Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:f0c5e5c111373862120eb870121f000ff0c43d9a39dbd6a61c1374db06f52010" },
   { seq = 11, at = "2026-09-21T21:45:25Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:6f521e25f854f93bf16c30501f64bbcd34ad9e2ec3ac6c597c0ff008a544f7fc", batch = 17 },
+  { seq = 12, at = "2026-10-02T17:07:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["rules", "scope", "status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", h = "sha256:83b4c133229a42ccb0ce35ec564cd5d3fbbac1acefc5fdeb51a81c4883d34b2f", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:OPvAfEHDCmcj4d51GKIj9ls76pm5wDo4f6F0efrOToCwXeXJpogzErmoNBplShbe9Bpwyb2l2nBDjiVTJokgCw==" },
 ]
 ```
