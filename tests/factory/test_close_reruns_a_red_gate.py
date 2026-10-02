@@ -149,7 +149,8 @@ def test_a_refused_or_unfinished_rerun_refuses_without_ending_the_run(disk: Disk
     )
     row_a = led.run(forbidden.run_id)
     assert row_a is not None and row_a["ended_at"] is None and acc_a.seen == [] and slept_a == []
-    assert len(led.phases_of(forbidden.run_id)) == 1, "no recovered phase row from a refused rerun"
+    # build + review (V4a-ii-b: the run as the line leaves one); nothing recovered on top of them by a refused rerun
+    assert len(led.phases_of(forbidden.run_id)) == 2, "no recovered phase row from a refused rerun"
 
     stuck = a_run(disk, led, disk.refused)
     forge_b = ScriptedForge(stuck.head, stuck.merge, checks_script=(RED, PENDING), rerun_answer=(555,))

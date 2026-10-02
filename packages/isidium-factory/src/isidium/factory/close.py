@@ -2,10 +2,15 @@
 
 Q-V18 [owner, 2026-09-12]: V5a before V4a-ii, and a card may close over a build-only chain — **declared, not
 refused**: the run record's `phases[]` already names every phase that ran, and the close's own record repeats it.
+**Narrowed by V4a-ii-b Q-B2 (a)** [owner, 2026-09-27]: a tenant whose signed policy declares a reviewer is owed the
+review gate, so a run whose gate did not run to its end is refused (`close.review-skipped`, below); a tenant that
+declares none keeps the build-only close.
 
 **What is refused, and never ends a run** — a read that cannot answer yet is not a failure of the run:
 
 * the run already ended (`close.ended`); no pull request recorded or given (`close.no-pr`);
+* the tenant declares a reviewer and the run's review gate did not run to its end (`close.review-skipped`) — drive
+  the chain on (`run --run` resumes from the history) and close again [V4a-ii-b Q-B2 (a)];
 * a pull request whose head is not the run's `head_sha` (`close.pr-mismatch`) — it is not this run's work;
 * not merged (`close.not-merged`) — the run stays in flight until the merge, which is the owner's button (X2);
 * a checkout that is dirty or whose `HEAD` does not contain the merge commit (`close.checkout`) [Q-V23 (a)] —
@@ -62,7 +67,9 @@ from isidium.store.core.refusal import Refusal
 
 from . import adapter as adapter_mod
 from . import artifacts as artifacts_mod
+from . import gate as gate_mod
 from . import lander, render
+from . import runner as runner_mod
 from .context import TenantContext
 from .forge import PASSING, CheckRun, Checks, MergeState, Verdict
 from .ledger import ABANDONED, CLOSED, Ledger
@@ -362,6 +369,21 @@ def _close(
             run_id, at, ABANDONED, billing_class=left.billing_class, detail={"card_status": status, **left.detail()}
         )
         return _result(ledger, run_id, {"sent": 0, "abandoned": status})
+
+    # V4a-ii-b Q-B2 (a) [owner, 2026-09-27]: once the review gate exists, a tenant whose signed policy declares a
+    # reviewer is owed one — a run that skipped it, or stopped inside it, is refused here and stays in flight, so the
+    # chain can be driven on (`run --run`, which resumes from the history) and close run again. A tenant that declares
+    # no reviewer keeps Q-V18's build-only close, declared rather than refused. Before the forge is asked anything.
+    if adapter_mod.declares(ctx.eff, "reviewer") and not gate_mod.review_gate_done(
+        runner_mod.history_of(ledger, ctx.home, run_id)
+    ):
+        ran = [str(p["phase"]) for p in ledger.phases_of(run_id)]
+        raise Refusal(
+            "close.review-skipped",
+            run_id,
+            f"the tenant declares a reviewer and this run's review gate has not run to its end (phases {ran}): "
+            f"drive it with `isidium-factory run --run {run_id}`, then close",
+        )
 
     number = pr if pr is not None else row["pr"]
     if number is None:

@@ -185,6 +185,15 @@ def _review_step(history: Sequence[Done], last: Done) -> Step:
     return Step("done")
 
 
+def review_gate_done(history: Sequence[Done]) -> bool:
+    """Whether a run's review gate ran to its end: a build, then the review path the gate itself would take, to `done`
+    (V4a-ii-b Q-B2 (a) — close asks it). The same function as the routing, so close can never disagree with the chain
+    about what "reviewed" means. A run with no build has nothing a review could have read."""
+    if not any(d.phase == "build" for d in history):
+        return False
+    return _review_step(history, history[-1]).kind == "done"
+
+
 def _disputed_text(
     ruling: artifacts.Ruling, findings: Mapping[str, Any] | None, report: Mapping[str, Any] | None
 ) -> str:

@@ -214,8 +214,8 @@ def test_the_failed_and_the_green_end_record_what_was_left_too(disk: Disk, led: 
     out = test_v5a.close_run(disk, led, failing, accept=test_v5a.Acceptance())
     assert out["outcome"] == "failed:card-drift"
     [ended] = [e for e in led.events_of(failing.run_id) if e["kind"] == "ended"]
-    assert sorted(ended["data"]["phases"]) == ["build", "plan"]
-    assert sorted(p["phase"] for p in led.phases_of(failing.run_id)) == ["build", "plan"]
+    assert sorted(ended["data"]["phases"]) == ["build", "plan", "review"]  # the review: V4a-ii-b, a_run carries one
+    assert sorted(p["phase"] for p in led.phases_of(failing.run_id)) == ["build", "plan", "review"]
 
     green = test_v5a.a_run(disk, led, disk.factory)
     _write_left(disk, green.run_id, "plan", phase="plan", agent="plan-author", cost_micro=50, duration_ms=0)

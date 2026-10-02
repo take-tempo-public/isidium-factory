@@ -90,3 +90,35 @@ find = '''        if _count(history, "review") == 0:
             named = [("plan", plan)]'''
 replace = '''        if True:
             named = [("plan", plan)]'''
+
+# ---- PR 3 of 3 — close owes the review gate. Each killed by tests/factory/test_v4a_ii_b_close.py alone.
+
+[[mutation]]
+id = "M13"
+label = "close never refuses a skipped review"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    if adapter_mod.declares(ctx.eff, "reviewer") and not gate_mod.review_gate_done('''
+replace = '''    if False and not gate_mod.review_gate_done('''
+
+[[mutation]]
+id = "M14"
+label = "close owes a review whether or not the tenant declares a reviewer"
+file = "packages/isidium-factory/src/isidium/factory/close.py"
+find = '''    if adapter_mod.declares(ctx.eff, "reviewer") and not gate_mod.review_gate_done('''
+replace = '''    if True and not gate_mod.review_gate_done('''
+
+[[mutation]]
+id = "M15"
+label = "a run with no build reads as reviewed"
+file = "packages/isidium-factory/src/isidium/factory/gate.py"
+find = '''    if not any(d.phase == "build" for d in history):
+        return False
+    return _review_step(history, history[-1]).kind == "done"'''
+replace = '''    return _review_step(history, history[-1]).kind == "done"'''
+
+[[mutation]]
+id = "M16"
+label = "a defaulted row reads as declared"
+file = "packages/isidium-factory/src/isidium/factory/adapter.py"
+find = '''    return isinstance(row, Mapping) and "tools" in row'''
+replace = '''    return isinstance(row, Mapping)'''

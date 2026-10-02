@@ -103,6 +103,16 @@ class AgentSpec(_Wire):
     prompt: str = Field(pattern=r"^v[1-9][0-9]*$")
 
 
+def declares(eff: Mapping[str, Any], kind: str) -> bool:
+    """Whether the tenant's signed policy **declares** an agent kind — its `[agents]` row names `tools`. A row the
+    schema's defaults alone supply names none (`tools` has no default, on purpose), so it is not one the tenant
+    declared. One home for the rule: the policy reads it to choose its rows, and close reads it to decide whether the
+    review gate is owed (V4a-ii-b Q-B2 (a))."""
+    agents = eff.get("agents")
+    row = agents.get(kind) if isinstance(agents, Mapping) else None
+    return isinstance(row, Mapping) and "tools" in row
+
+
 class ExecutorPolicy(_Wire):
     """The executor policy, read once from the tenant's signed policy and rendered per adapter."""
 
@@ -137,7 +147,7 @@ class ExecutorPolicy(_Wire):
             )
         # A row the defaults alone supply names no tools (`tools` has no default, on purpose): it is not a row the
         # tenant declared, so it is left out, and `agent()` refuses that kind rather than run it on unsigned tools.
-        agents = {k: v for k, v in agents.items() if isinstance(v, dict) and "tools" in v}
+        agents = {k: v for k, v in agents.items() if declares(eff, k)}
         try:
             return cls.model_validate(
                 {

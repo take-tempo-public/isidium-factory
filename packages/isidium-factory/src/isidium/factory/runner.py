@@ -349,6 +349,12 @@ def _review_attributes(sp: Any, phase: str, history: Sequence[gate.Done]) -> Non
         sp.set_attribute("isidium.review.blocking", len(found.blocking))
 
 
+def history_of(ledger: Ledger, home: Path, run_id: str) -> list[gate.Done]:
+    """The run's history as the chain reads it — for close, which asks the gate whether the review ran to its end
+    (V4a-ii-b Q-B2 (a)). The same read, artifacts re-hashed, so close and the chain see one history."""
+    return _history(ledger, home, run_id)
+
+
 def _history(ledger: Ledger, home: Path, run_id: str) -> list[gate.Done]:
     """The phases the ledger holds, in order, each with its artifact re-hashed against the ledger's record (T-B7 (3):
     *"every artifact referenced exists at its hash"*) — what the gate decides from and what later phases are handed.
