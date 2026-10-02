@@ -150,3 +150,4 @@
 {"at":"2026-10-02T18:44:02Z","card":24,"id":"e150","kind":"dispatched","run_id":"r-39"}
 {"at":"2026-10-02T19:07:31Z","card":24,"id":"e151","kind":"demoted","seq":3}
 {"at":"2026-10-02T19:08:31Z","card":24,"commit":"05388e6bb0b370500fec4c297d556ad68619ece7","ext_schema_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","id":"e152","kind":"ratified","refs_resolved":[{"blob":"6e2d6f79ae88a1afb6c6b55296e1acb4a0e8abc9","path":"prompts/builder/v4.md"},{"blob":"b953554374dda539a7c9e2f9b1cb7cafc67e2980","path":"packages/isidium-factory/src/isidium/factory/runner.py"}],"seq":4}
+{"at":"2026-10-02T19:09:18Z","card":24,"id":"e153","kind":"dispatched","run_id":"r-40"}
