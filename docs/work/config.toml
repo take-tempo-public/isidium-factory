@@ -41,11 +41,13 @@ tools = ["Read", "Glob", "Grep"]
 model = "claude-sonnet-5-5"
 effort = "high"
 tools = ["Read", "Glob", "Grep", "Edit", "Write", "Bash", "TodoWrite"]
+prompt = "v4"
 
 [agents.reviewer]
 model = "claude-opus-5-5"
 effort = "xhigh"
 tools = ["Read", "Glob", "Grep"]
+prompt = "v2"
 
 [executor]
 max_turns = 100
@@ -135,4 +137,5 @@ entries = [
   { seq = 48, at = "2026-10-01T00:06:06Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:c618afb076b759af6e4756ca9debb55f17cbdca3958dbf1ff0b5740035154206", ref = ["sha256:e113b84d0f1b851ee0e73bb5dc34e00b51b5b47b6c8642a72fabc1496c8898b4"], h = "sha256:b49ef5e220e2911a68bcaa11175fcd54e577e3c7452e13991f5738ae8a3af0e7", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:V7o3oW0Lr4rzRic1nuMeM08Dw+qj3XxA7GQbtfaBb19FhXR1YBTUHFLBujXKNzKvQtTK4No73PC9F3a2nuMTAw==" },
   { seq = 49, at = "2026-10-01T02:44:38Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:c618afb076b759af6e4756ca9debb55f17cbdca3958dbf1ff0b5740035154206", ref = ["sha256:27a999c3f78d47379c16a30992e727ace636a62333f89e0b1ca1dee5097f967b"], h = "sha256:4465a240814971b4623df92526cf35964f220baf3ecfd28ebe3ff3601ff0b313", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:GNuZwfvo6RTqhBO3hpL6lGWf4BtwZmWT5jwVwwzYS2ZXcpHMNurSaX7Z1ACfwcZ9tPvut/Om4/eU/RvGXDm3Bw==" },
   { seq = 50, at = "2026-10-01T20:53:42Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["agents"], build = "sha256:e186e24c6bcc561f45338141f6f7950a200c1096184662a3fe9e353e4307dff0", h = "sha256:1cfc72f38f9783875f9a840625c32b00b8bc09d5c0fb155e5cadf77cf6d0993e", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:WNWvQwZTyMd6krUITUcLLpq2B0pQunFRt8EwNMLqJOarmxS30n1rpcxNraa6fIMiTtS3U1vXkq2YBFtzcrn/Aw==" },
+  { seq = 51, at = "2026-10-02T00:11:35Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["agents"], build = "sha256:fe727b05da4c9daf3c60e4c3d220805c1e67b0ba6da04f73a84cd14068464cb9", h = "sha256:b7d4182214ab3f41eef54418592a65ad6ef6f2e56dbe632a1ec21cf0176f381c", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:GhQW1docesyywg1g8HZxIngOXkXHs+r+NPlSI2wNT5vZ91tqZMj9oLRuq/ElUU9O/mrDFEKINXHJHj6OSfdXDQ==" },
 ]
