@@ -2,13 +2,13 @@
 schema = 1
 id = 23
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A phase that ends with a mutation still held restores the pristine file before its work is committed"
 shape = "bdd"
 effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/runner.py::_phase", "packages/isidium-factory/src/isidium/factory/runner.py::_keep_work", "tools/mutate.py", "packages/isidium-factory/src/isidium/factory/ledger.py::Ledger"]
-surfaces = ["packages/isidium-factory/src/isidium/factory/runner.py", "tests/factory/test_phase_end_repairs_a_live_mutation.py", "tools/mutations/phase-end-repair.toml", "packages/isidium-factory/src/isidium/factory/ledger.py"]
+surfaces = ["packages/isidium-factory/src/isidium/factory/runner.py", "tests/factory/test_phase_end_repairs_a_live_mutation.py", "tools/mutations/phase-end-repair.toml", "packages/isidium-factory/src/isidium/factory/ledger.py", "packages/isidium-factory/src/isidium/factory/checkout.py", "packages/isidium-factory/src/isidium/factory/container.py"]
 priority = "P2"
 
 [narrative]
@@ -29,6 +29,10 @@ text = "A repair, or a marker that could not be verified, is named on the run's 
 [[rules]]
 id = "R4"
 text = "A worktree with no marker is committed exactly as today"
+
+[[rules]]
+id = "R5"
+text = "Before a container's next attempt starts, a marker the previous attempt left is dealt with the way R1-R3 deal with one at a phase's end: the named file restored (verified), the marker removed, and the repair recorded — so the attempt's kept patch holds the pristine file and the next attempt never meets a stale marker"
 
 [[guidance.avoid]]
 id = "A1"
@@ -54,6 +58,11 @@ because = "the card-writing checklist: a guard gets a committed spec, and mutate
 id = "C3"
 text = "Ledger.phase keeps repaired and repair_unverified in the phase event beside the keys it already copies; its signature, the phases table's columns and every other key are unchanged; no other Protocol, dataclass or signature changes"
 because = "the owner, on r-37's question (2026-10-02): the record must name every repair, and Ledger.phase copies a fixed key set, so a key runner.py adds is dropped silently; checked when amending: no test asserts a phase event's exact keys and Ledger.phase has one implementation"
+
+[[guidance.constraints]]
+id = "C4"
+text = "checkout.set_aside's and Container.execute's signatures are unchanged; R5 is done between attempts, before set_aside clears the tree, and every test file that exercises the container's two attempts keeps passing; the card's own test file and every file it changes pass ruff check and ruff format --check"
+because = "the owner, on r-38's review (2026-10-02): F1 (a marker surviving into a retry) and F2 (the refusal-with-result path untested) fold into this card; #96 went red on one ruff SIM105 in the test file"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -89,6 +98,20 @@ kind = "test-marker"
 title = "no marker, nothing changes"
 rule = "R4"
 observable = { test = "tests/factory/test_phase_end_repairs_a_live_mutation.py::test_no_marker_nothing_changes" }
+
+[[acceptance.scenarios]]
+id = "S6"
+kind = "test-marker"
+title = "a refusal carrying a result records the repair on its phase row"
+rule = "R3"
+observable = { test = "tests/factory/test_phase_end_repairs_a_live_mutation.py::test_a_refusal_carrying_a_result_records_the_repair_on_its_phase_row" }
+
+[[acceptance.scenarios]]
+id = "S7"
+kind = "test-marker"
+title = "a marker left by a first attempt is repaired before the second attempt"
+rule = "R5"
+observable = { test = "tests/factory/test_phase_end_repairs_a_live_mutation.py::test_a_marker_left_by_a_first_attempt_is_repaired_before_the_second" }
 ```
 
 ## Scope
@@ -99,6 +122,8 @@ The owner ruled (2026-10-02): file the marker-repair card.
 
 Not in scope, declared: a builder that mutates a file by hand, with no marker, is not caught here (CI's green bar and the review gate remain the defence); the builder prompt.
 
+Amended 2026-10-02 after r-38, the review gate's first live run [owner: "Amend with F1/F2, rebuild fresh"]: the reviewer found F1 (attempt 1's git-ignored marker survives set_aside into attempt 2, whose phase-end repair would write attempt 1's bytes over attempt 2's work) and F2 (a PhaseRefusal carrying a result, the shape a retry exhaustion produces, was never tested with a marker); R5, S6 and S7 answer them. F3 (whether R1 may be narrowed to the write surface) is open, not ruled. #96 (r-38) is abandoned; it was red on one ruff error.
+
 ## History
 
 ```toml
@@ -107,5 +132,6 @@ history = [
   { seq = 2, at = "2026-10-02T17:17:57Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:723b4e71480b9b5544c65006637b4c5e765a229395b23d1c755bd92e3bdf02ce", h = "sha256:fd980a79adcd661ab685af03b6a8e2b7bbc04a1e5a22c7b20fd13925986d4b59", batch = 53 },
   { seq = 3, at = "2026-10-02T17:24:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "refs", "rules", "status", "surfaces"], build = "sha256:339e8aaddace3614a564c897cbfe4a01fd00711a0915cc155827fafcf4a51ba4", h = "sha256:7d17bf6c92f2d8e5f2a0995bf1660c54d03c317770c8372d92cff51d0c8e9e0e", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:DovYuBe0N37x+pUP75OsKokXOS4cWl/EWi+ddi9h0h2x7OV6Ugo5afHyLnjb/WQkRssEg3/+ZI3YYuvUBeeCBQ==" },
   { seq = 4, at = "2026-10-02T17:25:39Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:339e8aaddace3614a564c897cbfe4a01fd00711a0915cc155827fafcf4a51ba4", h = "sha256:4a35ec1c69dcff0df751a92a1dd4a070913ebe727e8fa89e2a6e1545bfc3fb99", batch = 54 },
+  { seq = 5, at = "2026-10-02T18:13:44Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "scope", "status", "surfaces"], build = "sha256:1cf31d29569cdfbdfd109ef494a990231002d492a10dbcbd1ea8204b74b2ee0a", h = "sha256:afdf92ff86e012925d4b9bc3f3a3dc482cd83c5befd9eb7ebb8a48ca55db5f5c", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:4P20yv/Cc/zpiU0oSkComrf0BmBJR6DiPag2HARFJL32B0As+H7lrcEjflSP3+eYsrhR2OZDMqRm13crBxuVCw==" },
 ]
 ```
