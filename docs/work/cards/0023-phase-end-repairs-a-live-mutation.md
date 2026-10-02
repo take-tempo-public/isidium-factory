@@ -2,7 +2,7 @@
 schema = 1
 id = 23
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A phase that ends with a mutation still held restores the pristine file before its work is committed"
 shape = "bdd"
@@ -104,5 +104,6 @@ Not in scope, declared: a builder that mutates a file by hand, with no marker, i
 ```toml
 history = [
   { seq = 1, at = "2026-10-02T17:16:30Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:723b4e71480b9b5544c65006637b4c5e765a229395b23d1c755bd92e3bdf02ce", h = "sha256:7ecab05b367c75aab047078a80548f2f4f620a17d0352972cea9a169a7dffd34" },
+  { seq = 2, at = "2026-10-02T17:17:57Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:723b4e71480b9b5544c65006637b4c5e765a229395b23d1c755bd92e3bdf02ce", h = "sha256:fd980a79adcd661ab685af03b6a8e2b7bbc04a1e5a22c7b20fd13925986d4b59", batch = 53 },
 ]
 ```
