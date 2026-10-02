@@ -42,8 +42,8 @@ none
 - **22** · A test tenant checkout runs no background git maintenance, so copying it never races a lock · closed · software-grade · (derived)
 - **23** · A phase that ends with a mutation still held restores the pristine file before its work is committed · closed · software-grade · (derived)
 - **24** · The builder checks every file it changed with ruff and mypy before it finishes · closed · software-grade · (derived)
-- **25** · The reviewer is handed the run's diff, computed by the wrapper, on both passes · draft · software-grade · (derived)
-- **26** · A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator · draft · software-grade · (derived)
+- **25** · The reviewer is handed the run's diff, computed by the wrapper, on both passes · ready · software-grade · (derived)
+- **26** · A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator · ready · software-grade · (derived)
 
 ## Blocked
 

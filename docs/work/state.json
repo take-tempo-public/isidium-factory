@@ -1142,12 +1142,12 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "7f43262a0d748ec8e4b0014702502385aa8ffa75",
+        "commit": "7b2dc9dccce0d88f53590b659dc73001970c24b7",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
-            "blob": "b953554374dda539a7c9e2f9b1cb7cafc67e2980",
+            "blob": "8ed96b93ed7ecf0a84f1240209d3391f50ee622e",
             "path": "packages/isidium-factory/src/isidium/factory/runner.py"
           },
           {
@@ -1158,8 +1158,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:f191a81316c44b0b1b579430c3e196ad521876b9dcbd3d4583839a6a769d5579",
-        "seq": 3
+        "h": "sha256:59b761412abc14c95b414e2235952a1c6039d8a45402f2df390ce9c68528cee2",
+        "seq": 4
       },
       "runs": []
     },
@@ -1167,12 +1167,12 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "b6916e40286106eb7fff83fa6e82a9c27829c8ed",
+        "commit": "7b2dc9dccce0d88f53590b659dc73001970c24b7",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
-            "blob": "b953554374dda539a7c9e2f9b1cb7cafc67e2980",
+            "blob": "8ed96b93ed7ecf0a84f1240209d3391f50ee622e",
             "path": "packages/isidium-factory/src/isidium/factory/runner.py"
           },
           {
@@ -1195,8 +1195,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:fce96f874422693d356c15da7b06e7a42ce18de46362f0f80acd9cd5f72e3522",
-        "seq": 3
+        "h": "sha256:d6223bbe08786f3f67136cee7ed0532fbbb4ff3c56b25178fcf4d2d5d0aeefa2",
+        "seq": 4
       },
       "runs": []
     }
@@ -1301,10 +1301,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:88cfcfa10f108b46e4a63ac1ba6be74c5f01c396fcbd1bebb0180f1e9988e8c0",
-    "seq": 297
+    "h": "sha256:7b59e190bfa1aa86680aed88ad5cbd63d310cdb7ccaefe6b47fe9e20d5734f5b",
+    "seq": 299
   },
-  "landed_at": "2026-10-02T23:34:37Z",
-  "ledger_cursor": "424721b6ecb16b8b45595f6eb2a5d28e401b0fd8",
+  "landed_at": "2026-10-02T23:35:02Z",
+  "ledger_cursor": "7b2dc9dccce0d88f53590b659dc73001970c24b7",
   "schema": 2
 }
