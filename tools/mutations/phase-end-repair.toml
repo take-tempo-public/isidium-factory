@@ -1,0 +1,23 @@
+# Card 23: a phase that ends with a mutation still held restores the pristine file before its work is committed.
+#
+# Each kill is checked against this card's own test file only -- tests/factory/test_phase_end_repairs_a_live_mutation.py
+# -- applied in place and restored by hand (sha256 of runner.py before and after). `tools/mutate.py` is `--show` only
+# for this spec and never runs a mutation in the container: its whole-suite runs are what starved r-18, r-19 and r-27.
+#
+#     python tools/mutate.py tools/mutations/phase-end-repair.toml --show
+#
+# Expected kills: M1 by S1, S2 and S4; M2 by S3.
+
+[[mutation]]
+id = "M1"
+label = "R1: the repair skipped -- the mutated file is committed"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = "        target.write_bytes(pristine)"
+replace = "        pass"
+
+[[mutation]]
+id = "M2"
+label = "R2: the digest check skipped -- bytes that do not match their own digest are written back"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = "        if hashlib.sha256(pristine).hexdigest() != digest:"
+replace = "        if False:"

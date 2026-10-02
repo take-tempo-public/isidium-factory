@@ -229,7 +229,8 @@ class Ledger:
         The row is 03 §6's `phases[]` entry exactly — agent kind, effort and prompt version beside model, tokens,
         cost and duration — and nothing more. What the phase also produced (its artifacts by hash, the writes the
         guard denied, the set git says it touched, how it ended) rides the **event**, because the run record's
-        shape is ratified and the ledger's own transition log is where a fact without a column belongs."""
+        shape is ratified and the ledger's own transition log is where a fact without a column belongs. Card 23's
+        `repaired` and `repair_unverified` ride the event too, when the result carries them."""
         if self.run(run_id) is None:
             raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
         with telemetry.span(SPAN, **{"isidium.run_id": run_id}), self.transaction():
@@ -263,6 +264,9 @@ class Ledger:
                     "harness": result.get("harness"),
                     "harness_version": result.get("harness_version"),
                     "billing_class": result.get("billing_class"),
+                    # Card 23: a mutation the runner found held at the phase's end and what it did about it. Copied
+                    # only when present, so a phase with no marker has the event it always had.
+                    **{k: result[k] for k in ("repaired", "repair_unverified") if k in result},
                 },
             )
             if verdict is not None:

@@ -24,7 +24,10 @@ is the owner's call, not this chunk's. The trailer is the seam: the record says 
 
 from __future__ import annotations
 
+import base64
+import binascii
 import datetime as _dt
+import hashlib
 import json
 import os
 import subprocess
@@ -56,6 +59,12 @@ TRAILER_OUTCOME: Final = "Factory-Outcome"
 # was. Without it the carried commit is indistinguishable from the phase's own, and `close`'s identity walk -- which
 # reads every commit in `base..head` for a `Factory-Run` trailer -- would have no way to tell them apart either.
 TRAILER_CARRIED: Final = "Factory-Carried"
+
+# `tools/mutate.py`'s crash-safety sidecar, at the worktree's root: the pristine bytes of the file a mutation run is
+# holding (its `STATE`, written by `hold()`, the one writer). The format is read here, not imported -- `tools/` is not
+# in the installed package the runner image carries (card 23, A1) -- so the four keys `_repair_mutation` reads are the
+# whole of what the two share.
+MUTATION_MARKER: Final = ".mutation-in-flight.json"
 
 # The agent kind each phase runs as (05 §1's roster). V4a-i runs `build`; the other rows are here because the map is
 # the roster's, not this chunk's, and a phase whose agent is unnamed could not find its model.
@@ -266,30 +275,36 @@ def _phase(
         # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
         at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
         outcome = _outcome_of(r)
+        # Before the change set is computed, so what is kept below is the pristine file (card 23, R1).
+        repair = {} if phase in READ_ONLY else _repair_mutation(work, job.allowed_writes)
         changed = checkout.touched(work)
-        if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
-            ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed)})
+        row_written = isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None
+        if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:  # (the isinstance narrows for mypy)
+            ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed), **repair})
         # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
         # when its harness crashed, and the worktree was removed with nothing kept. A phase that may write nothing
         # has no work to keep — whatever it wrote is not work.
         head = None
         if phase not in READ_ONLY:
             head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
-        ledger.finish(
+        # A dead harness writes no phase row, so the repair rides the ended event's detail instead (card 23, R3).
+        ledger.end(
             run_id,
             at,
             outcome,
             head_sha=head,
             surfaces_actual=list(changed) if changed else None,
             billing_class=drv.capabilities().billing_class,
+            detail=None if row_written else (repair or None),
         )
         raise
+    repair = {} if phase in READ_ONLY else _repair_mutation(work, job.allowed_writes)
     touched = checkout.touched(work)
     _believe_nothing(res, touched)
     outside = guard.outside(touched, job.allowed_writes)
     at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
     if outside:
-        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope"})
+        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope", **repair})
         if phase in READ_ONLY:
             # [owner, 2026-09-23] a phase that may write nothing and wrote something ends the run uncommitted: there
             # is no work of its to keep, and a commit would put a read-only agent's edit on the story branch.
@@ -316,7 +331,7 @@ def _phase(
             verdict = (said.verdict, art.sha256)
     failed = None if res.outcome == "ok" else res.outcome
     head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
-    ledger.phase(run_id, at, {**res.row(), "touched": list(touched)}, verdict=verdict)
+    ledger.phase(run_id, at, {**res.row(), "touched": list(touched), **repair}, verdict=verdict)
     if res.outcome != "ok":
         ledger.finish(
             run_id,
@@ -432,6 +447,44 @@ def _previous_park(
     except (OSError, ValidationError) as e:
         telemetry.note("run.previous-park", f"{path}: {e}")
         return None
+
+
+def _repair_mutation(work: Path, allowed: Sequence[str]) -> dict[str, Any]:
+    """Card 23: a phase that ends with a mutation still held gives its work back pristine. `tools/mutate.py` keeps
+    the pristine bytes of the file it is mutating in a git-ignored marker at the worktree's root, so a build killed
+    inside a mutation run ends with the marker in the tree and the mutated file in the patch -- `r-27` kept guard.py
+    with M1 applied and the carry replayed it into `r-28` (2026-09-28). Called before the change set is computed, for
+    a writing phase, whatever the phase's outcome.
+
+    Total, and never a refusal (A2): the work around the mutation is real work, and a marker that cannot be trusted
+    costs the run nothing but a line on its record. Returns `{}` with no marker, `{"repaired": {"file", "id"}}`
+    after a restore, and `{"repair_unverified": {"file"}}` when the marker is unreadable, does not hash to its own
+    digest (R2), or names a path the restore must not write -- outside the worktree or outside the phase's allowed
+    writes, since a forged marker would otherwise write, after the write guard has run, a path the guard denies.
+    In every unverified case nothing is written and the marker stays."""
+    marker = work / MUTATION_MARKER
+    if not marker.is_file():
+        return {}
+    named = MUTATION_MARKER
+    try:
+        doc = json.loads(marker.read_text(encoding="utf-8"))
+        file, digest, mutation = doc["file"], doc["sha256"], doc["id"]
+        if not all(isinstance(v, str) for v in (file, digest, mutation, doc["pristine"])):
+            raise TypeError("a marker field is not a string")
+        named = file
+        pristine = base64.b64decode(doc["pristine"], validate=True)
+        if hashlib.sha256(pristine).hexdigest() != digest:
+            raise ValueError("the saved bytes do not hash to the marker's own digest")
+        target = (work / file).resolve()
+        root = work.resolve()
+        if not target.is_relative_to(root) or guard.outside([target.relative_to(root).as_posix()], allowed):
+            raise ValueError("the marker names a path this phase could not have written")
+        target.write_bytes(pristine)
+        marker.unlink()
+    except (OSError, ValueError, KeyError, TypeError, binascii.Error) as e:
+        telemetry.note("run.mutation-unverified", f"{marker}: {e}")
+        return {"repair_unverified": {"file": named}}
+    return {"repaired": {"file": file, "id": mutation}}
 
 
 def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, round_: int, home: Path) -> None:
