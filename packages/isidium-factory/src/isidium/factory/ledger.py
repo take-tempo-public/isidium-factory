@@ -263,6 +263,9 @@ class Ledger:
                     "harness": result.get("harness"),
                     "harness_version": result.get("harness_version"),
                     "billing_class": result.get("billing_class"),
+                    # Card 23: a repair rides the event only when there was one, so an unmarked phase's event is
+                    # byte-for-byte what it was. A key not copied here is dropped silently -- the set is fixed.
+                    **{k: result[k] for k in ("repaired", "repair_unverified") if k in result},
                 },
             )
             if verdict is not None:
