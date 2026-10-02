@@ -25,6 +25,9 @@ The rules, each where it was ruled:
 * **Round one's plan is handed the card's previous park, when it has one** (card 15, R1/R3): the runner finds it —
   the gate stays a function of what it is given, no ledger and no disk — and only round one reads it; a revision
   reads what its own round produced, as it always did.
+* **The review gate follows the build** (V4a-ii-b, [owner, 2026-09-25/27]): review → nothing blocking, the end; any
+  blocking finding → reconcile (the builder) → the reviewer's second pass, bounded to those findings → a finding still
+  asserted parks `review-disputed`, none does and it is the end. One reconcile round; no third review.
 """
 
 from __future__ import annotations
@@ -37,6 +40,8 @@ from . import artifacts
 
 PLAN_FAILED: Final = "plan-failed"
 CARD_AMBIGUITY: Final = "card-ambiguity"
+# V4a-ii-b ruling 2 [owner, 2026-09-25]: a review still disputed after reconcile is a question, not a failure class.
+REVIEW_DISPUTED: Final = "review-disputed"
 SURFACE: Final = "L-surface"  # the lint finding id prefix for a touched path outside the card's surfaces
 
 
@@ -151,7 +156,61 @@ def next_step(history: Sequence[Done], payload: Mapping[str, Any]) -> Step:
             question="the plan did not pass the gate; the judge's account is attached",
             why_blocked=verdict.reasoning,
         )
-    return Step("done")  # the build ran: the review gate is V4a-ii-b's
+    return _review_step(history, last)
+
+
+def _review_step(history: Sequence[Done], last: Done) -> Step:
+    """The review gate (V4a-ii-b), after the build: review; nothing blocking → the chain's end; blocking → reconcile
+    (the builder), then the reviewer's second pass, bounded; a finding still asserted → park `review-disputed` [owner,
+    2026-09-25], nothing still asserted → the end. One reconcile round, no third review."""
+    if last.phase == "build":
+        return Step("phase", "review")
+    if last.phase == "review" and _count(history, "review") == 1:
+        found = artifacts.Findings.model_validate(last.artifact)
+        return Step("phase", "reconcile") if found.blocking else Step("done")
+    if last.phase == "reconcile":
+        return Step("phase", "review")
+    if last.phase == "review":
+        ruling = artifacts.Ruling.model_validate(last.artifact)
+        if not ruling.disputed:
+            return Step("done")
+        first = _first(history, "review")
+        report = _latest(history, "reconcile")
+        return Step(
+            "park",
+            source_tag=REVIEW_DISPUTED,
+            question=_disputed_text(ruling, first, report),
+            why_blocked="the reviewer still asserts a blocking finding after reconcile; the owner decides",
+        )
+    return Step("done")
+
+
+def _disputed_text(
+    ruling: artifacts.Ruling, findings: Mapping[str, Any] | None, report: Mapping[str, Any] | None
+) -> str:
+    """Each disputed finding with both sides: the reviewer's claim and ruling, and the builder's disposition."""
+    claims: dict[str, str] = {}
+    if findings is not None:
+        claims = {f.id: f.claim for f in artifacts.Findings.model_validate(findings).findings}
+    sides: dict[str, str] = {}
+    if report is not None:
+        sides = {r.id: f"{r.disposition}: {r.note}" for r in artifacts.ReconcileReport.model_validate(report).rows}
+    reasons = {r.id: r.reason for r in ruling.rulings}
+    return "; ".join(
+        f"{i} — reviewer: {claims.get(i, '?')} (still asserted: {reasons[i]}); builder: {sides.get(i, 'no answer')}"
+        for i in ruling.disputed
+    )
+
+
+def _count(history: Sequence[Done], phase: str) -> int:
+    return sum(1 for d in history if d.phase == phase)
+
+
+def _first(history: Sequence[Done], phase: str) -> dict[str, Any] | None:
+    for d in history:
+        if d.phase == phase and d.artifact is not None:
+            return dict(d.artifact)
+    return None
 
 
 def inputs_for(
@@ -173,6 +232,15 @@ def inputs_for(
     named: list[tuple[str, dict[str, Any] | None]] = []
     if phase == "refute" or phase == "build":
         named = [("plan", plan)]
+    elif phase == "review":
+        # The first pass reads the plan (and the diff, from the tree); the second, bounded, reads the findings it filed
+        # and the builder's answer to them — no plan, because it may sweep nothing new.
+        if _count(history, "review") == 0:
+            named = [("plan", plan)]
+        else:
+            named = [("findings", _first(history, "review")), ("reconcile-report", _latest(history, "reconcile"))]
+    elif phase == "reconcile":
+        named = [("plan", plan), ("findings", _first(history, "review"))]
     elif phase == "judge":
         named = [("plan", plan), ("refutation", _latest(history, "refute"))]
         earlier = _answered(history, payload)

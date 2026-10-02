@@ -65,7 +65,9 @@ AGENT_OF: Final[Mapping[str, str]] = {
     "judge": "judge",
     "build": "builder",
     "review": "reviewer",
-    "reconcile": "reviewer",
+    # V4a-ii-b ruling 1 [owner, 2026-09-25]: the builder reconciles — fixing needs writes, and the reviewer has none;
+    # the reviewer's part is the bounded second pass, a `review` phase of its own.
+    "reconcile": "builder",
 }
 
 # The test paths a card may always write, beside its declared `surfaces` — T-B5 (1)'s *"surfaces ∪ test paths"*.
@@ -77,9 +79,9 @@ TEST_PATHS: Final[tuple[str, ...]] = ("tests/",)
 # write by construction, and a write that happened anyway ends the run uncommitted.
 READ_ONLY: Final[frozenset[str]] = frozenset({"plan", "refute", "judge", "review"})
 
-# The phases the plan gate can route a chain through (`gate.next_step`), up to the build — every one's agent row
-# is checked before a chain's first phase spends. The review gate beyond the build is V4a-ii-b's.
-LINE: Final[tuple[str, ...]] = ("plan", "refute", "judge", "build")
+# The phases a chain can be routed through (`gate.next_step`): the plan gate, the build and the review gate after it
+# (V4a-ii-b) — every one's agent row is checked before a chain's first phase spends.
+LINE: Final[tuple[str, ...]] = ("plan", "refute", "judge", "build", "review", "reconcile")
 
 # The prompt version each agent kind runs — 7bd.11's `prompts/<agent>/<version>.md` — is the agent's signed
 # `[agents].<kind>.prompt` since config@7 [owner, 2026-09-22]. It was a map here until then, kept in code on purpose
@@ -128,10 +130,11 @@ def run_chain(
     """The run driven from the last phase the ledger holds to its next end or gate [V4a-ii-a, point 7] — in **one
     worktree**, created at the first phase and removed at the end, not one per phase.
 
-    **The path is the plan gate's** (`gate.next_step`, a function of the history the ledger holds and the card): plan,
-    the lint, refute, judge, at most one revision, then the build or a park. The chain ends after the build — the review
-    gate is V4a-ii-b's — or at a park, or when a phase ends the run. A resumed chain takes the path it would have taken
-    uninterrupted, because the step is a function of the history and nothing else."""
+    **The path is the gates'** (`gate.next_step`, a function of the history the ledger holds and the card): plan,
+    the lint, refute, judge, at most one revision, then the build or a park; after the build, the review gate — review,
+    and on a blocking finding reconcile and the bounded second pass (V4a-ii-b). The chain ends at the review gate's end,
+    at a park, or when a phase ends the run. A resumed chain takes the path it would have taken uninterrupted, because
+    the step is a function of the history and nothing else."""
     with telemetry.span(CHAIN_SPAN, **{"isidium.run_id": run_id}):
         return _drive(ctx, reg, ledger, call, run_id, None, factory, now)
 
@@ -204,8 +207,9 @@ def _drive(
             with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
                 sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
                 _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now)
+                history = _history(ledger, ctx.home, run_id)
+                _review_attributes(sp, phase, history)
             carried = None  # the carry is told to the phase it was replayed for, and to no later one
-            history = _history(ledger, ctx.home, run_id)
             after = ledger.run(run_id)
             if after is not None and after["ended_at"]:
                 break
@@ -302,7 +306,7 @@ def _phase(
         raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
     verdict = None
     if res.outcome == "ok":
-        _believe_artifacts(res, phase, ctx.home)
+        _believe_artifacts(res, phase, job.round, ctx.home)
         if phase == "judge":
             # The verdict row, in the phase's own transaction (V4a-ii-a point 4): the judge's verdict as it said it —
             # the floor is applied by the gate, never written over the record — and its reasoning by the artifact's
@@ -329,6 +333,20 @@ def _phase(
         # A phase that ends ok and commits nothing (every read-only phase, or one whose `touched` was empty) still
         # drew on a lane — `advance` is not this write, because it would blank the head an earlier phase committed.
         ledger.bill(run_id, res.billing_class)
+
+
+def _review_attributes(sp: Any, phase: str, history: Sequence[gate.Done]) -> None:
+    """C-11 for the review gate (V4a-ii-b point 6): on the review phase's span, how many findings it filed and how many
+    blocked (first pass), or how many it still asserts (second pass) — the counts the gate routes on."""
+    if phase != "review" or not history or history[-1].phase != "review" or history[-1].artifact is None:
+        return
+    done = history[-1].artifact
+    if "rulings" in done:
+        sp.set_attribute("isidium.review.disputed", len(artifacts_mod.Ruling.model_validate(done).disputed))
+    else:
+        found = artifacts_mod.Findings.model_validate(done)
+        sp.set_attribute("isidium.review.findings", len(found.findings))
+        sp.set_attribute("isidium.review.blocking", len(found.blocking))
 
 
 def _history(ledger: Ledger, home: Path, run_id: str) -> list[gate.Done]:
@@ -410,11 +428,11 @@ def _previous_park(
         return None
 
 
-def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, home: Path) -> None:
+def _believe_artifacts(res: adapter_mod.PhaseResult, phase: str, round_: int, home: Path) -> None:
     """A structured phase that says `ok` answered with exactly its artifact, and the bytes at the path hash to what it
     claims — the adapter's word is not taken for either (the gajae follow-up's rule, applied to artifacts). Refused
     like a change set that disagrees with git: the run stays in flight and the operator reads why."""
-    shaped = artifacts_mod.OF_PHASE.get(phase)
+    shaped = artifacts_mod.artifact_of(phase, round_)
     expected = [shaped[0]] if shaped else []
     got = [a.name for a in res.artifacts]
     if got != expected:
@@ -489,7 +507,9 @@ def _job(
     plan = next((v for n, v in named if n == "plan"), None)
     if phase in READ_ONLY:
         writes: tuple[str, ...] = ()
-    elif phase == "build" and plan is not None:
+    elif phase in ("build", "reconcile") and plan is not None:
+        # Reconcile fixes inside what the plan was approved to touch: a fix that needs a wider surface is a question
+        # for the owner, never a wider write (the same rule as the build's, T-B5 (1)).
         writes = tuple(artifacts_mod.Plan.model_validate(plan).touched) + TEST_PATHS
     else:
         writes = surfaces + TEST_PATHS
