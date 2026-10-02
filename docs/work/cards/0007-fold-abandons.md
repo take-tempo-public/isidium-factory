@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -160,5 +160,6 @@ history = [
   { seq = 10, at = "2026-09-21T21:44:44Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:f0c5e5c111373862120eb870121f000ff0c43d9a39dbd6a61c1374db06f52010" },
   { seq = 11, at = "2026-09-21T21:45:25Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:6f521e25f854f93bf16c30501f64bbcd34ad9e2ec3ac6c597c0ff008a544f7fc", batch = 17 },
   { seq = 12, at = "2026-10-02T17:07:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["rules", "scope", "status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", h = "sha256:83b4c133229a42ccb0ce35ec564cd5d3fbbac1acefc5fdeb51a81c4883d34b2f", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:OPvAfEHDCmcj4d51GKIj9ls76pm5wDo4f6F0efrOToCwXeXJpogzErmoNBplShbe9Bpwyb2l2nBDjiVTJokgCw==" },
+  { seq = 13, at = "2026-10-02T17:08:22Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", h = "sha256:75eee89a51df981bdf4980b9de6ec04259defcf95fa85b4e0037cb83dfdc17b9", batch = 52 },
 ]
 ```
