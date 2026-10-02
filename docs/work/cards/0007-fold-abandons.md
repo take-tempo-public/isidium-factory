@@ -2,7 +2,7 @@
 schema = 1
 id = 7
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "planner"
 title = "The fold records an abandoned run when a card with a run in flight is withdrawn or demoted"
 shape = "bdd"
@@ -132,6 +132,14 @@ verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass", S5 = "pass", S6
 evidence = ["sha256:327fb4f707f5fffdbd11db72ca7c0314f99c7cf0165cfb2f81d308192ffe7118"]
 retracted = false
 
+[[closures]]
+id = "c3"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass", S5 = "pass", S6 = "pass", S7 = "pass", S8 = "pass" }
+evidence = ["sha256:327fb4f707f5fffdbd11db72ca7c0314f99c7cf0165cfb2f81d308192ffe7118"]
+retracted = false
+
 [[reopens]]
 id = "ro1"
 closure_id = "c2"
@@ -161,5 +169,6 @@ history = [
   { seq = 11, at = "2026-09-21T21:45:25Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:460e30bea4fef30fa8403bdd26b7e0713379e99c3e90c358b5b9aea67a22edd0", h = "sha256:6f521e25f854f93bf16c30501f64bbcd34ad9e2ec3ac6c597c0ff008a544f7fc", batch = 17 },
   { seq = 12, at = "2026-10-02T17:07:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["rules", "scope", "status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", h = "sha256:83b4c133229a42ccb0ce35ec564cd5d3fbbac1acefc5fdeb51a81c4883d34b2f", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:OPvAfEHDCmcj4d51GKIj9ls76pm5wDo4f6F0efrOToCwXeXJpogzErmoNBplShbe9Bpwyb2l2nBDjiVTJokgCw==" },
   { seq = 13, at = "2026-10-02T17:08:22Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", h = "sha256:75eee89a51df981bdf4980b9de6ec04259defcf95fa85b4e0037cb83dfdc17b9", batch = 52 },
+  { seq = 14, at = "2026-10-02T17:09:20Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:e5f81958857bee0a1a017f7f7b9dc34d2f8955ebe3623575e63a73feb40d60cf", ref = "c3:sha256:78c8f2612ac3bed05dfcc574d6694ada3d3d2a82a15de1cba2062a1bb1a9dbd7", h = "sha256:ce580a08e0926dfbf0f0c90c5a30063b8b96ffe4bab9c720d0f331bc99225f67", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:+2uZehYusH+V4fuR+qNRL2MHW2A8uIfk36Lk/8SlMDaVa58VSHY8vrsuRllxSQgTMDV4R5KMJHTnPaNVcJCbBQ==" },
 ]
 ```
