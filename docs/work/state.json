@@ -1003,9 +1003,9 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "fe699b72d56800d17e8c6548a2c1de34e61884ca",
+        "commit": "4d85336fb6f8f6f66f5f3424212db15758b4c905",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
             "blob": "b953554374dda539a7c9e2f9b1cb7cafc67e2980",
@@ -1018,13 +1018,17 @@
           {
             "blob": "00b647338db290e7a8df70e2530fb9cc218d1168",
             "path": "tools/mutate.py"
+          },
+          {
+            "blob": "e8fe1219a7c34392138a782a9d3369bb8fe98219",
+            "path": "packages/isidium-factory/src/isidium/factory/ledger.py"
           }
         ],
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:7d17bf6c92f2d8e5f2a0995bf1660c54d03c317770c8372d92cff51d0c8e9e0e",
-        "seq": 3
+        "h": "sha256:4a35ec1c69dcff0df751a92a1dd4a070913ebe727e8fa89e2a6e1545bfc3fb99",
+        "seq": 4
       },
       "runs": [
         {
@@ -1134,10 +1138,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:9cad4ab4b2d8853beb10c76fc511cfa38b344bc5d15266af9a453aedbbb55c99",
-    "seq": 272
+    "h": "sha256:de9d75a0db896aff6db03fb58310761cb067a43901374399fbda49e933cbc261",
+    "seq": 274
   },
-  "landed_at": "2026-10-02T17:24:42Z",
-  "ledger_cursor": "6c7dfda4e5d30221d65757d1f32ff0efa91eb12a",
+  "landed_at": "2026-10-02T17:25:39Z",
+  "ledger_cursor": "4d85336fb6f8f6f66f5f3424212db15758b4c905",
   "schema": 2
 }
