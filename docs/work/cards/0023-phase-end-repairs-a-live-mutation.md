@@ -2,7 +2,7 @@
 schema = 1
 id = 23
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A phase that ends with a mutation still held restores the pristine file before its work is committed"
 shape = "bdd"
@@ -133,5 +133,6 @@ history = [
   { seq = 3, at = "2026-10-02T17:24:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "refs", "rules", "status", "surfaces"], build = "sha256:339e8aaddace3614a564c897cbfe4a01fd00711a0915cc155827fafcf4a51ba4", h = "sha256:7d17bf6c92f2d8e5f2a0995bf1660c54d03c317770c8372d92cff51d0c8e9e0e", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:DovYuBe0N37x+pUP75OsKokXOS4cWl/EWi+ddi9h0h2x7OV6Ugo5afHyLnjb/WQkRssEg3/+ZI3YYuvUBeeCBQ==" },
   { seq = 4, at = "2026-10-02T17:25:39Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:339e8aaddace3614a564c897cbfe4a01fd00711a0915cc155827fafcf4a51ba4", h = "sha256:4a35ec1c69dcff0df751a92a1dd4a070913ebe727e8fa89e2a6e1545bfc3fb99", batch = 54 },
   { seq = 5, at = "2026-10-02T18:13:44Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "scope", "status", "surfaces"], build = "sha256:1cf31d29569cdfbdfd109ef494a990231002d492a10dbcbd1ea8204b74b2ee0a", h = "sha256:afdf92ff86e012925d4b9bc3f3a3dc482cd83c5befd9eb7ebb8a48ca55db5f5c", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:4P20yv/Cc/zpiU0oSkComrf0BmBJR6DiPag2HARFJL32B0As+H7lrcEjflSP3+eYsrhR2OZDMqRm13crBxuVCw==" },
+  { seq = 6, at = "2026-10-02T18:41:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1cf31d29569cdfbdfd109ef494a990231002d492a10dbcbd1ea8204b74b2ee0a", h = "sha256:507575332d6615c4b41e5d53b361cfeaf2b05ecad2c1e19a556638137a7e197c", batch = 55 },
 ]
 ```
