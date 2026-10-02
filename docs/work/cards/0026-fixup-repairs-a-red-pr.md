@@ -2,7 +2,7 @@
 schema = 1
 id = 26
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator"
 shape = "bdd"
@@ -129,5 +129,6 @@ Not in scope: the watcher; pushing (the operator's verb); selecting builder v6.
 ```toml
 history = [
   { seq = 1, at = "2026-10-02T21:36:06Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:d21b051d608669be4f5160d6a4bafd161d06b7df523395497c80ab767fd447b0" },
+  { seq = 2, at = "2026-10-02T22:04:01Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:24f4e7bc52c0c69d72ced59f5e70ea25fd7f552a630a64fd2cd28f0d49a0e430", batch = 58 },
 ]
 ```
