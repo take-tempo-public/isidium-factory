@@ -2,13 +2,13 @@
 schema = 1
 id = 23
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A phase that ends with a mutation still held restores the pristine file before its work is committed"
 shape = "bdd"
 effort = "default"
-refs = ["packages/isidium-factory/src/isidium/factory/runner.py::_phase", "packages/isidium-factory/src/isidium/factory/runner.py::_keep_work", "tools/mutate.py"]
-surfaces = ["packages/isidium-factory/src/isidium/factory/runner.py", "tests/factory/test_phase_end_repairs_a_live_mutation.py", "tools/mutations/phase-end-repair.toml"]
+refs = ["packages/isidium-factory/src/isidium/factory/runner.py::_phase", "packages/isidium-factory/src/isidium/factory/runner.py::_keep_work", "tools/mutate.py", "packages/isidium-factory/src/isidium/factory/ledger.py::Ledger"]
+surfaces = ["packages/isidium-factory/src/isidium/factory/runner.py", "tests/factory/test_phase_end_repairs_a_live_mutation.py", "tools/mutations/phase-end-repair.toml", "packages/isidium-factory/src/isidium/factory/ledger.py"]
 priority = "P2"
 
 [narrative]
@@ -24,7 +24,7 @@ text = "The pristine bytes are restored only when they hash to the marker's own 
 
 [[rules]]
 id = "R3"
-text = "A repair is named on the run's record: the phase's ledger row carries repaired, with the file and the mutation id the marker held"
+text = "A repair, or a marker that could not be verified, is named on the run's record: the phase's ledger event carries repaired (the file and the mutation id) or repair_unverified (the file); when the phase that ended writes no phase row (a harness that died), the same rides the ended event's detail"
 
 [[rules]]
 id = "R4"
@@ -52,8 +52,8 @@ because = "the card-writing checklist: a guard gets a committed spec, and mutate
 
 [[guidance.constraints]]
 id = "C3"
-text = "no Protocol, dataclass or function signature outside runner.py changes, and no test outside this card's file asserts on a kept or committed tree's contents for a run with a marker"
-because = "checked when filing (the checklist): _keep_work and _commit are called only inside runner.py"
+text = "Ledger.phase keeps repaired and repair_unverified in the phase event beside the keys it already copies; its signature, the phases table's columns and every other key are unchanged; no other Protocol, dataclass or signature changes"
+because = "the owner, on r-37's question (2026-10-02): the record must name every repair, and Ledger.phase copies a fixed key set, so a key runner.py adds is dropped silently; checked when amending: no test asserts a phase event's exact keys and Ledger.phase has one implementation"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -105,5 +105,6 @@ Not in scope, declared: a builder that mutates a file by hand, with no marker, i
 history = [
   { seq = 1, at = "2026-10-02T17:16:30Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:723b4e71480b9b5544c65006637b4c5e765a229395b23d1c755bd92e3bdf02ce", h = "sha256:7ecab05b367c75aab047078a80548f2f4f620a17d0352972cea9a169a7dffd34" },
   { seq = 2, at = "2026-10-02T17:17:57Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:723b4e71480b9b5544c65006637b4c5e765a229395b23d1c755bd92e3bdf02ce", h = "sha256:fd980a79adcd661ab685af03b6a8e2b7bbc04a1e5a22c7b20fd13925986d4b59", batch = 53 },
+  { seq = 3, at = "2026-10-02T17:24:42Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "refs", "rules", "status", "surfaces"], build = "sha256:339e8aaddace3614a564c897cbfe4a01fd00711a0915cc155827fafcf4a51ba4", h = "sha256:7d17bf6c92f2d8e5f2a0995bf1660c54d03c317770c8372d92cff51d0c8e9e0e", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:DovYuBe0N37x+pUP75OsKokXOS4cWl/EWi+ddi9h0h2x7OV6Ugo5afHyLnjb/WQkRssEg3/+ZI3YYuvUBeeCBQ==" },
 ]
 ```
