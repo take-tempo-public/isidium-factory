@@ -998,6 +998,35 @@
           "run_id": "r-36"
         }
       ]
+    },
+    "0023": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "fe699b72d56800d17e8c6548a2c1de34e61884ca",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "b953554374dda539a7c9e2f9b1cb7cafc67e2980",
+            "path": "packages/isidium-factory/src/isidium/factory/runner.py"
+          },
+          {
+            "blob": "b953554374dda539a7c9e2f9b1cb7cafc67e2980",
+            "path": "packages/isidium-factory/src/isidium/factory/runner.py"
+          },
+          {
+            "blob": "00b647338db290e7a8df70e2530fb9cc218d1168",
+            "path": "tools/mutate.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:fd980a79adcd661ab685af03b6a8e2b7bbc04a1e5a22c7b20fd13925986d4b59",
+        "seq": 2
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -1089,10 +1118,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:dbf6f33014fc2ad0c1e258af4901b4794c0e4839f87745e364a305ed027bfd88",
-    "seq": 265
+    "h": "sha256:5625d7c4d1ac54ba94d8e91927aadf2ce3b8182ebffc220ed3c3290ed8cb83e6",
+    "seq": 268
   },
-  "landed_at": "2026-10-02T17:09:20Z",
-  "ledger_cursor": "0d60251e0d4833427f450c0d7bc17633654062d5",
+  "landed_at": "2026-10-02T17:17:57Z",
+  "ledger_cursor": "fe699b72d56800d17e8c6548a2c1de34e61884ca",
   "schema": 2
 }
