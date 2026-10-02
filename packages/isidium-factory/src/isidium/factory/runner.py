@@ -261,35 +261,42 @@ def _phase(
     try:
         res = drv.execute(job)
     except Refusal as r:
+        # Card 23 R1: before the change set is read, so `touched`, the kept commit and the record all see the file as
+        # it was and never as a killed mutation run left it (`r-27`, found 2026-09-28).
+        named = _repaired(work, phase)
         # The end is when the adapter gave up, not when it was handed the job: `r-4`'s `ended_at` read the
         # phase's start, seventeen minutes early (2026-09-14). And what the phase spent is on the record even
         # when the adapter refused it — T-A7's *"telemetry per phase … required, not optional"*.
         at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
         outcome = _outcome_of(r)
         changed = checkout.touched(work)
-        if isinstance(r, adapter_mod.PhaseRefusal) and r.result is not None:
-            ledger.phase(run_id, at, {**r.result.row(), "touched": list(changed)})
+        spent = r.result if isinstance(r, adapter_mod.PhaseRefusal) else None
+        if spent is not None:
+            ledger.phase(run_id, at, {**spent.row(), "touched": list(changed), **named})
         # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
         # when its harness crashed, and the worktree was removed with nothing kept. A phase that may write nothing
         # has no work to keep — whatever it wrote is not work.
         head = None
         if phase not in READ_ONLY:
             head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
-        ledger.finish(
+        # R3: with no phase row the repair rides the ended event's detail; with one it is on the row and not twice.
+        ledger.end(
             run_id,
             at,
             outcome,
             head_sha=head,
             surfaces_actual=list(changed) if changed else None,
             billing_class=drv.capabilities().billing_class,
+            detail=None if spent is not None or not named else named,
         )
         raise
+    named = _repaired(work, phase)
     touched = checkout.touched(work)
     _believe_nothing(res, touched)
     outside = guard.outside(touched, job.allowed_writes)
     at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
     if outside:
-        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope"})
+        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope", **named})
         if phase in READ_ONLY:
             # [owner, 2026-09-23] a phase that may write nothing and wrote something ends the run uncommitted: there
             # is no work of its to keep, and a commit would put a read-only agent's edit on the story branch.
@@ -316,7 +323,7 @@ def _phase(
             verdict = (said.verdict, art.sha256)
     failed = None if res.outcome == "ok" else res.outcome
     head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
-    ledger.phase(run_id, at, {**res.row(), "touched": list(touched)}, verdict=verdict)
+    ledger.phase(run_id, at, {**res.row(), "touched": list(touched), **named}, verdict=verdict)
     if res.outcome != "ok":
         ledger.finish(
             run_id,
@@ -552,6 +559,27 @@ def _believe_nothing(res: adapter_mod.PhaseResult, touched: Sequence[str]) -> No
             res.run_id,
             f"the result claims {over} git does not have, and git has {under} it does not claim",
         )
+
+
+def _repaired(work: Path, phase: str) -> dict[str, Any]:
+    """Card 23 [R1-R3, R5]: a mutation marker the phase left, dealt with, and what it came to as the keys the phase's
+    record carries -- `repaired` (file and mutation id) and `repair_unverified` (file), each only when non-empty, so a
+    worktree with no marker adds nothing [R4]. The journal holds what the container repaired between attempts, so the
+    phase names every repair it had, not only the last. A phase that may write nothing has no marker of its own."""
+    if phase in READ_ONLY:
+        return {}
+    last = checkout.repair(work)
+    made = checkout.drain(work)
+    if last is not None and last not in made:  # the journal could not be written: this one is still named
+        made = (*made, last)
+    done = list(dict.fromkeys((r.file, r.id) for r in made if r.verified))
+    unverified = sorted({r.file for r in made if not r.verified})
+    out: dict[str, Any] = {}
+    if done:
+        out["repaired"] = [{"file": f, "id": i} for f, i in done]
+    if unverified:
+        out["repair_unverified"] = unverified
+    return out
 
 
 def _commit(

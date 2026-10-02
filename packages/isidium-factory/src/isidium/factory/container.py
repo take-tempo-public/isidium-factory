@@ -152,6 +152,11 @@ class Container:
         for attempt in range(1, ATTEMPTS + 1):
             if attempt > 1:
                 _keep(rundir, attempt - 1)
+                # Card 23 R5 [r-38's F1]: a marker the first attempt left is git-ignored, so `set_aside` would keep it
+                # and the second attempt's phase-end repair would write the first attempt's bytes over the second's
+                # work. Restored here, before the patch is made, so the patch holds the pristine file too; the repair
+                # reaches the phase's record through `checkout.drain`.
+                checkout.repair(Path(job.worktree))
                 checkout.set_aside(Path(job.worktree), rundir / f"attempt-{attempt - 1}.patch")
             try:
                 proc = self._run(

@@ -1,0 +1,46 @@
+# Card 23 -- a phase that ends with a mutation still held restores the pristine file [2026-10-02].
+#
+# Every kill is checked against this card's own test file only, `tests/factory/test_phase_end_repairs_a_live_mutation.py`,
+# applied in place by hand and restored: `tools/mutate.py` is run with `--show` for this spec and never in mutation
+# mode inside a build container, because its whole-suite runs are what starved builds r-18, r-19 and r-27.
+#
+# M1 is R1 (the repair skipped), M2 is R2 (the digest check skipped), M3 is the confinement R2's reading adds (a path
+# out of the tree restored anyway), and M4 is R5 (the container's between-attempts repair removed).
+
+[[mutation]]
+id = "M1"
+label = "the repair skipped -- a marker is never looked at, so the mutated file is committed"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''    if not marker.is_file():
+        return None
+    saved = _saved(marker)'''
+replace = '''    if True:
+        return None
+    saved = _saved(marker)'''
+
+[[mutation]]
+id = "M2"
+label = "the digest check skipped -- bytes that do not hash to the marker's own digest are restored anyway"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''    if hashlib.sha256(pristine).hexdigest() != digest:
+        return False'''
+replace = '''    if False:
+        return False'''
+
+[[mutation]]
+id = "M3"
+label = "the confinement skipped -- a marker naming a path outside the worktree is written to"
+file = "packages/isidium-factory/src/isidium/factory/checkout.py"
+find = '''    if not target.is_relative_to(root) or target.relative_to(root).parts[:1] in ((), (".git",)):
+        return False'''
+replace = '''    if False:
+        return False'''
+
+[[mutation]]
+id = "M4"
+label = "the between-attempts repair removed -- attempt 1's marker survives set_aside into attempt 2"
+file = "packages/isidium-factory/src/isidium/factory/container.py"
+find = '''                checkout.repair(Path(job.worktree))
+'''
+replace = '''                pass
+'''

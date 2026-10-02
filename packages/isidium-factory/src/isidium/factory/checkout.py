@@ -15,8 +15,13 @@ the adopted schema's default — or the caller's, and a checkout with neither is
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+import json
 import subprocess
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, Final
 
@@ -35,6 +40,13 @@ from .payload import Caps, Identity, Inputs
 SPAN: Final = "isidium.factory.payload.gather"
 GIT_SPAWNS: Final = "isidium.git.spawns"
 CARD_SCHEMA: Final = "card@1"
+# Card 23: tools/mutate.py's crash-safety sidecar, named here and read in its own format (`hold()`'s four keys) rather
+# than imported -- `tools/` is not in the package the runner image carries.
+MARKER: Final = ".mutation-in-flight.json"
+REPAIR_SPAN: Final = "isidium.factory.checkout.repair"
+# What a repair is journalled in, beside the worktree and never in it: outside the container's mount and untouched by
+# `set_aside`'s reset and clean, so a repair made between two attempts is still there for the phase's record.
+JOURNAL_SUFFIX: Final = ".repairs.jsonl"
 ContextOf = Callable[[int], Mapping[str, Any]]
 
 
@@ -196,6 +208,97 @@ def carry_over(tree: Path, base: str, head: str) -> tuple[str, ...]:
         why = applied.stderr.decode("utf-8", "replace").strip() or "conflicting paths git could not resolve"
         raise Refusal("run.merge", f"{base[:8]}..{head[:8]}", f"the carried work does not apply here: {why}")
     return touched(tree)
+
+
+@dataclass(frozen=True)
+class Repair:
+    """A mutation marker found in a worktree: the file it named and its mutation id, and whether the pristine bytes
+    were restored. An unverified one left the file and the marker exactly as they were."""
+
+    file: str
+    id: str
+    verified: bool
+
+
+def repair(tree: Path) -> Repair | None:
+    """Card 23: put back the file a killed mutation run left mutated, from the bytes its marker holds [R1].
+
+    `r-27`'s build died twice inside `tools/mutate.py` and the kept patch held `guard.py` with M1 still applied; the
+    carry replayed it into `r-28`. The marker is git-ignored, so it is in the worktree at a phase's end and never in
+    the patch -- which is why the phase's end, and not a commit hook, is where it is read.
+
+    **Restored only when verified** [R2]: the bytes must hash to the marker's own `sha256`, and the file must resolve
+    inside this tree -- the marker was written by the agent's own hand, and a digest proves a marker consistent, not
+    honest. Anything else (a digest mismatch, a marker that does not parse, a path out of the tree, a write that
+    fails) leaves file and marker as they are and says so. **Never raises**: the work around a mutation is real work,
+    and refusing the run over a marker would lose it. No marker costs one `is_file`, no spawn and no write [R4].
+
+    Every repair is journalled (`drain`), because the caller that makes one is not always the one that writes the
+    phase's record."""
+    marker = tree / MARKER
+    if not marker.is_file():
+        return None
+    saved = _saved(marker)
+    with telemetry.span(REPAIR_SPAN) as sp:
+        restored = saved is not None and _restore(tree, saved)
+        if restored:
+            marker.unlink(missing_ok=True)
+        found = Repair(saved[0] if saved else MARKER, saved[1] if saved else "", restored)
+        sp.set_attribute("isidium.repair.file", found.file)
+        sp.set_attribute("isidium.repair.verified", found.verified)
+    journal = _journal(tree)
+    try:
+        with journal.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"file": found.file, "id": found.id, "verified": found.verified}) + "\n")
+    except OSError:
+        return found  # the caller still holds this one; only an earlier phase's journalled repair is at risk
+    return found
+
+
+def drain(tree: Path) -> tuple[Repair, ...]:
+    """The repairs journalled for this worktree, in the order made, and the journal removed -- `()` when there is
+    none. The one reader, so a repair is named on one phase's record and not two."""
+    journal = _journal(tree)
+    try:
+        lines = journal.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ()
+    journal.unlink(missing_ok=True)
+    rows = [json.loads(ln) for ln in lines if ln.strip()]
+    return tuple(Repair(str(r["file"]), str(r["id"]), bool(r["verified"])) for r in rows)
+
+
+def _journal(tree: Path) -> Path:
+    return tree.with_name(tree.name + JOURNAL_SUFFIX)
+
+
+def _saved(marker: Path) -> tuple[str, str, str, bytes] | None:
+    """`(file, id, sha256, pristine bytes)` from `hold()`'s format, or `None` when the marker is anything else."""
+    try:
+        raw = json.loads(marker.read_text(encoding="utf-8"))
+        file, ident, digest, blob = (raw[k] for k in ("file", "id", "sha256", "pristine"))
+        if not all(isinstance(v, str) for v in (file, ident, digest, blob)):
+            return None
+        return file, ident, digest, base64.b64decode(blob, validate=True)
+    except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+        return None
+
+
+def _restore(tree: Path, saved: tuple[str, str, str, bytes]) -> bool:
+    file, _ident, digest, pristine = saved
+    if hashlib.sha256(pristine).hexdigest() != digest:
+        return False
+    root = tree.resolve()
+    target = (tree / file).resolve()
+    # Inside the tree and not inside git's own files: a worktree's `.git` is a file git reads, not one to write over.
+    if not target.is_relative_to(root) or target.relative_to(root).parts[:1] in ((), (".git",)):
+        return False
+    try:
+        if not target.is_file() or target.read_bytes() != pristine:
+            target.write_bytes(pristine)  # bytes, never text: nothing translates a CRLF document
+    except OSError:
+        return False
+    return True
 
 
 def touched(tree: Path) -> tuple[str, ...]:
