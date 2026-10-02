@@ -2,7 +2,7 @@
 schema = 1
 id = 24
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The builder checks every file it changed with ruff and mypy before it finishes"
 shape = "bdd"
@@ -83,5 +83,6 @@ history = [
   { seq = 1, at = "2026-10-02T18:15:50Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:1ec45c7b47b149e27b96d08298b718a407c82a7cef428c2c85812cd8f1d5d1be", h = "sha256:0132988dd47d3dc516d5594941e79c6c8e8c04d7de2725bd9f4cd6c3e3645aa2" },
   { seq = 2, at = "2026-10-02T18:41:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1ec45c7b47b149e27b96d08298b718a407c82a7cef428c2c85812cd8f1d5d1be", h = "sha256:6183c66615b47287ce92c1d8ccf160d33bb1804105b0da10d7f9539c0c07752d", batch = 55 },
   { seq = 3, at = "2026-10-02T19:07:31Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:1ec45c7b47b149e27b96d08298b718a407c82a7cef428c2c85812cd8f1d5d1be", h = "sha256:41500d148ebacf22665840bc587d911d1f1123d680789c6d5647530049361fc7", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:jvjfDWDQJoYrvvx+xFeFlMMhjlTDUrH4vKPNmHy5RCxKazK+dVzVVdE3ayt82hHOpsJovonGxii4JHDgPa24BQ==" },
+  { seq = 4, at = "2026-10-02T19:08:31Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1ec45c7b47b149e27b96d08298b718a407c82a7cef428c2c85812cd8f1d5d1be", h = "sha256:960a8fd02f2ca25892f32b36db8864e06d5fff43e54d4342ba9be6829fe6e32f", batch = 56 },
 ]
 ```
