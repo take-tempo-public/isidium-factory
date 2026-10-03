@@ -1367,14 +1367,14 @@
       "1b2be252619d4c50870e31331f4bc8d95fa6fc582659371e15c014f529352670"
     ],
     "overflow": 0,
-    "run_id": "r-44"
+    "run_id": "r-43"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:9057dd18cd58e50a5000ac60f56a5e61517cd9f91df4a0cead24e9c70d5d6033",
-    "seq": 312
+    "h": "sha256:6ee4c5f96d526d85943f7007da72fe21e30025b0503a61fd77a0a130d46af74d",
+    "seq": 314
   },
-  "landed_at": "2026-10-03T06:50:42Z",
-  "ledger_cursor": "0622079311e1403169342b0426061a39e143fa24",
+  "landed_at": "2026-10-03T18:38:26Z",
+  "ledger_cursor": "492ade39843e6f63f6f3ca25fe3f9276ce54a85b",
   "schema": 2
 }
