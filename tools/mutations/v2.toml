@@ -65,10 +65,8 @@ replace = '''            for i, wait in enumerate(BACKOFF * 1000):'''
 id = "M6"
 label = "the verdict over the runs that exist, not the required contexts"
 file = "packages/isidium-factory/src/isidium/factory/forge.py"
-find = '''            if got is None or got.status != "completed":
-                pending = True'''
-replace = '''            if got is None or got.status != "completed":
-                pass'''
+find = '''pending = any((got := latest.get(name)) is None or got.status != "completed" for name in self.required)'''
+replace = '''pending = any((got := latest.get(name)) is not None and got.status != "completed" for name in self.required)'''
 
 [[mutation]]
 id = "M7"
