@@ -2,7 +2,7 @@
 schema = 1
 id = 26
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator"
 shape = "bdd"
@@ -16,7 +16,7 @@ feature = "a one-line lint or type miss costs one bounded fixup on the same run,
 
 [[rules]]
 id = "R1"
-text = "`run --run r-N --phase fixup` reads the required checks on the run's pull request head; when none is red it refuses fixup.nothing-red and spends nothing"
+text = "`run --run r-N --phase fixup` reads the required checks on the run's pull request head; when none is red it refuses run.fixup-nothing-red and spends nothing"
 
 [[rules]]
 id = "R2"
@@ -37,6 +37,10 @@ text = "A fixup is not reviewed again: the review gate's verdict stands, and clo
 [[rules]]
 id = "R6"
 text = "Builder prompt v6 is v5 plus a section for the fixup phase: make the failing checks pass inside the surfaces, change nothing else, and run the v5 per-file checks on what it touched; v5 is not edited"
+
+[[rules]]
+id = "R7"
+text = "A fixup requires the run's review gate to have run to its end when the tenant declares a reviewer (the same gate.review_gate_done close asks); otherwise it refuses run.fixup-unreviewed and spends nothing, so the chain and close never disagree about a fixed-up run"
 
 [[guidance.avoid]]
 id = "A1"
@@ -72,6 +76,11 @@ because = "r-38 and r-39 each lost a whole run to a one-line style miss"
 id = "C5"
 text = "selecting builder v6 is a signed config act and a runner rebuild after the merge, not this card"
 because = "7bd.11: a new version is a new file; the image carries prompts"
+
+[[guidance.constraints]]
+id = "C6"
+text = "every refusal this card adds uses the run. namespace (run.fixup-nothing-red, run.fixup-unreviewed, ...); no new rule namespace is introduced, so the store's core/disclosure.py and its classification test are untouched"
+because = "the owner, on #100 (2026-10-02): the first build raised a new fixup.* namespace, which tests/unit/test_rule_ids.py requires core/disclosure.py to classify, a store file outside the surfaces"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -114,6 +123,13 @@ kind = "test-marker"
 title = "builder v6 names the fixup section and v5 is unedited"
 rule = "R6"
 observable = { test = "tests/factory/test_fixup_repairs_a_red_pr.py::test_builder_v6_names_the_fixup_section" }
+
+[[acceptance.scenarios]]
+id = "S7"
+kind = "test-marker"
+title = "a fixup on an unreviewed run is refused"
+rule = "R7"
+observable = { test = "tests/factory/test_fixup_repairs_a_red_pr.py::test_a_fixup_on_an_unreviewed_run_is_refused" }
 ```
 
 ## Scope
@@ -123,6 +139,8 @@ Found 2026-10-02: r-38 (card 23) and r-39 (card 24) each passed their tests and 
 The owner ruled the flow (2026-10-02): a fixup phase on the same run; input the failed checks and bounded log tails; one round, still red ends failed:gate with work kept; no re-review; invoked by the operator now, so no verb owner changes — a PR watcher, designed next as its own component on the forge seam, will invoke it.
 
 Not in scope: the watcher; pushing (the operator's verb); selecting builder v6.
+
+Amended 2026-10-02 after r-43 [owner: "Use the run.* namespace, rebuild"]: #100 went red on test_rule_ids (a new fixup.* namespace unclassified in the store's disclosure table); its review's F1 (a fixup on an unreviewed run leaves the chain and close disagreeing) is folded in as R7.
 
 ## History
 
@@ -134,5 +152,6 @@ history = [
   { seq = 4, at = "2026-10-02T23:35:02Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:d6223bbe08786f3f67136cee7ed0532fbbb4ff3c56b25178fcf4d2d5d0aeefa2", batch = 59 },
   { seq = 5, at = "2026-10-03T00:45:18Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:79850ce094d9d643f424eed4fdc0ce93becf868a0ab0f1ef5685ce35b1684bb0" },
   { seq = 6, at = "2026-10-03T00:45:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:b7683bd084b2ae75bc89855a41d109a15615a21ebd1cfc98dbe5d769f7798016", batch = 60 },
+  { seq = 7, at = "2026-10-03T05:58:50Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["acceptance", "guidance", "rules", "scope", "status"], build = "sha256:7b367e4e5e1a109c437611278acf5bcad53b88393ec7ad6af96358d802f52bc0", h = "sha256:c61a35622c80a7f0f11f8c3d03156b876b5162978d18889721dc2f3aa54666b9", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:2H7GYNsl4YQeuUr8YG+2rs8AWK60WQIFwr9m50q3vSXAvthQTXRImJJw7OyY14kvnn6J9jJfujQqeStT/bXZAQ==" },
 ]
 ```
