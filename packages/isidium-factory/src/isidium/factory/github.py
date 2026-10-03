@@ -2,10 +2,11 @@
 
 **Two halves, one identity.** The git half runs in the tenant checkout the context names, spawn-counted as V1's
 gatherer is: `fetch` is two spawns (`git fetch` and the tip out of `FETCH_HEAD`), `branch` one, `changed` one (the
-diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is five calls over one
+diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is seven calls over one
 `httpx.Client`: open a pull request, the ruleset's required contexts, a head's check runs, a pull request's state,
-and — through the Actions API — a commit's failed workflow runs re-requested (`GET .../actions/runs` then one
-`POST .../actions/runs/{id}/rerun-failed-jobs` per failed run).
+— through the Actions API — a commit's failed workflow runs re-requested (`GET .../actions/runs` then one
+`POST .../actions/runs/{id}/rerun-failed-jobs` per failed run), and a fixup's reads of a failed job (card 26:
+`GET .../actions/jobs/{id}` for its steps and `GET .../actions/jobs/{id}/logs` for its log).
 
 **The token is never in `argv` and never in the checkout's config.** git receives it as an `http.<origin>.extraheader`
 through the `GIT_CONFIG_COUNT` environment (a process list shows a command line, not an environment); the API
@@ -30,7 +31,7 @@ import json
 import subprocess
 import time
 from collections.abc import Callable, Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Final
 
 from isidium.store.core import telemetry
@@ -39,10 +40,12 @@ from isidium.store.core.refusal import Refusal
 from .context import ForgeKind, TenantContext
 from .forge import (
     PASSING,
+    TAIL_LINES,
     Capabilities,
     Changed,
     CheckRun,
     Checks,
+    FailedJob,
     MergeableState,
     MergeState,
     PullRequest,
@@ -52,6 +55,7 @@ from .forge import (
 
 API_HOST: Final = "api.github.com"
 API_VERSION: Final = "2022-11-28"
+ACTIONS_APP: Final = "github-actions"  # a check run of this app is an Actions job, and its id is the job's
 USER_AGENT: Final = "isidium-factory"
 # GitHub's transient classes — a dropped connection, a 5xx — clear in seconds; three waits doubling from one is the
 # span its own client libraries use, and a forge down for longer than seven seconds is `environment`, not a retry.
@@ -229,10 +233,19 @@ class GitHub:
     # ---- the API half ------------------------------------------------------------------------------------------
 
     def _call(
-        self, method: str, path: str, json: Mapping[str, Any] | None = None, *, auth: str | None = None, **params: Any
+        self,
+        method: str,
+        path: str,
+        json: Mapping[str, Any] | None = None,
+        *,
+        auth: str | None = None,
+        text: bool = False,
+        **params: Any,
     ) -> Any:
         """One API call with the bearer set **per request** (`auth` is the mint's JWT; every other call carries the
-        installation or static token), so no credential sits on the client object between calls."""
+        installation or static token), so no credential sits on the client object between calls. `text` reads a body
+        that is not JSON (a job's log): the request follows the forge's redirect to the storage host, and httpx drops
+        the `Authorization` header on a cross-origin hop, so the bearer never leaves GitHub."""
         import httpx
 
         bearer = auth if auth is not None else self._bearer()
@@ -240,7 +253,12 @@ class GitHub:
             for i, wait in enumerate((*BACKOFF, None)):
                 try:
                     r = self.http.request(
-                        method, path, json=json, params=params or None, headers={"Authorization": f"Bearer {bearer}"}
+                        method,
+                        path,
+                        json=json,
+                        params=params or None,
+                        headers={"Authorization": f"Bearer {bearer}"},
+                        follow_redirects=text,
                     )
                 except httpx.TransportError as e:
                     if wait is None:
@@ -263,6 +281,8 @@ class GitHub:
                 if r.status_code >= 400:
                     raise Refusal("forge.api", path, f"{r.status_code}: {_message(r)}")
                 sp.set_attribute("isidium.forge.tries", i + 1)
+                if text:
+                    return r.text
                 # `rerun-failed-jobs` answers 201 with no body; every other call here answers a JSON object.
                 return r.json() if r.content else None
         raise AssertionError("unreachable: the loop returns or raises")  # pragma: no cover
@@ -320,8 +340,66 @@ class GitHub:
             self._call("POST", f"{self._repo}/actions/runs/{run_id}/rerun-failed-jobs")
         return failed
 
+    def failed_jobs(self, sha: str, names: tuple[str, ...]) -> tuple[FailedJob, ...]:
+        """Card 26 R2: each named check at this commit, as a fixup is handed it. One call for the head's check runs
+        (the newest per name, as `Checks.latest` takes it), then for each that is an Actions job two more — its steps
+        and its log. A check that is not an Actions job has no log this driver can read: it is named, with no step and
+        no tail, and the fixup is told that much rather than refused."""
+        runs = self._call("GET", f"{self._repo}/commits/{sha}/check-runs", per_page=PAGE)
+        newest: dict[str, Any] = {}
+        for x in runs.get("check_runs", []):
+            newest.setdefault(str(x["name"]), x)
+        out: list[FailedJob] = []
+        for name in names:
+            run = newest.get(name)
+            if run is None or (run.get("app") or {}).get("slug") != ACTIONS_APP:
+                out.append(FailedJob(name, None, ""))
+                continue
+            job = self._call("GET", f"{self._repo}/actions/jobs/{int(run['id'])}")
+            log = self._call("GET", f"{self._repo}/actions/jobs/{int(run['id'])}/logs", text=True)
+            step = next((s for s in job.get("steps", []) if s.get("conclusion") == "failure"), None)
+            if step is None:
+                out.append(FailedJob(name, None, _tail(log.splitlines())))
+            else:
+                window = _window(log.splitlines(), str(step["started_at"]), str(step["completed_at"]))
+                out.append(FailedJob(name, str(step["name"]), _tail(window)))
+        return tuple(out)
+
     def capabilities(self) -> Capabilities:
         return GITHUB
+
+
+def _tail(lines: list[str]) -> str:
+    return "\n".join(lines[-TAIL_LINES:])
+
+
+def _stamp(text: str) -> datetime | None:
+    """The leading ISO timestamp of a job-log line (`2026-10-02T12:00:01.1234567Z ...`), or None for a line without
+    one — a continuation of the line before it. `fromisoformat` truncates the seven fractional digits GitHub writes."""
+    head = text.lstrip("\ufeff").split(" ", 1)[0]
+    if not head.endswith("Z"):
+        return None
+    try:
+        return datetime.fromisoformat(head)
+    except ValueError:
+        return None
+
+
+def _window(lines: list[str], started: str, completed: str) -> list[str]:
+    """The log lines stamped within [`started`, `completed` + 1s) — the step's own, since the jobs API stamps a step
+    to the second and its last line lands inside that second. A line with no stamp belongs with the stamped line it
+    follows."""
+    lo = datetime.fromisoformat(started)
+    hi = datetime.fromisoformat(completed) + timedelta(seconds=1)
+    inside = False
+    out: list[str] = []
+    for line in lines:
+        at = _stamp(line)
+        if at is not None:
+            inside = lo <= at < hi
+        if inside:
+            out.append(line)
+    return out
 
 
 def _b64(b: bytes) -> str:

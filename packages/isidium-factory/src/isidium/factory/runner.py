@@ -42,11 +42,16 @@ from . import artifacts as artifacts_mod
 from . import checkout, gate, guard, lander
 from . import payload as payload_mod
 from .context import TenantContext
+from .forge import Forge
 from .ledger import Ledger
 from .tenant import Registration
 
 SPAN: Final = "isidium.factory.run.phase"
 CHAIN_SPAN: Final = "isidium.factory.run.chain"
+FIXUP_SPAN: Final = "isidium.factory.run.fixup"
+# Card 26: the operator's one bounded repair of a red pull request. It is a phase the builder runs, but not one the
+# chain routes to (`LINE` does not hold it): it reads the forge, so it has its own entry, `run_fixup`.
+FIXUP: Final = "fixup"
 TRAILER_RUN: Final = "Factory-Run"
 TRAILER_AGENT: Final = "Factory-Agent"
 # [owner, 2026-09-15] a failed phase's work is committed to its story branch and never pushed; the trailer is how the
@@ -68,6 +73,7 @@ AGENT_OF: Final[Mapping[str, str]] = {
     # V4a-ii-b ruling 1 [owner, 2026-09-25]: the builder reconciles — fixing needs writes, and the reviewer has none;
     # the reviewer's part is the bounded second pass, a `review` phase of its own.
     "reconcile": "builder",
+    FIXUP: "builder",
 }
 
 # The test paths a card may always write, beside its declared `surfaces` — T-B5 (1)'s *"surfaces ∪ test paths"*.
@@ -114,7 +120,102 @@ def run_phase(
     """One phase of one dispatched run, end to end. Returns the run's row as the ledger holds it afterwards."""
     if phase not in AGENT_OF:
         raise Refusal("run.phase", phase, f"not a phase an adapter runs: {sorted(AGENT_OF)}")
+    if phase == FIXUP:
+        raise Refusal("run.phase", phase, "a fixup reads the forge: it is run by `run_fixup`, not as a bare phase")
     return _drive(ctx, reg, ledger, call, run_id, (phase,), factory, now)
+
+
+def run_fixup(
+    ctx: TenantContext,
+    reg: Registration,
+    ledger: Ledger,
+    call: Call,
+    forge: Forge,
+    *,
+    run_id: str,
+    factory: adapter_mod.AdapterFactory | None = None,
+    now: Now = _now,
+) -> dict[str, Any]:
+    """Card 26: one fixup of a run whose pull request is red on the gate, invoked by the operator. Every refusal below
+    comes before the adapter and spends nothing, in this order: the run is in flight (R-ended), its review gate ran to
+    its end when the tenant declares a reviewer (R7), its pull request is recorded and its head is the run's own (an
+    unpushed fixup would otherwise read the old red head and be ended for it), and some required check is red (R1).
+    A run that already holds a fixup and is still red ends `failed:gate` with its work kept and no model call (R4);
+    otherwise the builder runs in the run's worktree, handed each failed check's name, failed step and log tail (R2).
+    Pushing is the operator's: nothing here pushes or opens a pull request."""
+    with telemetry.span(FIXUP_SPAN, **{"isidium.run_id": run_id}) as sp:
+        try:
+            out = _fixup(ctx, reg, ledger, call, forge, run_id, factory, now, sp)
+        except Refusal as r:
+            telemetry.record_refusal_on(sp, r.rule)
+            raise
+        sp.set_attribute("isidium.outcome", str(out["outcome"]))
+        return out
+
+
+def _fixup(
+    ctx: TenantContext,
+    reg: Registration,
+    ledger: Ledger,
+    call: Call,
+    forge: Forge,
+    run_id: str,
+    factory: adapter_mod.AdapterFactory | None,
+    now: Now,
+    sp: Any,
+) -> dict[str, Any]:
+    row = ledger.run(run_id)
+    if row is None:
+        raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+    if row["ended_at"]:
+        raise Refusal("run.ended", run_id, f"this run ended {row['ended_at']} as {row['outcome']}")
+    history = _history(ledger, ctx.home, run_id)
+    # The same question close asks, of the same history: a fixup that follows a gate that did not run to its end would
+    # leave the chain wanting a review and close treating the run as reviewed (the gate reads a trailing fixup as done).
+    if adapter_mod.declares(ctx.eff, "reviewer") and not gate.review_gate_done(history):
+        raise Refusal(
+            "run.fixup-unreviewed",
+            run_id,
+            "the tenant declares a reviewer and this run's review gate has not run to its end: "
+            f"drive it with `isidium-factory run --run {run_id}` first",
+        )
+    number = row["pr"]
+    if number is None:
+        raise Refusal("run.fixup-no-pr", run_id, "no pull request is recorded for this run: there is no head to read")
+    state = forge.merge_state(int(number))
+    if state.head != row["head_sha"]:
+        raise Refusal(
+            "run.fixup-pr-mismatch",
+            f"#{number}",
+            f"its head is {state.head}; this run's is {row['head_sha']} (push the run's branch first)",
+        )
+    checks = forge.checks(state.head)
+    red = checks.failed()
+    if not red:
+        raise Refusal(
+            "run.fixup-nothing-red",
+            f"#{number}",
+            f"the required checks at {state.head} read {checks.verdict.value}: there is nothing to repair",
+        )
+    sp.set_attribute("isidium.fixup.red", len(red))
+    if any(d.phase == FIXUP for d in history):
+        # R4: one round. The fixup's commit is the run's head and stays on its branch; the end is the gate's.
+        ledger.end(
+            run_id,
+            now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "failed:gate",
+            detail={"fixup": "still-red", "head": state.head, "failed": list(red)},
+        )
+        lander.land_run(ledger, call, run_id)
+        ended = ledger.run(run_id)
+        assert ended is not None
+        return {**ended, "phases": ledger.phases_of(run_id)}
+    jobs = forge.failed_jobs(state.head, red)
+    failures = {
+        "head": state.head,
+        "checks": [{"name": j.name, "step": j.step, "tail": j.tail} for j in jobs],
+    }
+    return _drive(ctx, reg, ledger, call, run_id, (FIXUP,), factory, now, failures=failures)
 
 
 def run_chain(
@@ -148,6 +249,7 @@ def _drive(
     phases: Sequence[str] | None,
     factory: adapter_mod.AdapterFactory | None,
     now: Now,
+    failures: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The phases — the named ones, or the gate's when `phases` is None — in one worktree, until one ends the run.
     Everything checked before the worktree exists spends nothing and leaves the run in flight: the run's row, every
@@ -206,7 +308,7 @@ def _drive(
                 phase = step.phase
             with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
                 sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
-                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now)
+                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now, failures)
                 history = _history(ledger, ctx.home, run_id)
                 _review_attributes(sp, phase, history)
             carried = None  # the carry is told to the phase it was replayed for, and to no later one
@@ -240,10 +342,14 @@ def _phase(
     carried: adapter_mod.Carried | None,
     previous_park: artifacts_mod.ParkQuestion | None,
     now: Now,
+    failures: Mapping[str, Any] | None = None,
 ) -> None:
     """One phase in a worktree that already exists: the job, the adapter, the recompute, the record."""
     run_id = str(row["run_id"])
     agent = AGENT_OF[phase]
+    # Card 26 (Q2): the fixup's commit names it — subject and `Factory-Agent` trailer read `builder (fixup)` — while the
+    # job, the policy row and the identity stay the builder's.
+    who = f"{agent} ({phase})" if phase == FIXUP else agent
     job = _job(
         ctx,
         row,
@@ -255,6 +361,7 @@ def _phase(
         work=work,
         history=history,
         previous_park=previous_park,
+        failures=failures,
     )
     if carried is not None:
         job = job.model_copy(update={"carried": carried})
@@ -271,14 +378,19 @@ def _phase(
         outcome = _outcome_of(r)
         changed = checkout.touched(work)
         spent = r.result if isinstance(r, adapter_mod.PhaseRefusal) else None
-        if spent is not None:
-            ledger.phase(run_id, at, {**spent.row(), "touched": list(changed), **named})
         # [owner, 2026-09-15] the work survives the failure: `r-5`'s builder had edited all seven surfaces
         # when its harness crashed, and the worktree was removed with nothing kept. A phase that may write nothing
-        # has no work to keep — whatever it wrote is not work.
+        # has no work to keep — whatever it wrote is not work. Kept before the phase row is written (a fixup's row
+        # names its diff, which is read from the commit); `_keep_work` touches no record.
         head = None
         if phase not in READ_ONLY:
-            head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, changed, outcome)
+            head = _keep_work(work, run_id, who, ctx.identity.name, ctx.identity.email, changed, outcome)
+        if spent is not None:
+            ledger.phase(
+                run_id,
+                at,
+                {**spent.row(), "touched": list(changed), **named, **_fixup_docs(ctx.home, phase, failures, work, row)},
+            )
         # R3: with no phase row the repair rides the ended event's detail; with one it is on the row and not twice.
         ledger.end(
             run_id,
@@ -296,7 +408,23 @@ def _phase(
     outside = guard.outside(touched, job.allowed_writes)
     at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
     if outside:
-        ledger.phase(run_id, at, {**res.row(), "touched": list(touched), "outcome": "failed:scope", **named})
+        # Kept first for the reason the refusal path above keeps it first: a fixup's row names its diff.
+        head = (
+            None
+            if phase in READ_ONLY
+            else _keep_work(work, run_id, who, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
+        )
+        ledger.phase(
+            run_id,
+            at,
+            {
+                **res.row(),
+                "touched": list(touched),
+                "outcome": "failed:scope",
+                **named,
+                **_fixup_docs(ctx.home, phase, failures, work, row),
+            },
+        )
         if phase in READ_ONLY:
             # [owner, 2026-09-23] a phase that may write nothing and wrote something ends the run uncommitted: there
             # is no work of its to keep, and a commit would put a read-only agent's edit on the story branch.
@@ -308,7 +436,6 @@ def _phase(
                 billing_class=drv.capabilities().billing_class,
             )
             raise Refusal("run.read-only", outside[0], f"the {phase} phase writes nothing; it wrote {list(touched)}")
-        head = _keep_work(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, "failed:scope")
         ledger.finish(run_id, at, "failed:scope", head_sha=head, surfaces_actual=list(touched))
         raise Refusal("run.scope", outside[0], "; ".join(outside) + " — outside the card's surfaces")
     verdict = None
@@ -322,8 +449,13 @@ def _phase(
             said = artifacts_mod.Verdict.model_validate_json((ctx.home / art.path).read_bytes())
             verdict = (said.verdict, art.sha256)
     failed = None if res.outcome == "ok" else res.outcome
-    head = _commit(work, run_id, agent, ctx.identity.name, ctx.identity.email, touched, failed)
-    ledger.phase(run_id, at, {**res.row(), "touched": list(touched), **named}, verdict=verdict)
+    head = _commit(work, run_id, who, ctx.identity.name, ctx.identity.email, touched, failed)
+    ledger.phase(
+        run_id,
+        at,
+        {**res.row(), "touched": list(touched), **named, **_fixup_docs(ctx.home, phase, failures, work, row)},
+        verdict=verdict,
+    )
     if res.outcome != "ok":
         ledger.finish(
             run_id,
@@ -340,6 +472,28 @@ def _phase(
         # A phase that ends ok and commits nothing (every read-only phase, or one whose `touched` was empty) still
         # drew on a lane — `advance` is not this write, because it would blank the head an earlier phase committed.
         ledger.bill(run_id, res.billing_class)
+
+
+def _fixup_docs(
+    home: Path, phase: str, failures: Mapping[str, Any] | None, work: Path, row: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Card 26 R2 and R3: what a fixup's phase row names by hash — `failures`, the checks and log tails it was handed,
+    and `diff`, what it changed (the run's head when the phase began to the worktree's HEAD, as git has it). Two
+    canonical documents under the run's directory, written here and listed as `artifacts` in the home-relative frame
+    every artifact uses; failures first, so the run's history reads the fixup by what it was asked. Nothing for any
+    other phase. Two files of the run's own and not a directory, so `close`'s recovery of a left result — which lists
+    directories — never mistakes them for a phase."""
+    if phase != FIXUP or failures is None:
+        return {}
+    run_id = str(row["run_id"])
+    made: list[dict[str, str]] = []
+    for name, value in (("failures", failures), ("diff", _diff(work, str(row["head_sha"])))):
+        data = artifacts_mod.canonical(value)
+        rel = f"runs/{run_id}/{FIXUP}.{name}.json"
+        (home / rel).parent.mkdir(parents=True, exist_ok=True)
+        (home / rel).write_bytes(data)
+        made.append({"name": name, "sha256": artifacts_mod.sha256(data), "path": rel})
+    return {"artifacts": made}
 
 
 def _review_attributes(sp: Any, phase: str, history: Sequence[gate.Done]) -> None:
@@ -501,6 +655,7 @@ def _job(
     work: Path,
     history: Sequence[gate.Done] = (),
     previous_park: artifacts_mod.ParkQuestion | None = None,
+    failures: Mapping[str, Any] | None = None,
 ) -> adapter_mod.RunJob:
     """The job for one phase: what it reads (the payload, and the earlier artifacts the gate names for it — refused if
     a phase that cannot run without one has none) and where it may write — nothing for a read-only phase; for the build,
@@ -518,6 +673,12 @@ def _job(
         # Card 25: the reviewer has no Bash, so the wrapper hands it what the run changed — computed here, once per
         # review phase, from the worktree's HEAD (on the second pass that includes reconcile's commit).
         named = [*named, ("diff", _diff(work, str(row["base_sha"])))]
+    if phase == FIXUP:
+        # Card 26 R2: the failed checks, handed inline as the review's diff is — named, hashed, and written to the
+        # record by `_fixup_docs`. A fixup with none was not asked to fix anything.
+        if failures is None:
+            raise Refusal("run.artifact-missing", run_id, "the fixup phase reads the failures, and none were given")
+        named = [*named, ("failures", dict(failures))]
     inputs = tuple(
         adapter_mod.Input(name=n, sha256=artifacts_mod.sha256(artifacts_mod.canonical(v)), content=v) for n, v in named
     )
@@ -525,6 +686,13 @@ def _job(
     plan = next((v for n, v in named if n == "plan"), None)
     if phase in READ_ONLY:
         writes: tuple[str, ...] = ()
+    elif phase == FIXUP:
+        # R3: the build's own surface — what the plan was approved to touch and the test paths, or the card's
+        # `surfaces` for a build with no plan behind it — so a fixup can write nothing the build could not.
+        approved = next((d.artifact for d in reversed(history) if d.phase == "plan" and d.artifact is not None), None)
+        writes = (
+            tuple(artifacts_mod.Plan.model_validate(approved).touched) if approved is not None else surfaces
+        ) + TEST_PATHS
     elif phase in ("build", "reconcile") and plan is not None:
         # Reconcile fixes inside what the plan was approved to touch: a fix that needs a wider surface is a question
         # for the owner, never a wider write (the same rule as the build's, T-B5 (1)).

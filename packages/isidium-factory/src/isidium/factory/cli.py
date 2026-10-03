@@ -261,7 +261,12 @@ def run_verb(
     checkout_path: CHECKOUT,
     run: Annotated[str, typer.Option("--run", help="the dispatched run to execute, `r-<n>`")],
     phase: Annotated[
-        str | None, typer.Option("--phase", help="run this one phase; without it, drive the chain from the ledger")
+        str | None,
+        typer.Option(
+            "--phase",
+            help="run this one phase; without it, drive the chain from the ledger. `fixup` repairs a red pull request "
+            "head once (the operator pushes the run's branch before and after)",
+        ),
     ] = None,
     base: BASE = "main",
     root: ROOT = None,
@@ -270,7 +275,11 @@ def run_verb(
     re-assembled and checked against the hash the ledger wrote, each phase inside the write guard, the change set
     recomputed from git, one commit by the wrapper per phase that wrote, and each phase on the row it was dispatched
     under. Without `--phase`, the chain is driven from the last phase the ledger holds — plan, refute, judge, and it
-    stops at the judge until the plan gate is built [V4a-ii-a]; `--phase build` runs a build alone, as before."""
+    stops at the judge until the plan gate is built [V4a-ii-a]; `--phase build` runs a build alone, as before.
+
+    `--phase fixup` (card 26) reads the required checks on the run's pull request head and, when some are red, runs the
+    builder once on the run's own branch, handed each failed check's name and log tail; nothing red is refused
+    (`run.fixup-nothing-red`). It commits to the story branch and does not push or open anything — pushing is yours."""
     try:
         ctx = context.load(tenant, checkout_path, base=base, root=root)
         reg = tenant_mod.require(ctx.registration, ctx.home)
@@ -278,6 +287,8 @@ def run_verb(
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
             if phase is None:
                 row = runner_mod.run_chain(ctx, reg, led, channel.call, run_id=run)
+            elif phase == runner_mod.FIXUP:
+                row = runner_mod.run_fixup(ctx, reg, led, channel.call, github.GitHub(ctx), run_id=run)
             else:
                 row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
     except Refusal as r:
