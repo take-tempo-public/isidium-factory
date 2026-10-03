@@ -2,10 +2,12 @@
 
 **Two halves, one identity.** The git half runs in the tenant checkout the context names, spawn-counted as V1's
 gatherer is: `fetch` is two spawns (`git fetch` and the tip out of `FETCH_HEAD`), `branch` one, `changed` one (the
-diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is five calls over one
+diff), `push` one — **five for fetch → branch → check → push**, held by a test. The API half is six calls over one
 `httpx.Client`: open a pull request, the ruleset's required contexts, a head's check runs, a pull request's state,
-and — through the Actions API — a commit's failed workflow runs re-requested (`GET .../actions/runs` then one
-`POST .../actions/runs/{id}/rerun-failed-jobs` per failed run).
+— through the Actions API — a commit's failed workflow runs re-requested (`GET .../actions/runs` then one
+`POST .../actions/runs/{id}/rerun-failed-jobs` per failed run), and (card 26) the log of each failed required job
+(`GET .../actions/jobs/{id}/logs`, which answers a redirect to the log's storage and is followed). The log read treats
+a check run's id as its Actions job id, so it serves a required check that is an Actions job — today's three are.
 
 **The token is never in `argv` and never in the checkout's config.** git receives it as an `http.<origin>.extraheader`
 through the `GIT_CONFIG_COUNT` environment (a process list shows a command line, not an environment); the API
@@ -43,11 +45,13 @@ from .forge import (
     Changed,
     CheckRun,
     Checks,
+    Failure,
     MergeableState,
     MergeState,
     PullRequest,
     PullRequestSpec,
     changed_of,
+    tail_of,
 )
 
 API_HOST: Final = "api.github.com"
@@ -229,10 +233,19 @@ class GitHub:
     # ---- the API half ------------------------------------------------------------------------------------------
 
     def _call(
-        self, method: str, path: str, json: Mapping[str, Any] | None = None, *, auth: str | None = None, **params: Any
+        self,
+        method: str,
+        path: str,
+        json: Mapping[str, Any] | None = None,
+        *,
+        auth: str | None = None,
+        text: bool = False,
+        **params: Any,
     ) -> Any:
         """One API call with the bearer set **per request** (`auth` is the mint's JWT; every other call carries the
-        installation or static token), so no credential sits on the client object between calls."""
+        installation or static token), so no credential sits on the client object between calls. `text` is the one call
+        whose answer is a log and not JSON: it follows the redirect to the log's storage (httpx drops the bearer on a
+        cross-origin hop) and returns the body as text."""
         import httpx
 
         bearer = auth if auth is not None else self._bearer()
@@ -240,7 +253,12 @@ class GitHub:
             for i, wait in enumerate((*BACKOFF, None)):
                 try:
                     r = self.http.request(
-                        method, path, json=json, params=params or None, headers={"Authorization": f"Bearer {bearer}"}
+                        method,
+                        path,
+                        json=json,
+                        params=params or None,
+                        headers={"Authorization": f"Bearer {bearer}"},
+                        follow_redirects=text,
                     )
                 except httpx.TransportError as e:
                     if wait is None:
@@ -264,6 +282,8 @@ class GitHub:
                     raise Refusal("forge.api", path, f"{r.status_code}: {_message(r)}")
                 sp.set_attribute("isidium.forge.tries", i + 1)
                 # `rerun-failed-jobs` answers 201 with no body; every other call here answers a JSON object.
+                if text:
+                    return r.text
                 return r.json() if r.content else None
         raise AssertionError("unreachable: the loop returns or raises")  # pragma: no cover
 
@@ -281,17 +301,41 @@ class GitHub:
             raise
         return PullRequest(int(data["number"]), str(data["html_url"]), str(data["head"]["sha"]))
 
-    def checks(self, sha: str) -> Checks:
+    def _read_checks(self, sha: str) -> tuple[Checks, list[Any]]:
+        """The ruleset's required contexts and the head's check runs — two calls — and the raw runs beside them:
+        `failures` needs a run's id, which `CheckRun` does not carry (tests build it positionally, and C-1 rules out a
+        default)."""
         rules = self._call("GET", f"{self._repo}/rules/branches/{self.ctx.base}")
         required: list[str] = []
         for rule in rules:
             if rule.get("type") == "required_status_checks":
                 required.extend(str(c["context"]) for c in rule.get("parameters", {}).get("required_status_checks", []))
-        runs = self._call("GET", f"{self._repo}/commits/{sha}/check-runs", per_page=PAGE)
-        return Checks(
-            tuple(required),
-            tuple(CheckRun(str(x["name"]), str(x["status"]), x.get("conclusion")) for x in runs.get("check_runs", [])),
+        runs = self._call("GET", f"{self._repo}/commits/{sha}/check-runs", per_page=PAGE).get("check_runs", [])
+        checks = Checks(
+            tuple(required), tuple(CheckRun(str(x["name"]), str(x["status"]), x.get("conclusion")) for x in runs)
         )
+        return checks, runs
+
+    def checks(self, sha: str) -> Checks:
+        return self._read_checks(sha)[0]
+
+    def failures(self, sha: str) -> tuple[Failure, ...]:
+        """Card 26 R2: each required check whose newest run completed and did not pass, with the tail of its job's
+        log — in the ruleset's order, one log read per failure and none for a check that is green, pending or not
+        required. Red is decided by `Checks.latest` and `PASSING`, the rule `verdict` uses, so this and the gate cannot
+        disagree."""
+        checks, raw = self._read_checks(sha)
+        latest = checks.latest()
+        out: list[Failure] = []
+        for name in dict.fromkeys(checks.required):
+            run = latest.get(name)
+            if run is None or run.status != "completed" or run.conclusion in PASSING:
+                continue
+            # The newest run of the name is the first listed, as `latest` reads it: its id is the job to read.
+            job = next(int(x["id"]) for x in raw if str(x["name"]) == name)
+            log = self._call("GET", f"{self._repo}/actions/jobs/{job}/logs", text=True)
+            out.append(Failure(name, tail_of(str(log))))
+        return tuple(out)
 
     def merge_state(self, number: int) -> MergeState:
         pr = self._call("GET", f"{self._repo}/pulls/{number}")

@@ -1,0 +1,25 @@
+# Card 26 (2026-10-03) -- the fixup's two limits, checked against this card's own test file only, never the whole suite
+# (mutate.py runs the whole suite per mutation by default, and that is the cost card 19's r-27 exists to avoid).
+#
+#     python tools/mutate.py tools/mutations/fixup.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_fixup_repairs_a_red_pr.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "a fixup on a green head runs -- the nothing-red refusal is gone and a model call is spent on a head with nothing to fix (killed by S1's nothing-built, nothing-read, nothing-written assertions)"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''        if not red:
+'''
+replace = '''        if False:
+'''
+
+[[mutation]]
+id = "M2"
+label = "a second fixup round is allowed -- the one-round bound is gone and a still-red head spends again (killed by S4's failed:gate end with one adapter build and one model call)"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''        if any(p["phase"] == "fixup" for p in ledger.phases_of(run_id)):
+'''
+replace = '''        if False and any(p["phase"] == "fixup" for p in ledger.phases_of(run_id)):
+'''

@@ -2,7 +2,7 @@
 
 T-C7's contract, verbatim: *"fetch/clone (read creds); push (bot identity); … PR/MR open with generated body, CI
 status read, merge status read; … each driver publishes a capability matrix"*. What v1c's line needs of it through
-V6 is here as a `Protocol` of nine methods; what it does not need is **absent from the type, not refused at
+V6 is here as a `Protocol` of ten methods; what it does not need is **absent from the type, not refused at
 runtime**: there is no `merge` (X2 [owner-ratified]: *"the PR merge stays the forge's button — round 14"*), no force
 push (the store's rule, *"a store must never hold a force path at all"*, is the factory's too), no delete. A driver
 that cannot merge cannot be asked to.
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from typing import Final, Protocol
 
 from isidium.store.client.hook import governed_in
 
@@ -55,6 +55,33 @@ class CheckRun:
     name: str
     status: str  # queued | in_progress | completed
     conclusion: str | None  # success | failure | neutral | cancelled | skipped | timed_out | action_required
+
+
+@dataclass(frozen=True)
+class Failure:
+    """One failed required check and the tail of its log — what card 26's fixup phase is handed (R2)."""
+
+    name: str
+    tail: str
+
+
+# Card 26 R2's number: *"the last 200 lines of its failed step's log"* — enough for a lint or type report, small
+# enough to ride the job inline and to be named by hash on the record.
+TAIL: Final = 200
+# GitHub's marker for the line that ends a failed step; a job log carries the post-job cleanup steps after it.
+ERROR_MARK: Final = "##[error]"
+
+
+def tail_of(log: str) -> str:
+    """The failed step's tail: the log's lines up to and including its last `##[error]` line (the whole log when it has
+    none), then the last `TAIL` of those. GitHub serves a log per job, not per step, so the cut at the error line is
+    what keeps the cleanup steps' lines out of the tail."""
+    lines = log.splitlines()
+    for i in range(len(lines) - 1, -1, -1):
+        if ERROR_MARK in lines[i]:
+            lines = lines[: i + 1]
+            break
+    return "\n".join(lines[-TAIL:])
 
 
 @dataclass(frozen=True)
@@ -148,6 +175,7 @@ class Forge(Protocol):
     def push(self, name: str) -> Changed: ...
     def open_pr(self, spec: PullRequestSpec) -> PullRequest: ...
     def checks(self, sha: str) -> Checks: ...
+    def failures(self, sha: str) -> tuple[Failure, ...]: ...
     def merge_state(self, number: int) -> MergeState: ...
     def rerun_failed(self, sha: str) -> tuple[int, ...]: ...
     def capabilities(self) -> Capabilities: ...

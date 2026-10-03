@@ -270,7 +270,11 @@ def run_verb(
     re-assembled and checked against the hash the ledger wrote, each phase inside the write guard, the change set
     recomputed from git, one commit by the wrapper per phase that wrote, and each phase on the row it was dispatched
     under. Without `--phase`, the chain is driven from the last phase the ledger holds — plan, refute, judge, and it
-    stops at the judge until the plan gate is built [V4a-ii-a]; `--phase build` runs a build alone, as before."""
+    stops at the judge until the plan gate is built [V4a-ii-a]; `--phase build` runs a build alone, as before.
+
+    `--phase fixup` reads the run's pull request's required checks from the forge: when none is red it refuses, and
+    when some are it runs one bounded fixup on the run's branch, handed each failed check's log tail. It never pushes;
+    the operator pushes afterwards (card 26)."""
     try:
         ctx = context.load(tenant, checkout_path, base=base, root=root)
         reg = tenant_mod.require(ctx.registration, ctx.home)
@@ -278,6 +282,8 @@ def run_verb(
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
             if phase is None:
                 row = runner_mod.run_chain(ctx, reg, led, channel.call, run_id=run)
+            elif phase == "fixup":
+                row = runner_mod.run_fixup(ctx, reg, led, channel.call, github.GitHub(ctx), run_id=run)
             else:
                 row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
     except Refusal as r:
