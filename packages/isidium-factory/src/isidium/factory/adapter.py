@@ -45,7 +45,8 @@ if TYPE_CHECKING:  # C-13: the registration is a type here, not a runtime import
 # The ratified story flow's phases (05's descends-from line: pick → consume → plan → light plan-refutation → judge →
 # build → adversarial review → reconcile → close). `pick`, `consume` and `close` make no model calls and are not
 # adapter work, so they are not here. V4a-i runs `build`; V4a-ii adds the other four.
-Phase = Literal["plan", "refute", "judge", "build", "review", "reconcile"]
+# `fixup` is card 26's: the operator's one bounded repair of a red pull request, run by the builder.
+Phase = Literal["plan", "refute", "judge", "build", "review", "reconcile", "fixup"]
 
 # What a phase can end as, at the amplitude V4a-i writes. `ok` is the phase done; `failed:infra` is T-C6's
 # *"Adapter start/timeouts ⇒ `failed:infra`, one retry"*; `failed:scope` is T-B5's *"repeated beyond a tenant

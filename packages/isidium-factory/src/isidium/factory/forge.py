@@ -2,7 +2,7 @@
 
 T-C7's contract, verbatim: *"fetch/clone (read creds); push (bot identity); … PR/MR open with generated body, CI
 status read, merge status read; … each driver publishes a capability matrix"*. What v1c's line needs of it through
-V6 is here as a `Protocol` of nine methods; what it does not need is **absent from the type, not refused at
+V6 is here as a `Protocol` of ten methods; what it does not need is **absent from the type, not refused at
 runtime**: there is no `merge` (X2 [owner-ratified]: *"the PR merge stays the forge's button — round 14"*), no force
 push (the store's rule, *"a store must never hold a force path at all"*, is the factory's too), no delete. A driver
 that cannot merge cannot be asked to.
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from typing import Final, Protocol
 
 from isidium.store.client.hook import governed_in
 
@@ -74,17 +74,39 @@ class Checks:
             out.setdefault(run.name, run)
         return out
 
+    def failed(self) -> tuple[str, ...]:
+        """The required names whose newest run completed with a conclusion outside `PASSING`, in `required` order —
+        the one home for what makes a gate red (`verdict` reads it, and a fixup reads it for its inputs, card 26)."""
+        latest = self.latest()
+        return tuple(
+            name
+            for name in self.required
+            if (got := latest.get(name)) is not None and got.status == "completed" and got.conclusion not in PASSING
+        )
+
     @property
     def verdict(self) -> Verdict:
+        if self.failed():
+            return Verdict.RED
         latest = self.latest()
-        pending = False
-        for name in self.required:
-            got = latest.get(name)
-            if got is None or got.status != "completed":
-                pending = True
-            elif got.conclusion not in PASSING:
-                return Verdict.RED
+        pending = any((got := latest.get(name)) is None or got.status != "completed" for name in self.required)
         return Verdict.PENDING if pending else Verdict.GREEN
+
+
+# Card 26 R2: how much of a failed step's log a fixup is handed — the tail is where a lint or type miss names itself,
+# and a bounded tail keeps the job (and the record that names it by hash) small however long the step ran.
+TAIL_LINES: Final = 200
+
+
+@dataclass(frozen=True)
+class FailedJob:
+    """One failed required check, as a fixup is handed it: its name, the step that failed and that step's last
+    `TAIL_LINES` lines joined by newlines. `step` is None, and `tail` empty, for a check the driver cannot read a log
+    for (not an Actions job); a job with no failed step carries the job log's own tail."""
+
+    name: str
+    step: str | None
+    tail: str
 
 
 @dataclass(frozen=True)
@@ -150,6 +172,7 @@ class Forge(Protocol):
     def checks(self, sha: str) -> Checks: ...
     def merge_state(self, number: int) -> MergeState: ...
     def rerun_failed(self, sha: str) -> tuple[int, ...]: ...
+    def failed_jobs(self, sha: str, names: tuple[str, ...]) -> tuple[FailedJob, ...]: ...
     def capabilities(self) -> Capabilities: ...
 
 

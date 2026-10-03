@@ -1,0 +1,26 @@
+# Card 26 (2026-10-03) — the fixup's two limit assertions, each checked against this card's own test file only, never
+# the whole suite (C3): mutate.py runs the whole suite per mutation by default, and that is exactly what a builder's
+# container cannot afford.
+#
+#     python tools/mutate.py tools/mutations/fixup.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_fixup_repairs_a_red_pr.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "a fixup runs on a head that is not red -- a green gate is repaired anyway, and a model call is spent on nothing (killed by S1's refusal and its empty adapter `seen`)"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    if not red:
+        raise Refusal(
+            "run.fixup-nothing-red",'''
+replace = '''    if False and not red:
+        raise Refusal(
+            "run.fixup-nothing-red",'''
+
+[[mutation]]
+id = "M2"
+label = "a second round is allowed -- one fixup becomes a loop on a red gate (killed by S4's failed:gate end and its unchanged adapter `seen`)"
+file = "packages/isidium-factory/src/isidium/factory/runner.py"
+find = '''    if any(d.phase == FIXUP for d in history):'''
+replace = '''    if False and any(d.phase == FIXUP for d in history):'''
