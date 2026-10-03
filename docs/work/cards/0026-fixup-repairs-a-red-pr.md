@@ -2,7 +2,7 @@
 schema = 1
 id = 26
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator"
 shape = "bdd"
@@ -133,5 +133,6 @@ history = [
   { seq = 3, at = "2026-10-02T23:34:37Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:fce96f874422693d356c15da7b06e7a42ce18de46362f0f80acd9cd5f72e3522" },
   { seq = 4, at = "2026-10-02T23:35:02Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:d6223bbe08786f3f67136cee7ed0532fbbb4ff3c56b25178fcf4d2d5d0aeefa2", batch = 59 },
   { seq = 5, at = "2026-10-03T00:45:18Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:79850ce094d9d643f424eed4fdc0ce93becf868a0ab0f1ef5685ce35b1684bb0" },
+  { seq = 6, at = "2026-10-03T00:45:35Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:cc214f46845426b4e814b21243b0570341dc473aa3ab2fc323002bacc30ae38c", h = "sha256:b7683bd084b2ae75bc89855a41d109a15615a21ebd1cfc98dbe5d769f7798016", batch = 60 },
 ]
 ```
