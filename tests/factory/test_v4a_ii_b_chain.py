@@ -59,7 +59,7 @@ def test_a_clean_review_ends_the_chain_and_reads_the_plan_writing_nothing(disk: 
     assert [p["phase"] for p in row["phases"]][-2:] == ["build", "review"] and row["ended_at"] is None
     review = drv.seen[-1]
     assert review.identity.agent == "reviewer" and review.allowed_writes == ()
-    assert [i.name for i in review.inputs] == ["plan"], "the first pass reads the plan; the diff is the tree"
+    assert [i.name for i in review.inputs] == ["plan", "diff"], "the first pass reads the plan; the diff is in the job"
 
 
 def test_a_blocking_finding_runs_reconcile_then_a_bounded_second_pass(disk: Disk, led: Ledger) -> None:
@@ -74,7 +74,7 @@ def test_a_blocking_finding_runs_reconcile_then_a_bounded_second_pass(disk: Disk
     reconcile, second = drv.seen[-2], drv.seen[-1]
     assert reconcile.identity.agent == "builder" and reconcile.allowed_writes == (INSIDE, "tests/")
     assert [i.name for i in reconcile.inputs] == ["plan", "findings"]
-    assert second.round == 2 and [i.name for i in second.inputs] == ["findings", "reconcile-report"]
+    assert second.round == 2 and [i.name for i in second.inputs] == ["findings", "reconcile-report", "diff"]
     argv = harness.argv(second, "/run/settings.json")
     assert json.loads(argv[argv.index("--json-schema") + 1]) == artifacts.schema(artifacts.Ruling)
     assert not led.verdicts_of(run_id)[2:], "the review's outcome is never a verdicts row (ruling 3)"

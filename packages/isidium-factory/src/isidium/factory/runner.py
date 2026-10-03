@@ -505,7 +505,8 @@ def _job(
     """The job for one phase: what it reads (the payload, and the earlier artifacts the gate names for it — refused if
     a phase that cannot run without one has none) and where it may write — nothing for a read-only phase; for the build,
     the approved plan's `touched` ∪ the test paths (T-B5 (1): the plan narrows, nothing widens — the lint already
-    proved it ⊆ the card's), or the card's `surfaces` ∪ the test paths for a build with no plan behind it."""
+    proved it ⊆ the card's), or the card's `surfaces` ∪ the test paths for a build with no plan behind it. A review
+    phase, on either pass, also reads `diff`: the run's base to the worktree's HEAD, computed here with git."""
     named = gate.inputs_for(phase, history, p.value, previous_park=previous_park)
     have = {n for n, _ in named}
     missing = [n for n in artifacts_mod.INPUTS.get(phase, ()) if n not in have]
@@ -513,6 +514,10 @@ def _job(
         raise Refusal(
             "run.artifact-missing", run_id, f"the {phase} phase reads the {missing[0]}, and no phase made one"
         )
+    if phase == "review":
+        # Card 25: the reviewer has no Bash, so the wrapper hands it what the run changed — computed here, once per
+        # review phase, from the worktree's HEAD (on the second pass that includes reconcile's commit).
+        named = [*named, ("diff", _diff(work, str(row["base_sha"])))]
     inputs = tuple(
         adapter_mod.Input(name=n, sha256=artifacts_mod.sha256(artifacts_mod.canonical(v)), content=v) for n, v in named
     )
@@ -595,6 +600,25 @@ def _commit(
     if outcome is not None:
         message += f"{TRAILER_OUTCOME}: {outcome}\n"
     return _commit_message(work, message, name, email)
+
+
+def _diff(work: Path, base: str) -> dict[str, Any]:
+    """The unified diff of the run's `base` to the worktree's HEAD, with the two commits it was taken between — the
+    content of a review phase's `diff` input (card 25 R1). A git failure is a typed refusal, before the adapter
+    spawns. No span of its own: `test_v4a_ii` pins the chain's span names exactly, and a new one is not this card's to
+    add; the diff's hash rides the Input and its size is its content's."""
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=work, capture_output=True, check=False)
+    if head.returncode != 0:
+        raise Refusal("factory.git", str(work), head.stderr.decode("utf-8", errors="replace").strip())
+    made = subprocess.run(
+        ["git", "diff", "--no-ext-diff", "--no-color", base, "HEAD"], cwd=work, capture_output=True, check=False
+    )
+    if made.returncode != 0:
+        raise Refusal("factory.git", str(work), made.stderr.decode("utf-8", errors="replace").strip())
+    # `errors="replace"`: the diff is data for a reader, and one non-UTF-8 byte must not end the phase. Bytes, not
+    # `text=True`, so the diff is what git printed and no newline translation alters it.
+    text = made.stdout.decode("utf-8", errors="replace")
+    return {"base": base, "head": head.stdout.decode("ascii").strip(), "diff": text}
 
 
 def _commit_message(work: Path, message: str, name: str, email: str) -> str | None:
