@@ -2,7 +2,7 @@
 schema = 1
 id = 30
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The PR watcher runs every 15 minutes from a host scheduled task, one pass at a time, logged"
 shape = "bdd"
@@ -96,5 +96,6 @@ Not in scope: installing it on tenant #0 (the owner's, after the merge); webhook
 history = [
   { seq = 1, at = "2026-10-05T14:21:42Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e15fc04e7c64f84a2778c9958317e4d4941a878bbe7e5a59ee5af9828ab5abcb", h = "sha256:566b7554c937f90111bb3cdd95547f768a70e22090b34273e799e48e581e4ec3" },
   { seq = 2, at = "2026-10-05T14:24:53Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance"], build = "sha256:df78ed749f1071324a6dfd9638d02f82ff51e955ec09b3a4038c4076f3b8f5e4", h = "sha256:b7dbcb74ac753bd48c4d8dab63dd0408b9832faad84556d3fa503f4563823c3e" },
+  { seq = 3, at = "2026-10-05T18:49:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:df78ed749f1071324a6dfd9638d02f82ff51e955ec09b3a4038c4076f3b8f5e4", h = "sha256:f0646b3e67c469cb98cfa1911c40eb0cee92a09fc7445c11f01128cb460470ef", batch = 63 },
 ]
 ```

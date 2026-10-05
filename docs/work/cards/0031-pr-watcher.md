@@ -2,7 +2,7 @@
 schema = 1
 id = 31
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging"
 shape = "bdd"
@@ -191,5 +191,6 @@ Not in scope: the timer (card 30); webhooks (polling first); a Gitea driver.
 history = [
   { seq = 1, at = "2026-10-05T14:22:17Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:32b5c9c23c5da61f94b30eafa7aded8b4278572cb5f8e6f4a39bfd926addaf7d", h = "sha256:1ea28125617ddcf1a67e52aad10ee9df9f7b56189b806aa3203e1db53bba19a9" },
   { seq = 2, at = "2026-10-05T14:24:33Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:e47b89051230f7b1592687f19c4b1b8aa29af66929ac47bad00e1de7f70e9a60" },
+  { seq = 3, at = "2026-10-05T18:49:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:0036992e988ff32a5ab3440def4fc3f3e34a4d576843cfce01490829051bb672", batch = 63 },
 ]
 ```

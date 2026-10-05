@@ -2,7 +2,7 @@
 schema = 1
 id = 28
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A run's actions take a lease in the ledger, so the operator and the PR watcher never act on one run at once"
 shape = "bdd"
@@ -145,5 +145,6 @@ Not in scope: the watcher (card 31) and its holder; land, which is idempotent by
 history = [
   { seq = 1, at = "2026-10-05T14:21:28Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e409483c7300953acb09e6e14b10e3738b5c04c81bdf3047569a724b5ae8e3a3", h = "sha256:729ee08ab8a64981fb8626e0df520952c733751798a020f13f2d4ee5c327826a" },
   { seq = 2, at = "2026-10-05T14:24:16Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:53b208a19f0f5a060ef6c48a318e42dc90bef7f2c27b31a34a9784707026d20c", h = "sha256:faa78f5b803e6cbfb358d6a83390c639dbfa2f64fdff3b4e2654f0bca53c8235" },
+  { seq = 3, at = "2026-10-05T18:49:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:53b208a19f0f5a060ef6c48a318e42dc90bef7f2c27b31a34a9784707026d20c", h = "sha256:b6eb454d1a2bc70a1fd7e5596e710003c355f05282640f84548a92b54cafccfd", batch = 63 },
 ]
 ```

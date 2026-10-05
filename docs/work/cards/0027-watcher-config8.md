@@ -2,7 +2,7 @@
 schema = 1
 id = 27
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The config schema gains a signed [watcher] table: whether the PR watcher may start a fixup, and how many a day"
 shape = "bdd"
@@ -106,5 +106,6 @@ Not in scope: the watcher; adopting @8 for tenant #0; a store image swap (the ow
 history = [
   { seq = 1, at = "2026-10-05T14:21:16Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:8992616ece5aa36d15b5c63a4d1b19130751ebf6b474b662869f9a72effdc167", h = "sha256:f3a72c610b9bf07987bfa69ecf56ab6fa9a39d67af1edd42e2db2684ca159001" },
   { seq = 2, at = "2026-10-05T14:23:58Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:ecdeaf12be963a9970c3344fe778aef99af33b86768f7b817c1d0a3607b00100", h = "sha256:f92e7fcaa2bf4c9e4862c8ee02805461ca0052b27ca228fb2edfe07835782fe9" },
+  { seq = 3, at = "2026-10-05T18:49:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ecdeaf12be963a9970c3344fe778aef99af33b86768f7b817c1d0a3607b00100", h = "sha256:29a1bdcedee5ffdaf7ce1b160fad0b1843cf8e5e26bea8c90da65c958c5d8eb1", batch = 63 },
 ]
 ```
