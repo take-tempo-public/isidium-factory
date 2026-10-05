@@ -93,7 +93,7 @@ because = "test_v4a_ii pins the run.* span list exactly"
 
 [[guidance.constraints]]
 id = "C7"
-text = "needs cards A and B merged first"
+text = "needs cards 27 and 28 merged first"
 because = "it reads [watcher] and takes leases"
 
 [[guidance.constraints]]
@@ -183,12 +183,13 @@ observable = { test = "tests/factory/test_watch.py::test_decide_is_a_pure_functi
 
 Ruled 2026-10-04 [owner], three checkpoints: actions 'close + land after merge, fixup on red, flag stale/conflicted, rerun flaky checks'; identity 'The lander's App'; host 'Host timer, one pass'; locking 'Per-run lease'; flags 'Watcher log + summary'; the order on red 'As proposed'; telemetry 'Also per forge read'. Forge-neutral: it uses the seam only, so a Gitea driver gives it Gitea.
 
-Not in scope: the timer (card D); webhooks (polling first); a Gitea driver.
+Not in scope: the timer (card 30); webhooks (polling first); a Gitea driver.
 
 ## History
 
 ```toml
 history = [
   { seq = 1, at = "2026-10-05T14:22:17Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:32b5c9c23c5da61f94b30eafa7aded8b4278572cb5f8e6f4a39bfd926addaf7d", h = "sha256:1ea28125617ddcf1a67e52aad10ee9df9f7b56189b806aa3203e1db53bba19a9" },
+  { seq = 2, at = "2026-10-05T14:24:33Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:e47b89051230f7b1592687f19c4b1b8aa29af66929ac47bad00e1de7f70e9a60" },
 ]
 ```
