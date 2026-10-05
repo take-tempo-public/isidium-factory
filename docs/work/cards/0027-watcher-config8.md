@@ -38,7 +38,7 @@ because = "the owner, 2026-10-04 (the watcher design, chunk plan: 'The PR watche
 [[guidance.avoid]]
 id = "A2"
 option = "adding the poll cadence or any host setting to [watcher]"
-because = "the cadence (15 minutes, ruled) is the host timer's, card D; the signed table holds only what spends"
+because = "the cadence (15 minutes, ruled) is the host timer's, card 30; the signed table holds only what spends"
 
 [[guidance.constraints]]
 id = "C1"
@@ -96,7 +96,7 @@ observable = { test = "tests/store/test_config8.py::test_a_negative_fixup_per_da
 
 ## Scope
 
-Ruled 2026-10-04 [owner], the PR watcher's spend guard: 'Signed opt-in + ceiling', placed in 'New config schema row' (config@8 [watcher]). The watcher (card C) reads it; until a tenant adopts @8 by a signed act, no automatic fixup happens.
+Ruled 2026-10-04 [owner], the PR watcher's spend guard: 'Signed opt-in + ceiling', placed in 'New config schema row' (config@8 [watcher]). The watcher (card 31) reads it; until a tenant adopts @8 by a signed act, no automatic fixup happens.
 
 Not in scope: the watcher; adopting @8 for tenant #0; a store image swap (the owner's, after the merge).
 
@@ -105,5 +105,6 @@ Not in scope: the watcher; adopting @8 for tenant #0; a store image swap (the ow
 ```toml
 history = [
   { seq = 1, at = "2026-10-05T14:21:16Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:8992616ece5aa36d15b5c63a4d1b19130751ebf6b474b662869f9a72effdc167", h = "sha256:f3a72c610b9bf07987bfa69ecf56ab6fa9a39d67af1edd42e2db2684ca159001" },
+  { seq = 2, at = "2026-10-05T14:23:58Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:ecdeaf12be963a9970c3344fe778aef99af33b86768f7b817c1d0a3607b00100", h = "sha256:f92e7fcaa2bf4c9e4862c8ee02805461ca0052b27ca228fb2edfe07835782fe9" },
 ]
 ```
