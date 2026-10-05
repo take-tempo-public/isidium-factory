@@ -137,12 +137,13 @@ observable = { test = "tests/factory/test_leases.py::test_a_schema_3_ledger_gain
 
 Ruled 2026-10-04 [owner]: 'Per-run lease in the ledger' (every caller, human or watcher), and the shape 'As proposed': keyed (run, action, head_sha); holder; expiry from the action's own bound so a crashed holder frees itself; rows never deleted, so the table is the lock, the history and the watcher's ceiling count.
 
-Not in scope: the watcher (card C) and its holder; land, which is idempotent by its watermark and is only called inside close and the runner.
+Not in scope: the watcher (card 31) and its holder; land, which is idempotent by its watermark and is only called inside close and the runner.
 
 ## History
 
 ```toml
 history = [
   { seq = 1, at = "2026-10-05T14:21:28Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e409483c7300953acb09e6e14b10e3738b5c04c81bdf3047569a724b5ae8e3a3", h = "sha256:729ee08ab8a64981fb8626e0df520952c733751798a020f13f2d4ee5c327826a" },
+  { seq = 2, at = "2026-10-05T14:24:16Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:53b208a19f0f5a060ef6c48a318e42dc90bef7f2c27b31a34a9784707026d20c", h = "sha256:faa78f5b803e6cbfb358d6a83390c639dbfa2f64fdff3b4e2654f0bca53c8235" },
 ]
 ```
