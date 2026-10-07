@@ -1263,6 +1263,159 @@
           "run_id": "r-44"
         }
       ]
+    },
+    "0027": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "a098e04fb0e26c019dbeab9944064292ae6ca371",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "676785e23c4b5eb8a74e0f6a4b0303652a0123e9",
+            "path": "packages/isidium-store/src/isidium/store/registry/schemas/config@7.toml"
+          },
+          {
+            "blob": "db93962a2d162e1772e73b08ac25f96acae2bb6a",
+            "path": "packages/isidium-store/src/isidium/store/registry/config.py"
+          },
+          {
+            "blob": "11294f1519912d46b72ac59d5f0a4458d246fc14",
+            "path": "docs/design/04-config-schema.md"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:29a1bdcedee5ffdaf7ce1b160fad0b1843cf8e5e26bea8c90da65c958c5d8eb1",
+        "seq": 3
+      },
+      "runs": []
+    },
+    "0028": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "a098e04fb0e26c019dbeab9944064292ae6ca371",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "4dd94e14696b041c74f6f8c53b99b3da7fc44f64",
+            "path": "packages/isidium-factory/src/isidium/factory/ledger.py"
+          },
+          {
+            "blob": "b77fa758f4dd3d948a623370986e4b992d490e0c",
+            "path": "packages/isidium-factory/src/isidium/factory/cli.py"
+          },
+          {
+            "blob": "5c28b0160ea31d5b1d0630a8b42a92caec572ca7",
+            "path": "packages/isidium-factory/src/isidium/factory/close.py"
+          },
+          {
+            "blob": "c546e01861077848f53b96dd25ad8368b9065ebb",
+            "path": "packages/isidium-factory/src/isidium/factory/runner.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:b6eb454d1a2bc70a1fd7e5596e710003c355f05282640f84548a92b54cafccfd",
+        "seq": 3
+      },
+      "runs": []
+    },
+    "0030": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "a098e04fb0e26c019dbeab9944064292ae6ca371",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "ab2dbb798a632a55139c94a35a0204c547534031",
+            "path": "deploy/README.md"
+          },
+          {
+            "blob": "3b46d06ae7370a3babc86be1a6806e7eab7c1c00",
+            "path": "deploy/build-runner.sh"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:f0646b3e67c469cb98cfa1911c40eb0cee92a09fc7445c11f01128cb460470ef",
+        "seq": 3
+      },
+      "runs": []
+    },
+    "0031": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "a098e04fb0e26c019dbeab9944064292ae6ca371",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "79d8f3f8a63132a1b3bdeb22608b0fdf943f6768",
+            "path": "packages/isidium-factory/src/isidium/factory/forge.py"
+          },
+          {
+            "blob": "5c28b0160ea31d5b1d0630a8b42a92caec572ca7",
+            "path": "packages/isidium-factory/src/isidium/factory/close.py"
+          },
+          {
+            "blob": "c546e01861077848f53b96dd25ad8368b9065ebb",
+            "path": "packages/isidium-factory/src/isidium/factory/runner.py"
+          },
+          {
+            "blob": "4dd94e14696b041c74f6f8c53b99b3da7fc44f64",
+            "path": "packages/isidium-factory/src/isidium/factory/ledger.py"
+          },
+          {
+            "blob": "b77fa758f4dd3d948a623370986e4b992d490e0c",
+            "path": "packages/isidium-factory/src/isidium/factory/cli.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:0036992e988ff32a5ab3440def4fc3f3e34a4d576843cfce01490829051bb672",
+        "seq": 3
+      },
+      "runs": []
+    },
+    "0032": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "7baf2c791c38ec1eb169f9e5320ac134d9f22851",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "97c0c6057dd3ecc85e5b321c8ad111561fb403ee",
+            "path": "packages/isidium-factory/src/isidium/factory/github.py"
+          },
+          {
+            "blob": "79d8f3f8a63132a1b3bdeb22608b0fdf943f6768",
+            "path": "packages/isidium-factory/src/isidium/factory/forge.py"
+          },
+          {
+            "blob": "03f79d3946dc31ed00983d8cb14e884cdcdf7111",
+            "path": ".github/workflows/ci.yml"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:ca339da479ee7c158a97a43270c8e5b89cdb2b2f0c36c5e75e6b3308006efae3",
+        "seq": 2
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -1367,14 +1520,14 @@
       "1b2be252619d4c50870e31331f4bc8d95fa6fc582659371e15c014f529352670"
     ],
     "overflow": 0,
-    "run_id": "r-43"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:6ee4c5f96d526d85943f7007da72fe21e30025b0503a61fd77a0a130d46af74d",
-    "seq": 314
+    "h": "sha256:9951b9d2df5e1fcac3c8da6abf4e4b90b5dde9f21a04df8a363a0ff03eae60ba",
+    "seq": 326
   },
-  "landed_at": "2026-10-03T18:38:26Z",
-  "ledger_cursor": "492ade39843e6f63f6f3ca25fe3f9276ce54a85b",
+  "landed_at": "2026-10-07T06:26:58Z",
+  "ledger_cursor": "7baf2c791c38ec1eb169f9e5320ac134d9f22851",
   "schema": 2
 }
