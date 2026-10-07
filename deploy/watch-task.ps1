@@ -12,8 +12,8 @@ checkout. `-Tenant` is matched case-sensitively, as the factory's own tenant gra
 not stopped when the host goes to battery. Registering or removing stops on the first error and prints no success line
 after one.
 
-`-Pass` and `-Exe` are the task's own action: the registered task runs this script again with them, and nobody else
-passes them. No parameter has a default.
+`-Pass` and `-Exe` are the task's own action: the registered task runs this script again with them, through a
+headless console, and nobody else passes them. No parameter has a default.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Register')]
 param(
@@ -98,8 +98,10 @@ $deployPath = (Resolve-Path -LiteralPath $Deploy).ProviderPath
 $exePath = (Resolve-Path -LiteralPath $found.Source).ProviderPath
 $scriptPath = $MyInvocation.MyCommand.Path
 
-$argLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Pass -Tenant "{1}" -Checkout "{2}" -Deploy "{3}" -Exe "{4}"' -f $scriptPath, $Tenant, $checkoutPath, $deployPath, $exePath
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argLine -WorkingDirectory $checkoutPath -ErrorAction Stop
+# The pass runs in a headless console: powershell.exe creates its console window before -WindowStyle Hidden applies, so a
+# direct launch flashes a window and takes focus every pass. conhost.exe --headless gives it a console with no window.
+$argLine = '--headless powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Pass -Tenant "{1}" -Checkout "{2}" -Deploy "{3}" -Exe "{4}"' -f $scriptPath, $Tenant, $checkoutPath, $deployPath, $exePath
+$action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument $argLine -WorkingDirectory $checkoutPath -ErrorAction Stop
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $CadenceMinutes) -ErrorAction Stop
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours $LimitHours) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ErrorAction Stop
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name

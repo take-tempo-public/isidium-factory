@@ -1323,6 +1323,11 @@ the largest tenant's bound: a close's lease (`CLOSE_LEASE_S`, one hour) plus a f
 act without them. If a tenant's `wall_clock_s` is raised past that, the limit in the script is raised with it, and the
 test for it goes red for tenant #0's until it is.
 
+**The pass runs headless.** The task's action is `conhost.exe --headless powershell.exe -NoProfile -NonInteractive
+-ExecutionPolicy Bypass -WindowStyle Hidden -File ...`, not `powershell.exe` launched directly: `powershell.exe` creates
+its console window before `-WindowStyle Hidden` applies, so a direct launch flashes a window and takes focus every
+fifteen minutes. Under a headless console no window opens and nothing takes focus.
+
 **Check:**
 
 ```powershell
@@ -1352,8 +1357,8 @@ powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Remo
   terminal or agent session, not without the Windows logon.
 - **`PYTHONIOENCODING=utf-8` is this script's own choice.** The run launch scripts it was to match are at the deploy
   home and not in this repository.
-- **A pass the limit ends may leave its child.** Whether the scheduler ending `powershell.exe` also ends the
-  `isidium-factory` process it started has not been observed on the host; CI cannot show it. The leases still guard
+- **A pass the limit ends may leave its child.** Whether the scheduler ending the task's `conhost.exe` also ends
+  the `isidium-factory` process it started has not been observed on the host; CI cannot show it. The leases still guard
   every action the watcher takes, and an orphan shows as a `START` with no `EXIT`.
 - **Not installed on tenant #0 by this change.** That is the owner's step, after the merge. Webhooks are not in this:
   polling first.
