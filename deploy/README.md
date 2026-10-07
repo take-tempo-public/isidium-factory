@@ -1304,7 +1304,11 @@ the memory guard can reap and the network can strand. **The cadence, and "host t
 (2026-10-04); moving the cadence is the owner's call**, not an operator's edit.
 
 **Install** (PowerShell, as the user who will own the task; `isidium-factory` must be on PATH, because the task is
-registered with the path it resolves to). Running it again replaces the task:
+registered with the path it resolves to). Running it again replaces the task. `-Checkout` and `-Deploy` may be given
+relative but must exist: they are resolved to absolute paths, as is the executable, and the task starts in the checkout.
+A path that does not exist, or a tenant name with a capital in it (the factory's tenant grammar is case-sensitive), is
+refused with a message and registers nothing. A registration or removal that fails exits nonzero and prints no
+`registered` or `removed` line:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Checkout <path to the tenant checkout> -Deploy <deploy home>
@@ -1312,10 +1316,12 @@ powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Chec
 
 The task is `isidium-watch-<t>`. Each pass runs `isidium-factory watch --once --tenant <t> --checkout <path>` with
 `ISIDIUM_DEPLOY` set to the deploy home and `PYTHONIOENCODING` set to `utf-8`. The task never starts a second instance
-while one runs (`MultipleInstances IgnoreNew`) and ends a pass after four hours. Four hours is longer than a close's
-lease (`CLOSE_LEASE_S`, one hour) plus a fixup's bound (the signed `[executor].wall_clock_s` per attempt times
-`ATTEMPTS`, 3600 x 2 at tenant #0): a pass that outlived its leases would act without them. If the signed
-`wall_clock_s` is raised, the limit in the script is raised with it, and the test for it goes red until it is.
+while one runs (`MultipleInstances IgnoreNew`), starts on battery and is not stopped when the host goes to battery, and
+ends a pass after four hours. The four hours are one limit for every tenant registered on the host, so they must exceed
+the largest tenant's bound: a close's lease (`CLOSE_LEASE_S`, one hour) plus a fixup's bound (that tenant's signed
+`[executor].wall_clock_s` per attempt times `ATTEMPTS`, 3600 x 2 at tenant #0). A pass that outlived its leases would
+act without them. If a tenant's `wall_clock_s` is raised past that, the limit in the script is raised with it, and the
+test for it goes red for tenant #0's until it is.
 
 **Check:**
 
