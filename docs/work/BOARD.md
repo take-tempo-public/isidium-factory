@@ -49,8 +49,8 @@ none
 - **30** · The PR watcher runs every 15 minutes from a host scheduled task, one pass at a time, logged · closed · software-grade · (derived)
 - **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · closed · software-grade · (derived)
 - **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · closed · software-grade · (derived)
-- **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · draft · (derived)
-- **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · draft · (derived)
+- **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · ready · software-grade · (derived)
+- **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · ready · software-grade · (derived)
 
 ## Blocked
 
