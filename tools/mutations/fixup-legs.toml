@@ -1,0 +1,22 @@
+# Card 32 (2026-10-07) — the aggregator-legs read's two assertions, each checked against this card's own test file
+# only, never the whole suite (card 26's C3): mutate.py runs the whole suite per mutation by default, and that is
+# exactly what a builder's container cannot afford.
+#
+#     python tools/mutate.py tools/mutations/fixup-legs.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_fixup_reads_the_aggregators_failed_legs.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "the bound is removed -- a matrix that fans out puts every failed leg's tail into the prompt (killed by S3's length and its count of logs reads)"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''                if len(kept) == MAX_LEG_JOBS:'''
+replace = '''                if False and len(kept) == MAX_LEG_JOBS:'''
+
+[[mutation]]
+id = "M2"
+label = "the legs are not read -- the fixup is handed the aggregator's echo and none of the output it must repair (killed by S1's and S2's legs)"
+file = "packages/isidium-factory/src/isidium/factory/github.py"
+find = '''            out.extend(self._legs(job, skip))'''
+replace = '''            out.extend([])'''

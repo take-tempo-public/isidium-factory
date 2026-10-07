@@ -274,7 +274,13 @@ def test_the_github_driver_reads_the_failed_steps_last_200_lines(disk: Disk) -> 
                         "completed_at": "2026-10-02T12:00:20Z",
                     },
                 ]
-                return httpx.Response(200, json={"steps": steps})
+                return httpx.Response(200, json={"run_id": 77, "run_attempt": 1, "steps": steps})
+            case p if p == f"{repo}/actions/runs/77/attempts/1/jobs":
+                jobs = [
+                    {"id": 555, "name": "green-bar", "status": "completed", "conclusion": "failure"},
+                    {"id": 556, "name": "docs", "status": "completed", "conclusion": "success"},
+                ]
+                return httpx.Response(200, json={"jobs": jobs})
             case p if p == f"{repo}/actions/jobs/555/logs":
                 return httpx.Response(302, headers={"Location": "https://logs.example.test/blob/555"})
         return httpx.Response(404, json={"message": "not found: " + req.url.path})
@@ -283,6 +289,7 @@ def test_the_github_driver_reads_the_failed_steps_last_200_lines(disk: Disk) -> 
     got = drv.failed_jobs("abc", ("green-bar",))
     assert got == (FailedJob("green-bar", "Run ruff", "\n".join(inside[-200:])),)
     assert len(got[0].tail.splitlines()) == 200
+    assert any(r.url.path == f"{repo}/actions/runs/77/attempts/1/jobs" for r in seen), "the run's jobs were read"
     logs = [r for r in seen if r.url.host == "logs.example.test"]
     assert len(logs) == 1 and "authorization" not in logs[0].headers, "the token does not follow the redirect"
     assert all("authorization" in r.headers for r in seen if r.url.host == "api.github.com")

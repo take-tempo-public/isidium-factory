@@ -63,6 +63,10 @@ BACKOFF: Final = (1.0, 2.0, 4.0)
 # Check runs per page: tenant #0's gate has three required contexts and a head carries under ten runs; one page of
 # a hundred is every run there is, so `checks` is one call and not a walk.
 PAGE: Final = 100
+# Extra failed jobs read per named check. One required check can aggregate a whole matrix that fans out, and every
+# leg's last-`TAIL_LINES` tail rides into the fixup's prompt, so the legs are capped: twice today's two-leg fan-out
+# leaves room for one more axis, and a run with more failed legs than this hands the first ones the forge lists.
+MAX_LEG_JOBS: Final = 4
 TIMEOUT: Final = 30.0  # seconds per API call; the calls are small reads and one small write
 # A GitHub App's JWT may live ten minutes at most; nine leaves the cap untouched by a slow clock, and `iat` a minute
 # back absorbs the skew GitHub itself documents. An installation token lives an hour; renewing five minutes early
@@ -344,11 +348,17 @@ class GitHub:
         """Card 26 R2: each named check at this commit, as a fixup is handed it. One call for the head's check runs
         (the newest per name, as `Checks.latest` takes it), then for each that is an Actions job two more — its steps
         and its log. A check that is not an Actions job has no log this driver can read: it is named, with no step and
-        no tail, and the fixup is told that much rather than refused."""
+        no tail, and the fixup is told that much rather than refused.
+
+        Card 32: a named check that aggregates other jobs echoes their result and nothing more, so for an Actions job
+        the other failed jobs of its workflow run attempt follow its entry — in the order the forge lists them, each
+        named by its job name, at most `MAX_LEG_JOBS` of them. A run that cannot be read hands the named entry alone."""
         runs = self._call("GET", f"{self._repo}/commits/{sha}/check-runs", per_page=PAGE)
         newest: dict[str, Any] = {}
         for x in runs.get("check_runs", []):
             newest.setdefault(str(x["name"]), x)
+        # A job that is itself a named check, or that an earlier named check already handed, is not handed again.
+        skip = {int(newest[n]["id"]) for n in names if n in newest}
         out: list[FailedJob] = []
         for name in names:
             run = newest.get(name)
@@ -356,14 +366,43 @@ class GitHub:
                 out.append(FailedJob(name, None, ""))
                 continue
             job = self._call("GET", f"{self._repo}/actions/jobs/{int(run['id'])}")
-            log = self._call("GET", f"{self._repo}/actions/jobs/{int(run['id'])}/logs", text=True)
-            step = next((s for s in job.get("steps", []) if s.get("conclusion") == "failure"), None)
-            if step is None:
-                out.append(FailedJob(name, None, _tail(log.splitlines())))
-            else:
-                window = _window(log.splitlines(), str(step["started_at"]), str(step["completed_at"]))
-                out.append(FailedJob(name, str(step["name"]), _tail(window)))
+            out.append(self._read_job(name, int(run["id"]), job.get("steps", [])))
+            out.extend(self._legs(job, skip))
         return tuple(out)
+
+    def _read_job(self, name: str, job_id: int, steps: list[Any]) -> FailedJob:
+        """One job as a fixup is handed it: its failed step's name and that step's last `TAIL_LINES` lines, or the
+        job log's own tail when no step is marked failed. One logs read."""
+        log = self._call("GET", f"{self._repo}/actions/jobs/{job_id}/logs", text=True)
+        step = next((s for s in steps if s.get("conclusion") == "failure"), None)
+        if step is None:
+            return FailedJob(name, None, _tail(log.splitlines()))
+        window = _window(log.splitlines(), str(step["started_at"]), str(step["completed_at"]))
+        return FailedJob(name, str(step["name"]), _tail(window))
+
+    def _legs(self, job: Mapping[str, Any], skip: set[int]) -> list[FailedJob]:
+        """The other failed jobs of the named job's own workflow run attempt (the newest run of its name, so the
+        latest attempt), one listing call and one logs read per leg. The cap applies before any log is read. This is
+        a widening of what the fixup is told, not a gate: a run or a log that cannot be read hands no legs, and the
+        refusal (already marked on its `forge.api` span by `_call`) is not raised."""
+        run_id, attempt = job.get("run_id"), job.get("run_attempt")
+        if run_id is None or attempt is None:
+            return []
+        try:
+            listing = self._call(
+                "GET", f"{self._repo}/actions/runs/{int(run_id)}/attempts/{int(attempt)}/jobs", per_page=PAGE
+            )
+            kept: list[Mapping[str, Any]] = []
+            for j in listing.get("jobs", []):
+                if len(kept) == MAX_LEG_JOBS:
+                    break
+                if j.get("status") == "completed" and j.get("conclusion") not in PASSING and int(j["id"]) not in skip:
+                    kept.append(j)
+            legs = [self._read_job(str(j["name"]), int(j["id"]), j.get("steps", [])) for j in kept]
+        except Refusal:
+            return []
+        skip.update(int(j["id"]) for j in kept)
+        return legs
 
     def capabilities(self) -> Capabilities:
         return GITHUB
