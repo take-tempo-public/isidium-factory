@@ -2,7 +2,7 @@
 schema = 1
 id = 31
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging"
 shape = "bdd"
@@ -193,5 +193,6 @@ history = [
   { seq = 2, at = "2026-10-05T14:24:33Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:e47b89051230f7b1592687f19c4b1b8aa29af66929ac47bad00e1de7f70e9a60" },
   { seq = 3, at = "2026-10-05T18:49:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:0036992e988ff32a5ab3440def4fc3f3e34a4d576843cfce01490829051bb672", batch = 63 },
   { seq = 4, at = "2026-10-07T11:44:07Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:5d802be3bc7ed5c5fd9b72b0f4775326ae072fd0301cafc4fe10f3fffbf57a63" },
+  { seq = 5, at = "2026-10-07T11:45:02Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af", h = "sha256:268b2dab2780893f17cdac529e0aeed88713af496310ac60d35b76c927932cad", batch = 65 },
 ]
 ```
