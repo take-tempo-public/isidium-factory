@@ -58,8 +58,10 @@ def _ledger(tmp_path: Path) -> Ledger:
     return Ledger(tmp_path / "ledger.sqlite", TENANT)
 
 
-def _leases(led_: Ledger) -> list[dict[str, Any]]:
-    return [dict(r) for r in led_.db.execute("SELECT * FROM leases ORDER BY rowid")]
+def _leases(led_: Ledger, run_id: str | None = None) -> list[dict[str, Any]]:
+    """Every lease row, or one run's. `disk` is module-scoped, so a test that reads through it asks by run."""
+    rows = led_.db.execute("SELECT * FROM leases ORDER BY rowid").fetchall()
+    return [dict(r) for r in rows if run_id is None or r["run_id"] == run_id]
 
 
 def _argv(disk_: Disk, verb: str, run_id: str, *more: str) -> list[str]:
@@ -157,7 +159,7 @@ def test_a_refusal_releases_the_lease_with_its_outcome(
 
     out = CliRunner().invoke(cli_mod.app, argv)
     assert out.exit_code == 2, out.output  # run_fixup's own refusal: this run has no review and no pull request
-    (row,) = _leases(led)
+    (row,) = _leases(led, run_id)
     assert row["action"] == "fixup" and row["released_at"] is not None
     assert row["outcome"] and row["outcome"].startswith("run.") and row["outcome"] in out.output
     assert row["outcome"] != "run.lease-held"
@@ -173,7 +175,7 @@ def test_a_refusal_releases_the_lease_with_its_outcome(
     monkeypatch.setattr(close_mod, "close", boom)
     died = CliRunner().invoke(cli_mod.app, _argv(disk, "close", run_id))
     assert died.exit_code != 0 and isinstance(died.exception, RuntimeError)
-    held = [r for r in _leases(led) if r["action"] == "close"]
+    held = [r for r in _leases(led, run_id) if r["action"] == "close"]
     assert len(held) == 1 and held[0]["released_at"] is not None
     assert held[0]["outcome"] == ledger_mod.LEASE_RAISED
 
@@ -210,7 +212,7 @@ def test_the_verbs_take_their_lease_as_the_operator(
 
     def held(action: str) -> None:
         # Read through the ledger the verb opened: the lease must be taken before the action starts.
-        seen[action] = [dict(r) for r in led.db.execute("SELECT * FROM leases WHERE action = ?", (action,))]
+        seen[action] = [r for r in _leases(led, run_id) if r["action"] == action]
 
     def close_stub(ctx: Any, ledger: Ledger, call: Any, forge: Any, *, run_id: str, pr: int | None = None) -> Any:
         held("close")
@@ -230,7 +232,7 @@ def test_the_verbs_take_their_lease_as_the_operator(
     for action, outcome in (("close", "closed"), ("fixup", "dispatched")):
         (during,) = seen[action]
         assert during["holder"] == "operator" and during["released_at"] is None, "held while the action runs"
-        (after,) = [r for r in _leases(led) if r["action"] == action]
+        (after,) = [r for r in _leases(led, run_id) if r["action"] == action]
         assert after["outcome"] == outcome and after["released_at"] is not None
         assert after["head_sha"] == "f" * 40, "the run row's head"
 
@@ -238,7 +240,7 @@ def test_the_verbs_take_their_lease_as_the_operator(
         fmt = "%Y-%m-%dT%H:%M:%SZ"
         return datetime.strptime(taken["expires_at"], fmt) - datetime.strptime(taken["taken_at"], fmt)
 
-    by = {r["action"]: r for r in _leases(led)}
+    by = {r["action"]: r for r in _leases(led, run_id)}
     assert span_of(by["close"]) == timedelta(seconds=cli_mod.CLOSE_LEASE_S)
     policy = adapter_mod.ExecutorPolicy.from_effective(disk.ctx.eff)
     assert span_of(by["fixup"]) == timedelta(seconds=policy.budgets.wall_clock_s * container.ATTEMPTS)
