@@ -18,10 +18,9 @@ from typer.testing import CliRunner
 
 from isidium.factory import cli as cli_mod
 from isidium.factory import close as close_mod
-from isidium.factory import context
+from isidium.factory import context, watch
 from isidium.factory import github as github_mod
 from isidium.factory import runner as runner_mod
-from isidium.factory import watch
 from isidium.factory.ledger import Ledger, NewRun
 from isidium.store.client.config import ClientConfig
 
@@ -141,7 +140,7 @@ def test_an_idle_pass_emits_its_span(tmp_path: Path, monkeypatch: pytest.MonkeyP
     (span,) = otel.spans(watch.PASS_SPAN)
     attrs = dict(span.attributes)
     assert (attrs["isidium.watch.open"], attrs["isidium.watch.held"], attrs["isidium.watch.refused"]) == (0, 0, 0)
-    assert span.status.status_code.name != "ERROR"
+    assert span.status.status_code.name == "OK"
     assert not otel.spans(context.SPAN) and not otel.spans(watch.READ_SPAN)
 
 

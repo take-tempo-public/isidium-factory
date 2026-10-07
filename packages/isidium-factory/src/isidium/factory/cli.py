@@ -405,8 +405,8 @@ def watch_verb(
         _cfg, home = tenant_client(tenant)
         with ledger_mod.Ledger.open(home, tenant) as led:
             # C-13, card 37: the ledger is read first and a pass with no open run stops there. An idle pass took
-            # 12-18 s and ~115 MB on the workstation, about 7 s of it in `context.load`'s two git subprocesses (the
-            # remote's url, and the fetch), against ~2 s for the imports and a ledger read (2026-10-07) -- ~96
+            # 12-18 s and ~115 MB on the workstation, about 7 s of it in `context.load`'s git subprocesses (chiefly
+            # the fetch), against ~2 s for the imports and a ledger read (2026-10-07) -- ~96
             # fetches a day at the 15-minute cadence, for nothing to watch. Each pass is a fresh process (the host
             # timer, card 30), so a cache could not carry the load across passes: laziness is the fix. `home` is
             # `context.load`'s own (`tenant_client` is its first call), so this is the same ledger.
