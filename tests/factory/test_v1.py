@@ -118,7 +118,7 @@ def bare_inputs(head: dict[str, Any], refs: dict[str, tuple[str, bytes]], hz: Ha
 # The first eight hex digits of the payload hash over L5's graph — pinned by the first run as `cad63a82`; moved by V3
 # (config@5: the pinned tree's `schema` 5 and the config subset's `ladder.leaf`) — the same inputs with `schema` 4 and
 # no leaf still give `cad63a82`, measured 2026-09-11.
-GOLDEN = "8dd4e78d"
+GOLDEN = "a51c0b37"
 
 
 def test_the_same_inputs_give_the_same_hash_and_the_value_round_trips_the_card() -> None:
@@ -135,10 +135,12 @@ def test_the_same_inputs_give_the_same_hash_and_the_value_round_trips_the_card()
     assert assemble(pinned).payload_hash.removeprefix("sha256:")[:8] == GOLDEN, assemble(pinned).payload_hash
     # The golden moves with the ADOPTED config version and only with it — the value carries the config subset,
     # and `schema` there is the effective config's, not the pinned tree's. V3 moved it cad63a82 -> 88fe296d
-    # (config@5); V4a-i moves it again (config@6, -> 959d9e99), and V4a-ii-a a third time (config@7, -> 8dd4e78d).
-    # These lines say each move is explained rather than asserted: the same inputs at an effective schema of 5 and
-    # of 6 still give those versions' hashes, and `[agents]` / `[executor]` are not in the subset at all, so the
-    # payload carries neither the executor policy nor config@7's per-agent tools and prompt to the builder.
+    # (config@5); V4a-i moves it again (config@6, -> 959d9e99), V4a-ii-a a third time (config@7, -> 8dd4e78d), and
+    # card 27 a fourth (config@8, -> a51c0b37).
+    # These lines say each move is explained rather than asserted: the same inputs at an effective schema of 5, of 6
+    # and of 7 still give those versions' hashes, and `[agents]` / `[executor]` / `[watcher]` are not in the subset at
+    # all, so the payload carries neither the executor policy, config@7's per-agent tools and prompt, nor config@8's
+    # watcher ceiling to the builder.
     at5 = inputs_of(
         hz, g.subject, base_sha="0" * 40, tree={"schema": 5, "tenant": "sartor"}, eff={**st.eff, "schema": 5}
     )
@@ -147,7 +149,11 @@ def test_the_same_inputs_give_the_same_hash_and_the_value_round_trips_the_card()
         hz, g.subject, base_sha="0" * 40, tree={"schema": 6, "tenant": "sartor"}, eff={**st.eff, "schema": 6}
     )
     assert assemble(at6).payload_hash.removeprefix("sha256:")[:8] == "959d9e99"
-    assert not {"agents", "executor"} & set(assemble(pinned).value["constraints"]["config"])
+    at7 = inputs_of(
+        hz, g.subject, base_sha="0" * 40, tree={"schema": 7, "tenant": "sartor"}, eff={**st.eff, "schema": 7}
+    )
+    assert assemble(at7).payload_hash.removeprefix("sha256:")[:8] == "8dd4e78d"
+    assert not {"agents", "executor", "watcher"} & set(assemble(pinned).value["constraints"]["config"])
     inp = inputs_of(hz, g.subject)
     once, twice = assemble(inp), assemble(inp)
     assert once.payload_hash == twice.payload_hash and once.value == twice.value
