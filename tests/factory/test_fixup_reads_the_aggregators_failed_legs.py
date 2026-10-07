@@ -13,6 +13,8 @@ from isidium.factory.github import BACKOFF, MAX_LEG_JOBS, GitHub
 
 from .test_v4a import Disk, disk
 
+__all__ = ["disk"]  # the V4a tenant, built once for this module too
+
 NAMED = 555  # the aggregating check's job id
 RUN = 77
 ATTEMPT = 2
