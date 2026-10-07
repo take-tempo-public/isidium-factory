@@ -22,8 +22,9 @@ from ..core.refusal import Refusal
 from .loader import Registry, adopted_version, parse_ref
 from .vocabulary import CLOSED_TYPES, SchemaDoc, check_required_when, is_type
 
-# the config schema version this module's cross-key code mirrors (V4a-ii-a: config@7, per-agent `tools` + `prompt`)
-SCHEMA_VERSION: Final = 7
+# the config schema version this module's cross-key code mirrors (card 27: config@8, the signed `[watcher]` table; it
+# is a plain table, so nothing cross-key moved with it)
+SCHEMA_VERSION: Final = 8
 
 # 04 §2.1 — scalars first, among themselves in this inventory order
 SCALAR_ORDER: Final[tuple[str, ...]] = (
@@ -52,6 +53,7 @@ TABLE_ORDER: Final[tuple[str, ...]] = (
     "runners",
     "board",
     "inbox",
+    "watcher",  # config@8 (card 27): the PR watcher's signed opt-in and daily ceiling
     "prioritization",
     "origin",
     "extensions",
@@ -74,6 +76,7 @@ TABLE_KEY_ORDER: Final[dict[str, tuple[str, ...]]] = {
     "runners": ("test", "command", "http", "file"),
     "board": ("commit",),
     "inbox": ("max_per_run", "max_per_actor_per_day"),
+    "watcher": ("fixup", "fixup_per_day"),
     "prioritization": (
         "time_criticality",
         "unblocking",
@@ -377,7 +380,18 @@ def validate_tree(tree: Mapping[str, Any], registry: Registry, identity_enabled:
 
     if "toolkit" not in tree:
         _r(rs, "config.type", "toolkit", "required table absent (the four pins)")
-    plain = ("toolkit", "journal", "board", "inbox", "prioritization", "profiles", "ladder", "effort", "surfaces")
+    plain = (
+        "toolkit",
+        "journal",
+        "board",
+        "inbox",
+        "watcher",
+        "prioritization",
+        "profiles",
+        "ladder",
+        "effort",
+        "surfaces",
+    )
     for name in (*plain, "executor"):
         t = tree.get(name)
         if t is None:

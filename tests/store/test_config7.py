@@ -40,7 +40,7 @@ def rules(tree: dict[str, Any]) -> list[tuple[str, str]]:
 def test_init_adopts_config7_and_the_defaults_mirror_the_code_they_replaced(st: Store) -> None:
     """`init` adopts the newest, and config@7's prompt defaults are the map `runner.PROMPT_VERSIONS` held — builder
     `v3`, every other kind `v1` — so moving the version under the signature changes no run. No default names tools."""
-    assert st.config_tree["schema"] == REGISTRY.newest("config") == 7
+    assert st.config_tree["schema"] == REGISTRY.newest("config") == 8
     rows = REGISTRY.defaults_of("config@7")["agents"]
     assert {k: r["prompt"] for k, r in rows.items()} == {
         "planner": "v1",
