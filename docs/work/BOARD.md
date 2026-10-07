@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -44,7 +44,7 @@ none
 - **24** · The builder checks every file it changed with ruff and mypy before it finishes · closed · software-grade · (derived)
 - **25** · The reviewer is handed the run's diff, computed by the wrapper, on both passes · closed · software-grade · (derived)
 - **26** · A run whose pull request is red on the gate gets one fixup phase on its own branch, invoked by the operator · closed · software-grade · (derived)
-- **27** · The config schema gains a signed [watcher] table: whether the PR watcher may start a fixup, and how many a day · dispatched · software-grade · (derived)
+- **27** · The config schema gains a signed [watcher] table: whether the PR watcher may start a fixup, and how many a day · closed · software-grade · (derived)
 - **28** · A run's actions take a lease in the ledger, so the operator and the PR watcher never act on one run at once · closed · software-grade · (derived)
 - **30** · The PR watcher runs every 15 minutes from a host scheduled task, one pass at a time, logged · ready · software-grade · (derived)
 - **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · ready · software-grade · (derived)

@@ -1265,8 +1265,27 @@
       ]
     },
     "0027": {
-      "closures": [],
-      "execution": "dispatched",
+      "closures": [
+        {
+          "at": "2026-10-07T09:14:58Z",
+          "closure_id": "f-r-47",
+          "evidence": [
+            "sha256:d64a8e3ea21082f311b6f03e7271f90fe4959c61fc15894edbf7f30842c48c8c",
+            "94b544b6c1bb2c70dd5b613f4b6a1543c8c26682"
+          ],
+          "kind": "factory",
+          "outcome": "met",
+          "verdicts": {
+            "S1": "pass",
+            "S2": "pass",
+            "S3": "pass",
+            "S4": "pass"
+          },
+          "verified": true,
+          "verified_against": "sha256:ecdeaf12be963a9970c3344fe778aef99af33b86768f7b817c1d0a3607b00100"
+        }
+      ],
+      "execution": "closed",
       "fingerprint": {
         "commit": "a098e04fb0e26c019dbeab9944064292ae6ca371",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -1291,7 +1310,16 @@
         "h": "sha256:29a1bdcedee5ffdaf7ce1b160fad0b1843cf8e5e26bea8c90da65c958c5d8eb1",
         "seq": 3
       },
-      "runs": []
+      "runs": [
+        {
+          "batch": null,
+          "build_hash": "sha256:ecdeaf12be963a9970c3344fe778aef99af33b86768f7b817c1d0a3607b00100",
+          "cost_micro": 11510521,
+          "duration_ms": 1861981,
+          "outcome": "complete",
+          "run_id": "r-47"
+        }
+      ]
     },
     "0028": {
       "closures": [
@@ -1581,17 +1609,18 @@
       "0e1f50c6d5ebbc893ae066a04cc5b855528a885f756b380ae40ea4f9e841c088",
       "1ef43b07328c5b7952d24e7d71f41364c32373b6e4599f99625785d103226051",
       "846d9a0c019b1d86cc1bcae2e73061237b2c6b670a0d0a59f10b562e1d085b6c",
-      "878e319c5b483ac38a59dbb377600dac2c2ef84c05ddb2a572eb32cffb18e9d1"
+      "878e319c5b483ac38a59dbb377600dac2c2ef84c05ddb2a572eb32cffb18e9d1",
+      "425bf3e1f682cf0b393e46067d5cf92e54840281b415c2bc26509d04a0439c99"
     ],
     "overflow": 0,
     "run_id": "r-47"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:0b20561c388373021df2d32d9df247f786b830d64dc6d7a44fb8ca5201a5262e",
-    "seq": 331
+    "h": "sha256:13409540bf368b2dd11a21e41111db46715388e3d50a79b3dcb0bdceee524d78",
+    "seq": 332
   },
-  "landed_at": "2026-10-07T08:26:25Z",
-  "ledger_cursor": "4e3b7cb66ee3cffb369427b215f02c97c8c80c37",
+  "landed_at": "2026-10-07T09:10:16Z",
+  "ledger_cursor": "94b544b6c1bb2c70dd5b613f4b6a1543c8c26682",
   "schema": 2
 }
