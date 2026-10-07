@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox 0
+WIP 1/1 · inbox 0
 
 ## Queue
 
@@ -51,7 +51,7 @@ none
 - **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · closed · software-grade · (derived)
 - **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · closed · software-grade · (derived)
 - **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · closed · software-grade · (derived)
-- **37** · An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull req… · ready · software-grade · (derived)
+- **37** · An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull req… · dispatched · software-grade · (derived)
 - **38** · The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus · ready · software-grade · (derived)
 
 ## Blocked
