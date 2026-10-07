@@ -2,7 +2,7 @@
 schema = 1
 id = 32
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggregator's echo"
 shape = "bdd"
@@ -107,5 +107,6 @@ Not in scope: any change to the workflow; webhooks; a Gitea driver.
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T06:16:34Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:3b40cd002dc0b94286bfd54bfe02d87031e12babb805734af0a5449b5f5952a5", h = "sha256:12afd1130b2cb02246531e38820c66f146c00bcbe5447d24c08361702689fbad" },
+  { seq = 2, at = "2026-10-07T06:26:58Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:3b40cd002dc0b94286bfd54bfe02d87031e12babb805734af0a5449b5f5952a5", h = "sha256:ca339da479ee7c158a97a43270c8e5b89cdb2b2f0c36c5e75e6b3308006efae3", batch = 64 },
 ]
 ```
