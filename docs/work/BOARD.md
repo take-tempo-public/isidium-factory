@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -48,7 +48,7 @@ none
 - **28** · A run's actions take a lease in the ledger, so the operator and the PR watcher never act on one run at once · ready · software-grade · (derived)
 - **30** · The PR watcher runs every 15 minutes from a host scheduled task, one pass at a time, logged · ready · software-grade · (derived)
 - **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · ready · software-grade · (derived)
-- **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · dispatched · software-grade · (derived)
+- **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · closed · software-grade · (derived)
 
 ## Blocked
 
