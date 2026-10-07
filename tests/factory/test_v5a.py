@@ -445,7 +445,7 @@ def test_a_schema_1_ledger_gains_every_later_column_at_open_and_keeps_its_rows(t
         row = ledger.run("r-1")
         assert row is not None and row["card"] == 5
         assert all(row[c] is None for c in ledger_mod.ADDED_COLUMNS), "every added column is there, and empty"
-        assert ledger._meta("schema") == str(ledger_mod.SCHEMA) == "3"
+        assert ledger._meta("schema") == str(ledger_mod.SCHEMA) == "4"
         ledger.set_pr("r-1", 57)
         again = ledger.run("r-1")
         assert again is not None and again["pr"] == 57
