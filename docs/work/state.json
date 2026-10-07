@@ -1681,10 +1681,29 @@
     "0037": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "7db259a323412e3dc3edc388af5590db6857be79",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "d5d82d4e39f9e830d23c897a5a50dfeb5c1f7139",
+            "path": "packages/isidium-factory/src/isidium/factory/cli.py"
+          },
+          {
+            "blob": "e19e583a375fae150d675a3f599de75aa457363e",
+            "path": "packages/isidium-factory/src/isidium/factory/watch.py"
+          },
+          {
+            "blob": "75fcbb4c851ce4f539aa2476afca37fc37546896",
+            "path": "packages/isidium-factory/src/isidium/factory/context.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:f1a9925088fa989d6779e9ee58c8e9bea04102c62d695f070218f146b9a445bf",
-        "seq": 1
+        "h": "sha256:0b95c0339015c023379ede50f97e31594fabf88482708b626ec6e4f1c07dfdb7",
+        "seq": 2
       },
       "runs": []
     },
@@ -1838,10 +1857,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:14d31386220aa7f698f8275c23efb9e28676748e76271639b913631b7f5950a2",
-    "seq": 355
+    "h": "sha256:302697613a6d8cc5610c4bd8add31682a40d6f2944142cdecfbfb9bd5034e10d",
+    "seq": 357
   },
-  "landed_at": "2026-10-07T21:39:55Z",
-  "ledger_cursor": "2ea46e1dea1983a09ee051890ec1dc283d44ec64",
+  "landed_at": "2026-10-07T22:23:09Z",
+  "ledger_cursor": "7db259a323412e3dc3edc388af5590db6857be79",
   "schema": 2
 }
