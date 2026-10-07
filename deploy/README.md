@@ -1295,6 +1295,63 @@ and `isidium factory dispatch --dry-run` gets past the WIP cap and refuses `disp
 longer blocked, and has no ratified card to run. The chain that closed was `phases: ["build"]` — a build-only close,
 declared on the ledger's `ended` row until V4a-ii adds the rest.
 
+## The PR watcher's timer: a host scheduled task, one pass every 15 minutes (card 30)
+
+`isidium-factory watch --once` is one pass over the in-flight runs and then exits; the loop is not in it. The loop is a
+Windows scheduled task on the host, one per tenant, registered by `deploy/watch-task.ps1`. It is not a container and not
+a service supervisor: the store's restart policy is no and the VPN breaks WSL DNS, so a resident process would be one
+the memory guard can reap and the network can strand. **The cadence, and "host timer, one pass", are the owner's ruling
+(2026-10-04); moving the cadence is the owner's call**, not an operator's edit.
+
+**Install** (PowerShell, as the user who will own the task; `isidium-factory` must be on PATH, because the task is
+registered with the path it resolves to). Running it again replaces the task:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Checkout <path to the tenant checkout> -Deploy <deploy home>
+```
+
+The task is `isidium-watch-<t>`. Each pass runs `isidium-factory watch --once --tenant <t> --checkout <path>` with
+`ISIDIUM_DEPLOY` set to the deploy home and `PYTHONIOENCODING` set to `utf-8`. The task never starts a second instance
+while one runs (`MultipleInstances IgnoreNew`) and ends a pass after four hours. Four hours is longer than a close's
+lease (`CLOSE_LEASE_S`, one hour) plus a fixup's bound (the signed `[executor].wall_clock_s` per attempt times
+`ATTEMPTS`, 3600 x 2 at tenant #0): a pass that outlived its leases would act without them. If the signed
+`wall_clock_s` is raised, the limit in the script is raised with it, and the test for it goes red until it is.
+
+**Check:**
+
+```powershell
+Get-ScheduledTask isidium-watch-<t>
+Get-ScheduledTaskInfo isidium-watch-<t>                  # LastRunTime, LastTaskResult (the pass's exit code), NextRunTime
+Get-Content <deploy home>\<t>\factory\watch-task.log -Tail 40
+```
+
+`<deploy home>\<t>\factory\watch-task.log` is appended by every pass: a `START` line, the verb's output (its one
+summary line, and anything on stderr), and an `EXIT <code>` line, each stamped in UTC. The verb's own record of what it
+did is `watch.jsonl` beside it. **A `START` with no `EXIT` after it is a pass the limit ended** (or one whose host went
+down), and it is the thing to look for first.
+
+**Remove:** the same script with `-Remove` unregisters the task and leaves the log where it is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Remove
+```
+
+**What it does not do, stated rather than discovered:**
+
+- **It runs only while the owner is logged on to Windows.** The task is registered for the current user with an
+  Interactive logon and no stored password, so it stops firing at logoff and resumes at the next logon (a missed start
+  runs when the host is next available). A logon type that runs with nobody logged on (S4U, or a stored password) was
+  not chosen: S4U sessions are known to have trouble reaching WSL and the podman machine, which a fixup needs, and a
+  stored password is a credential this card does not authorise. "Without a session open" means without the owner's
+  terminal or agent session, not without the Windows logon.
+- **`PYTHONIOENCODING=utf-8` is this script's own choice.** The run launch scripts it was to match are at the deploy
+  home and not in this repository.
+- **A pass the limit ends may leave its child.** Whether the scheduler ending `powershell.exe` also ends the
+  `isidium-factory` process it started has not been observed on the host; CI cannot show it. The leases still guard
+  every action the watcher takes, and an orphan shows as a `START` with no `EXIT`.
+- **Not installed on tenant #0 by this change.** That is the owner's step, after the merge. Webhooks are not in this:
+  polling first.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider
