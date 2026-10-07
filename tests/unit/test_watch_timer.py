@@ -144,13 +144,18 @@ def test_each_pass_is_logged_with_its_exit() -> None:
     assert "-TaskName $TaskName" in unregisters[0], "-Remove unregisters the task the script registered"
 
 
-def test_the_readme_names_install_check_remove() -> None:
+def _watch_section() -> str:
+    """The README's one section for the watcher's timer, up to the next `## ` heading."""
     text = README.read_text(encoding="utf-8")
     starts = [m.start() for m in re.finditer(re.escape(SECTION), text)]
     assert len(starts) == 1, "the README has one section for the watcher's timer"
     rest = text[starts[0] + len(SECTION) :]
     end = rest.find("\n## ")
-    section = rest if end == -1 else rest[:end]
+    return rest if end == -1 else rest[:end]
+
+
+def test_the_readme_names_install_check_remove() -> None:
+    section = _watch_section()
 
     assert "watch-task.ps1 -Tenant" in section, "install"
     assert "Get-ScheduledTaskInfo" in section and "watch-task.log" in section, "check"
@@ -253,15 +258,19 @@ def test_the_tenant_is_case_sensitive() -> None:
         assert bool(grammar.match(name)) == bool(registration.TENANT.match(name)), name
 
 
-def test_the_actions_arguments_are_pinned() -> None:
-    code = _script_code()
+def _action_template(code: list[str]) -> tuple[str, list[str]]:
+    """The action's argument template and the variables it is formatted with, from the one `$argLine =` code line."""
     lines = _lines_with(code, "$argLine =")
     assert len(lines) == 1
     parsed = re.fullmatch(r"\s*\$argLine = '(?P<template>.*)' -f (?P<args>.*?)\s*", lines[0])
     assert parsed, "one template, formatted with a list of variables"
-    template = parsed["template"]
-    args = [a.strip() for a in parsed["args"].split(",")]
-    assert template.startswith("-NoProfile -NonInteractive -ExecutionPolicy Bypass ")
+    return parsed["template"], [a.strip() for a in parsed["args"].split(",")]
+
+
+def test_the_actions_arguments_are_pinned() -> None:
+    code = _script_code()
+    template, args = _action_template(code)
+    assert template.startswith("--headless powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass ")
     assert re.search(r"\s-Pass\s+-Tenant\b", template), "the pass switch is bare and precedes the tenant"
     assert sorted(int(n) for n in re.findall(r"\{(\d+)\}", template)) == list(range(len(args)))
 
@@ -278,8 +287,48 @@ def test_the_actions_arguments_are_pinned() -> None:
 
     actions = _lines_with(code, "New-ScheduledTaskAction")
     assert len(actions) == 1
-    assert "-Execute 'powershell.exe'" in actions[0]
+    assert "-Execute 'conhost.exe'" in actions[0]
     assert "-Argument $argLine" in actions[0]
+
+
+def test_the_pass_runs_in_a_headless_console() -> None:
+    code = _script_code()
+    actions = _lines_with(code, "New-ScheduledTaskAction")
+    assert len(actions) == 1
+    assert "-Execute 'conhost.exe'" in actions[0]
+    assert "-Argument $argLine" in actions[0]
+    assert not _lines_with(code, "-Execute 'powershell.exe'"), "nothing launches powershell.exe directly"
+
+    # --headless is conhost's first argument, and today's powershell invocation follows it unchanged.
+    template, _args = _action_template(code)
+    tokens = template.split()
+    assert tokens[0] == "--headless"
+    assert tokens[1] == "powershell.exe"
+    assert " ".join(tokens[2:8]) == "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden"
+    assert tokens[8] == "-File"
+
+    # The avoid list (A1, A2): no script launcher, and the logon stays Interactive with no stored password.
+    assert not [ln for ln in code if re.search(r"(?i)wscript|cscript|\.vbs\b", ln)]
+    principals = _lines_with(code, "New-ScheduledTaskPrincipal")
+    assert len(principals) == 1
+    assert "-LogonType Interactive" in principals[0]
+    assert not [ln for ln in code if "S4U" in ln or "-Password" in ln]
+
+
+def test_the_readme_says_the_pass_is_headless() -> None:
+    section = _watch_section()
+    starts = [m.start() for m in re.finditer(re.escape("**Install**"), section)]
+    ends = [m.start() for m in re.finditer(re.escape("**Check:**"), section)]
+    assert len(starts) == 1 and len(ends) == 1 and starts[0] < ends[0], "the install part sits before the check part"
+    install = section[starts[0] : ends[0]]
+    flat = " ".join(install.split())
+    for needle in ("conhost.exe --headless", "-WindowStyle Hidden", "window", "focus"):
+        assert needle in flat, f"the install part does not say {needle!r}"
+
+    # The reason sits in the same paragraph as the mechanism it explains.
+    paragraphs = [" ".join(p.split()) for p in re.split(r"\n\s*\n", install)]
+    reasons = [p for p in paragraphs if "-WindowStyle Hidden" in p and "before" in p.lower()]
+    assert reasons, "a paragraph says -WindowStyle Hidden applies only after powershell.exe has made its window"
 
 
 _PARSE = (
