@@ -2,7 +2,7 @@
 schema = 1
 id = 38
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus"
 shape = "bdd"
@@ -66,5 +66,6 @@ Owner, 2026-10-07: 'can you set that cron to NOT open a window and grab control 
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T21:39:20Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:62fec378124aa925391c101c10fc4cf03bcbfcbd94c9d3556ad72e5176f23fd6", h = "sha256:409385a46eb719b088f5068ac720add4cf5521c08fa90bdefb0f58ff8671cf57" },
+  { seq = 2, at = "2026-10-07T21:39:55Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:62fec378124aa925391c101c10fc4cf03bcbfcbd94c9d3556ad72e5176f23fd6", h = "sha256:4e9c114e09ad33841367e09758cba2cc3b55329155c6e4a749457eaa7e7a2aaa", batch = 69 },
 ]
 ```
