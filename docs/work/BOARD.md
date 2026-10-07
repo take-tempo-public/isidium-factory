@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -47,8 +47,9 @@ none
 - **27** · The config schema gains a signed [watcher] table: whether the PR watcher may start a fixup, and how many a day · closed · software-grade · (derived)
 - **28** · A run's actions take a lease in the ledger, so the operator and the PR watcher never act on one run at once · closed · software-grade · (derived)
 - **30** · The PR watcher runs every 15 minutes from a host scheduled task, one pass at a time, logged · ready · software-grade · (derived)
-- **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · dispatched · software-grade · (derived)
+- **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · closed · software-grade · (derived)
 - **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · closed · software-grade · (derived)
+- **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · draft · (derived)
 
 ## Blocked
 

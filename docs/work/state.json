@@ -1411,8 +1411,34 @@
       "runs": []
     },
     "0031": {
-      "closures": [],
-      "execution": "dispatched",
+      "closures": [
+        {
+          "at": "2026-10-07T13:11:46Z",
+          "closure_id": "f-r-48",
+          "evidence": [
+            "sha256:36f81db148a330ccffc05297ecad8a87e72846aac0056cbfc796c3dc21e8629b",
+            "590a27bf277785c7c8c36cba434d6d99dfb43c66"
+          ],
+          "kind": "factory",
+          "outcome": "met",
+          "verdicts": {
+            "S1": "pass",
+            "S10": "pass",
+            "S11": "pass",
+            "S2": "pass",
+            "S3": "pass",
+            "S4": "pass",
+            "S5": "pass",
+            "S6": "pass",
+            "S7": "pass",
+            "S8": "pass",
+            "S9": "pass"
+          },
+          "verified": true,
+          "verified_against": "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af"
+        }
+      ],
+      "execution": "closed",
       "fingerprint": {
         "commit": "808a34760d5b5ae5128fb2bba3a54a67bc8be4c9",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -1445,7 +1471,16 @@
         "h": "sha256:268b2dab2780893f17cdac529e0aeed88713af496310ac60d35b76c927932cad",
         "seq": 5
       },
-      "runs": []
+      "runs": [
+        {
+          "batch": null,
+          "build_hash": "sha256:10b17da822473ccb04bc457c1dd6496d92128053730b717336f29dd982d4a7af",
+          "cost_micro": 9942975,
+          "duration_ms": 3501668,
+          "outcome": "complete",
+          "run_id": "r-48"
+        }
+      ]
     },
     "0032": {
       "closures": [
@@ -1503,6 +1538,16 @@
           "run_id": "r-45"
         }
       ]
+    },
+    "0035": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": null,
+      "history_head": {
+        "h": "sha256:078ad7d29b6eba8feccc2f5bcf69507c9912145c192c1710c12adc9222b141e9",
+        "seq": 1
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -1611,17 +1656,18 @@
       "846d9a0c019b1d86cc1bcae2e73061237b2c6b670a0d0a59f10b562e1d085b6c",
       "878e319c5b483ac38a59dbb377600dac2c2ef84c05ddb2a572eb32cffb18e9d1",
       "425bf3e1f682cf0b393e46067d5cf92e54840281b415c2bc26509d04a0439c99",
-      "6134d50d53a3433a4133c4c3df3af7e4e43e93fdeb05a0ab2cbfb31faac35447"
+      "6134d50d53a3433a4133c4c3df3af7e4e43e93fdeb05a0ab2cbfb31faac35447",
+      "3e9ce5c4e621d722d62ebbeecd44d40fc3ee255f4d3fe422e47cc7f982b4d1bb"
     ],
     "overflow": 0,
-    "run_id": "r-0"
+    "run_id": "r-48"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:96ac00a40a722b85c4855463329a9c08d8e98609435b905bda6bedc5ee7e4a4a",
-    "seq": 337
+    "h": "sha256:c38f9e26428e30d189f17d555b61e361643bc4403d732b7ccbebef4204ddc50c",
+    "seq": 339
   },
-  "landed_at": "2026-10-07T13:06:22Z",
-  "ledger_cursor": "b38bca33bf56be0d1bb142726feb4b6b4b6b41b8",
+  "landed_at": "2026-10-07T13:07:55Z",
+  "ledger_cursor": "590a27bf277785c7c8c36cba434d6d99dfb43c66",
   "schema": 2
 }
