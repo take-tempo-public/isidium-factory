@@ -25,6 +25,7 @@ from . import ledger as ledger_mod
 from . import payload as payload_mod
 from . import runner as runner_mod
 from . import tenant as tenant_mod
+from . import watch as watch_mod
 from .registration import tenant_client
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="isidium-factory — the line's own verbs.")
@@ -33,7 +34,7 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="isidium-fact
 @app.callback()
 def _verbs() -> None:
     """The factory's verbs — `isidium factory <verb>`, or `isidium-factory <verb>`: `land`, `payload`, `context`,
-    `push`, `pr-open`, `pr-status`."""
+    `push`, `pr-open`, `pr-status`, `watch`."""
     # A callback keeps `land` a subcommand: with one command and no callback typer makes it the root, and the
     # umbrella's dispatch (`isidium factory land …` → `isidium-factory land …`) would hand it its own name as an
     # argument.
@@ -80,6 +81,14 @@ def _leased(
         raise
     led.release_lease(lease, _now(), str(out["outcome"]))
     return out
+
+
+def _fixup_bound(ctx: context.TenantContext) -> float:
+    """How long a fixup lease holds: the signed policy's `wall_clock_s` per attempt, over the attempts a run makes. The
+    operator's `run --phase fixup` and the watcher's pass both take it."""
+    from . import container  # lazy, as adapter.py does: the other verbs never load the container module
+
+    return adapter_mod.ExecutorPolicy.from_effective(ctx.eff).budgets.wall_clock_s * container.ATTEMPTS
 
 
 def _out(value: Any) -> None:
@@ -329,15 +338,12 @@ def run_verb(
             if phase is None:
                 row = runner_mod.run_chain(ctx, reg, led, channel.call, run_id=run)
             elif phase == runner_mod.FIXUP:
-                from . import container  # lazy, as adapter.py does: the other verbs never load the container module
-
-                bound = adapter_mod.ExecutorPolicy.from_effective(ctx.eff).budgets.wall_clock_s * container.ATTEMPTS
                 forge_driver = github.GitHub(ctx)
                 row = _leased(
                     led,
                     run,
                     "fixup",
-                    bound,
+                    _fixup_bound(ctx),
                     lambda: runner_mod.run_fixup(ctx, reg, led, channel.call, forge_driver, run_id=run),
                 )
             else:
@@ -374,6 +380,47 @@ def close_verb(
     except Refusal as r:
         _refuse(r)
     _out(row)
+
+
+@app.command("watch")
+def watch_verb(
+    tenant: TENANT,
+    checkout_path: CHECKOUT,
+    once: Annotated[bool, typer.Option("--once", help="run one pass and return (the host timer is the loop)")] = False,
+    base: BASE = "main",
+    root: ROOT = None,
+) -> None:
+    """The PR watcher (card 31): one pass over every in-flight run that has a pull request. A merged one is closed
+    (which lands it); a red one has its failed checks rerun once, then a fixup when the signed `[watcher]` policy opts
+    in and the day's ceiling allows, else it is flagged; a stale or conflicted one is flagged. It never merges, pushes,
+    opens a pull request, signs or ratifies, and acts through `close` and `run --phase fixup` under a `watcher` lease --
+    a run whose lease is held is skipped this pass. Each pass appends to `watch.jsonl` at the deploy home and prints
+    one summary line."""
+    if not once:
+        _refuse(
+            Refusal("run.watch-once", "--once", "a pass is one pass: the cadence is the host timer's, not a loop here")
+        )
+    try:
+        ctx, drv = _driver(tenant, checkout_path, base, root)
+        channel = Transport(ctx.client, ctx.home)
+        policy = watch_mod.Policy.from_effective(ctx.eff)
+        with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+
+            def close_run(run_id: str) -> dict[str, Any]:
+                return close_mod.close(ctx, led, channel.call, drv, run_id=run_id)
+
+            def fixup_run(run_id: str) -> dict[str, Any]:
+                reg = tenant_mod.require(ctx.registration, ctx.home)
+                return runner_mod.run_fixup(ctx, reg, led, channel.call, drv, run_id=run_id)
+
+            verbs = watch_mod.Verbs(
+                close=watch_mod.Verb(close_run, lambda: CLOSE_LEASE_S),
+                fixup=watch_mod.Verb(fixup_run, lambda: _fixup_bound(ctx)),
+            )
+            summary = watch_mod.watch_once(led, drv, policy, verbs, ctx.home / watch_mod.LOG_FILE, _now)
+    except Refusal as r:
+        _refuse(r)
+    typer.echo(summary.line())
 
 
 @app.command("runs")

@@ -1,0 +1,21 @@
+# Card 31 -- the watcher's two limits are checked against this card's own test file only, never the whole suite (C5):
+# mutate.py runs the whole suite per mutation by default, and `--show` is all it is used for here.
+#
+#     python tools/mutate.py tools/mutations/watch.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_watch.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "a fixup is chosen past the day's ceiling -- the comparison against fixup_per_day is dropped, so the watcher spends the model without limit (killed by S4, test_a_fixup_past_the_ceiling_is_flagged)"
+file = "packages/isidium-factory/src/isidium/factory/watch.py"
+find = '''        if policy is not None and policy.fixup and taken < policy.fixup_per_day:'''
+replace = '''        if policy is not None and policy.fixup:'''
+
+[[mutation]]
+id = "M2"
+label = "a merged pull request is left unclosed -- the merged branch chooses nothing, so a run stays in flight after its merge (killed by S1, test_a_merged_pr_is_closed)"
+file = "packages/isidium-factory/src/isidium/factory/watch.py"
+find = '''        return (Close(v.run_id, s.head),)'''
+replace = '''        return ()'''
