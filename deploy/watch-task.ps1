@@ -82,4 +82,4 @@ $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $principal = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-Write-Output "registered $TaskName: every $CadenceMinutes minutes, one pass at a time, limit $LimitHours hours"
+Write-Output "registered ${TaskName}: every $CadenceMinutes minutes, one pass at a time, limit $LimitHours hours"

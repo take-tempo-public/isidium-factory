@@ -23,6 +23,7 @@ TENANT_ZERO_CONFIG = ROOT / "docs" / "work" / "config.toml"
 BLOCK_COMMENT = re.compile(r"<#.*?#>", re.DOTALL)
 CADENCE = re.compile(r"^\s*\$CadenceMinutes\s*=\s*(\d+)\s*$")
 LIMIT = re.compile(r"^\s*\$LimitHours\s*=\s*(\d+)\s*$")
+UNBRACED_COLON = re.compile(r"\$[A-Za-z_]\w*:(?![\w{:])")
 SECTION = "## The PR watcher's timer"
 
 
@@ -58,6 +59,10 @@ def _signed_wall_clock_s() -> int:
 def test_the_task_runs_one_pass_every_15_minutes() -> None:
     code = _script_code()
     assert not [ln for ln in code if re.search(r"\s#", ln)], "a trailing comment hides in a code line from the pins"
+    # PowerShell parses the whole file before it runs a line, and `"$name: ..."` is a parse error (the colon reads as a
+    # scope qualifier), which no text pin on behaviour can see. Text cannot prove the file parses, but it can refuse
+    # this one shape, which is the one this script met.
+    assert not [ln for ln in code if UNBRACED_COLON.search(ln)], "a variable followed by a colon needs ${braces}"
 
     assert _only(code, CADENCE) == 15
     triggers = _lines_with(code, "New-ScheduledTaskTrigger")
