@@ -2,7 +2,7 @@
 schema = 1
 id = 37
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull request"
 shape = "bdd"
@@ -77,5 +77,6 @@ Measured 2026-10-07 at the owner's question ('how many resources does it use?'):
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T19:57:52Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:581915a44dc3208834614f86e5557202a40c47c5ecf927b5a94bdf9305665d4a", h = "sha256:f1a9925088fa989d6779e9ee58c8e9bea04102c62d695f070218f146b9a445bf" },
+  { seq = 2, at = "2026-10-07T22:23:09Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:581915a44dc3208834614f86e5557202a40c47c5ecf927b5a94bdf9305665d4a", h = "sha256:0b95c0339015c023379ede50f97e31594fabf88482708b626ec6e4f1c07dfdb7", batch = 70 },
 ]
 ```
