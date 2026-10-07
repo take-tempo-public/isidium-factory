@@ -55,6 +55,10 @@ max_turns = 100
 [ladder]
 leaf = "story"
 
+[watcher]
+fixup = true
+fixup_per_day = 2
+
 [[governed]]
 path = "cards/*.md"
 schema = "card@1"
@@ -154,4 +158,5 @@ entries = [
   { seq = 65, at = "2026-10-07T11:45:02Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:915465969e4c84dd9f8fcb0d0eb328e84c261a6007920e3367d5981e81de7e31", ref = ["sha256:268b2dab2780893f17cdac529e0aeed88713af496310ac60d35b76c927932cad"], h = "sha256:b01c0dfa9f801d1845a13df2f4232df51d037df766b40b82987aadbe98746bac", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:Kt9xVTZ1N9xVcHmpyUTGkQy+pfxZl00D9Glpx+HDtd+k7wLxr2z9J5iSdjgCanywKvSs4MqktO+2XC4tqI/+DQ==" },
   { seq = 66, at = "2026-10-07T15:01:14Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:915465969e4c84dd9f8fcb0d0eb328e84c261a6007920e3367d5981e81de7e31", ref = ["sha256:c2af5d3ee015511699be47a0b499314742c051b1c362d64c40f8235525e760fa", "sha256:f48c424a92ea908b875d7f7cc147b3b5b7d0d981097bbfa2869d1f5b5f52201d"], h = "sha256:1d646005c464f4b825d1b1ee1d0c8071eb9b3fdb1438d63a9f55649ab4fb8dec", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:4kpYRuykv8czsciknNdEUgRCCWrTvLeVUkP1jkM/7Zpf+taM5x4vGH1Hv2qY7mt06xArD8O9TDMDC+s55jilDg==" },
   { seq = 67, at = "2026-10-07T18:26:42Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["governed", "schema"], build = "sha256:87b1b78d86543def7976901e5ce998ca5817d0fe3c25733c46d57b38761aa009", h = "sha256:5edf3d261dfa85503bcc968c1a24bfe97c4c51c562b6b23f36d2501551d7014b", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:JC36N/cjH0PrP0vl9GyFc5JGYNMlFmEB1BhRCxqIKdZ/gvptNHFzXYv4VrhA04NxPM/fr5PN0PUSFIw1oRQIBw==" },
+  { seq = 68, at = "2026-10-07T18:34:15Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["watcher"], build = "sha256:a2108ff26d25a92aeea251436c775b409dd99da5689d6e7f439561b7fe0bae8b", h = "sha256:1c4e5bef7b5c88e35b3dfec3c4be9099cb26ae3e40b1bb977d4433044852a11f", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:GZFIfDn51OECiMJ82xgC3f2TQzKPpIQiDVKB83Sw6B2SFogAPgcORmexeMhqaRaN/iteuagTfjmHsVFP59GGAA==" },
 ]
