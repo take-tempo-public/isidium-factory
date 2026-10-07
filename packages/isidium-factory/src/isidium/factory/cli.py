@@ -395,29 +395,40 @@ def watch_verb(
     in and the day's ceiling allows, else it is flagged; a stale or conflicted one is flagged. It never merges, pushes,
     opens a pull request, signs or ratifies, and acts through `close` and `run --phase fixup` under a `watcher` lease --
     a run whose lease is held is skipped this pass. Each pass appends to `watch.jsonl` at the deploy home and prints
-    one summary line."""
+    one summary line. A pass with no open pull request reads the ledger and stops: no tenant context, no fetch, no
+    forge (card 37)."""
     if not once:
         _refuse(
             Refusal("run.watch-once", "--once", "a pass is one pass: the cadence is the host timer's, not a loop here")
         )
     try:
-        ctx, drv = _driver(tenant, checkout_path, base, root)
-        channel = Transport(ctx.client, ctx.home)
-        policy = watch_mod.Policy.from_effective(ctx.eff)
-        with ledger_mod.Ledger.open(ctx.home, tenant) as led:
+        _cfg, home = tenant_client(tenant)
+        with ledger_mod.Ledger.open(home, tenant) as led:
+            # C-13, card 37: the ledger is read first and a pass with no open run stops there. An idle pass took
+            # 12-18 s and ~115 MB on the workstation, about 7 s of it in `context.load`'s git subprocesses (chiefly
+            # the fetch), against ~2 s for the imports and a ledger read (2026-10-07) -- ~96
+            # fetches a day at the 15-minute cadence, for nothing to watch. Each pass is a fresh process (the host
+            # timer, card 30), so a cache could not carry the load across passes: laziness is the fix. `home` is
+            # `context.load`'s own (`tenant_client` is its first call), so this is the same ledger.
+            if not watch_mod.open_runs(led):
+                summary = watch_mod.idle_pass()
+            else:
+                ctx, drv = _driver(tenant, checkout_path, base, root)
+                channel = Transport(ctx.client, ctx.home)
+                policy = watch_mod.Policy.from_effective(ctx.eff)
 
-            def close_run(run_id: str) -> dict[str, Any]:
-                return close_mod.close(ctx, led, channel.call, drv, run_id=run_id)
+                def close_run(run_id: str) -> dict[str, Any]:
+                    return close_mod.close(ctx, led, channel.call, drv, run_id=run_id)
 
-            def fixup_run(run_id: str) -> dict[str, Any]:
-                reg = tenant_mod.require(ctx.registration, ctx.home)
-                return runner_mod.run_fixup(ctx, reg, led, channel.call, drv, run_id=run_id)
+                def fixup_run(run_id: str) -> dict[str, Any]:
+                    reg = tenant_mod.require(ctx.registration, ctx.home)
+                    return runner_mod.run_fixup(ctx, reg, led, channel.call, drv, run_id=run_id)
 
-            verbs = watch_mod.Verbs(
-                close=watch_mod.Verb(close_run, lambda: CLOSE_LEASE_S),
-                fixup=watch_mod.Verb(fixup_run, lambda: _fixup_bound(ctx)),
-            )
-            summary = watch_mod.watch_once(led, drv, policy, verbs, ctx.home / watch_mod.LOG_FILE, _now)
+                verbs = watch_mod.Verbs(
+                    close=watch_mod.Verb(close_run, lambda: CLOSE_LEASE_S),
+                    fixup=watch_mod.Verb(fixup_run, lambda: _fixup_bound(ctx)),
+                )
+                summary = watch_mod.watch_once(led, drv, policy, verbs, ctx.home / watch_mod.LOG_FILE, _now)
     except Refusal as r:
         _refuse(r)
     typer.echo(summary.line())

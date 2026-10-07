@@ -391,6 +391,26 @@ def _leased(
     return outcome
 
 
+def open_runs(ledger: Ledger) -> list[dict[str, Any]]:
+    """C2 (card 31): the open runs are the ledger's in-flight runs that have a pull request. The one home for that
+    predicate, so the CLI's idle test and the pass cannot disagree about what counts as open."""
+    return [r for r in ledger.in_flight() if r["pr"] is not None]
+
+
+def idle_pass() -> Summary:
+    """Card 37 R1/R3: the pass with nothing to watch -- no open run -- which reads no forge and no policy. It emits the
+    same `PASS_SPAN` a busy pass does, with the same attributes at 0. The signed `[watcher]` table lives in the
+    effective config, which only `context.load` reads, so this pass never knew the opt-in and does not claim it absent
+    (`opt_in_absent` stays false: the line is the ordinary one with `open=0`)."""
+    summary = Summary(opt_in_absent=False)
+    with telemetry.span(PASS_SPAN) as sp:
+        sp.set_attribute("isidium.watch.open", summary.open)
+        sp.set_attribute("isidium.watch.held", summary.held)
+        sp.set_attribute("isidium.watch.refused", summary.refused)
+        telemetry.record_ok()
+    return summary
+
+
 def watch_once(
     ledger: Ledger,
     forge: Watched,
@@ -405,7 +425,7 @@ def watch_once(
     t = now().astimezone(UTC)
     summary = Summary(opt_in_absent=policy is None)
     with telemetry.span(PASS_SPAN) as sp:
-        rows = [r for r in ledger.in_flight() if r["pr"] is not None]
+        rows = open_runs(ledger)
         summary.open = len(rows)
         pasts = _pasts(ledger)
         views: list[View] = []
