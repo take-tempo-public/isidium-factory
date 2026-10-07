@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -50,7 +50,7 @@ none
 - **31** · The PR watcher: one pass reads every open run's pull request and acts through the existing verbs, never merging · closed · software-grade · (derived)
 - **32** · A fixup behind an aggregating required check is handed the failed jobs of that check's workflow run, not only the aggre… · closed · software-grade · (derived)
 - **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · closed · software-grade · (derived)
-- **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · dispatched · software-grade · (derived)
+- **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · closed · software-grade · (derived)
 
 ## Blocked
 
