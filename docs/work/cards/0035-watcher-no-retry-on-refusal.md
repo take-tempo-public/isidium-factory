@@ -2,7 +2,7 @@
 schema = 1
 id = 35
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling"
 shape = "bdd"
@@ -102,5 +102,6 @@ Not in scope: F4 (UTC midnight unexplained), F5 (watch.jsonl growth), card 28's 
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T13:07:55Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:3e078b746ff4c018b4f67df1d2e8158957b4acd9f09123cc62c468bbccd2ef78", h = "sha256:078ad7d29b6eba8feccc2f5bcf69507c9912145c192c1710c12adc9222b141e9" },
+  { seq = 2, at = "2026-10-07T15:01:14Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:3e078b746ff4c018b4f67df1d2e8158957b4acd9f09123cc62c468bbccd2ef78", h = "sha256:f48c424a92ea908b875d7f7cc147b3b5b7d0d981097bbfa2869d1f5b5f52201d", batch = 66 },
 ]
 ```

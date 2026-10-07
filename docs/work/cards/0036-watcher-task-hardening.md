@@ -2,7 +2,7 @@
 schema = 1
 id = 36
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails"
 shape = "bdd"
@@ -94,5 +94,6 @@ Found by r-49's review gate (card 30): F2 the battery defaults; F3 relative path
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T13:44:03Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:a669c14b974d07d12cc87377f60a80868b391f94d1556eb25ebeab4887488a1f", h = "sha256:aad13227b1a94441e51faebde172a5f47fb34944e7d48339791e58a0288005ab" },
+  { seq = 2, at = "2026-10-07T15:01:14Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:a669c14b974d07d12cc87377f60a80868b391f94d1556eb25ebeab4887488a1f", h = "sha256:c2af5d3ee015511699be47a0b499314742c051b1c362d64c40f8235525e760fa", batch = 66 },
 ]
 ```
