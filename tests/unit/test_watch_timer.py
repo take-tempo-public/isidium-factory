@@ -7,10 +7,15 @@ comments is the reason the execution limit carries beside it (card 30, C1)."""
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
-from isidium.factory import cli, container
+import pytest
+
+from isidium.factory import cli, container, registration
 from isidium.factory.adapter import ExecutorPolicy
 from isidium.store.registry import config as cfg
 from isidium.store.registry.loader import Registry
@@ -108,7 +113,9 @@ def test_no_second_instance_and_a_limit() -> None:
         block.append(ln)
     reason = "\n".join(block)
     assert "CLOSE_LEASE_S" in reason
-    assert "_fixup_bound" in reason or "ATTEMPTS" in reason
+    assert "wall_clock_s" in reason
+    assert "ATTEMPTS" in reason
+    assert re.search(r"(each|every) tenant", reason), "the one limit is said to cover each tenant's own bound"
 
 
 def test_each_pass_is_logged_with_its_exit() -> None:
@@ -149,3 +156,152 @@ def test_the_readme_names_install_check_remove() -> None:
     assert "Get-ScheduledTaskInfo" in section and "watch-task.log" in section, "check"
     assert "-Remove" in section, "remove"
     assert "owner" in section and "2026-10-04" in section, "the cadence is the owner's ruling"
+
+
+def _stripped(code: list[str]) -> list[str]:
+    return [ln.strip() for ln in code]
+
+
+def _index_of(code: list[str], prefix: str) -> int:
+    """The index of the one code line that starts with `prefix`."""
+    found = [i for i, ln in enumerate(_stripped(code)) if ln.startswith(prefix)]
+    assert len(found) == 1, f"{prefix!r}: expected one code line, found {len(found)}"
+    return found[0]
+
+
+def test_the_task_runs_on_battery() -> None:
+    code = _script_code()
+    settings = _lines_with(code, "New-ScheduledTaskSettingsSet")
+    assert len(settings) == 1
+    assert "-AllowStartIfOnBatteries" in settings[0]
+    assert "-DontStopIfGoingOnBatteries" in settings[0]
+    assert not _lines_with(code, "-DisallowStartIfOnBatteries")
+    assert not [ln for ln in code if re.search(r"(?<!Dont)StopIfGoingOnBatteries", ln)]
+
+
+def test_paths_are_absolute_and_must_exist() -> None:
+    code = _script_code()
+    stripped = _stripped(code)
+    registers = _index_of(code, "Register-ScheduledTask")
+    action = _index_of(code, "$action = New-ScheduledTaskAction")
+
+    # Each parameter is checked, then resolved; a refusal is a throw, and it comes before anything is built or registered.
+    for param, resolved in (("Checkout", "checkoutPath"), ("Deploy", "deployPath")):
+        check = _index_of(code, f"if (-not (Test-Path -LiteralPath ${param} -PathType Container))")
+        assert stripped[check + 1].startswith("throw "), f"-{param} missing refuses with a message"
+        assert stripped[check + 2] == "}"
+        resolve = _index_of(code, f"${resolved} = (Resolve-Path -LiteralPath ${param}).ProviderPath")
+        assert check < resolve < action < registers
+    exe_check = _index_of(code, "if (-not (Test-Path -LiteralPath $found.Source -PathType Leaf))")
+    assert stripped[exe_check + 1].startswith("throw ")
+    exe_resolve = _index_of(code, "$exePath = (Resolve-Path -LiteralPath $found.Source).ProviderPath")
+    assert exe_check < exe_resolve < action < registers
+
+    assert "-WorkingDirectory $checkoutPath" in stripped[action]
+    arg_line = code[_index_of(code, "$argLine =")]
+    assert not re.search(r"\$(Checkout|Deploy)\b", arg_line.split(" -f ", 1)[1]), "the raw parameters are not passed on"
+
+
+def test_a_failed_registration_prints_no_success() -> None:
+    code = _script_code()
+    stripped = _stripped(code)
+    for verb in ("Register-ScheduledTask", "Unregister-ScheduledTask"):
+        calls = _lines_with(code, verb)
+        assert len(calls) == 1
+        assert "-ErrorAction Stop" in calls[0], f"{verb} stops on an error"
+    assert "-ErrorAction Stop" in _lines_with(code, "Get-ScheduledTask")[0], (
+        "-Remove's probe does not hide a scheduler error"
+    )
+
+    # A script-wide preference covers what -ErrorAction does not; it sits after the pass, which keeps its own 'Continue'.
+    pref = [i for i, ln in enumerate(stripped) if ln == "$ErrorActionPreference = 'Stop'"]
+    assert len(pref) == 1
+    assert stripped.index("exit $code") < pref[0] < stripped.index("if ($Remove) {")
+    assert not [ln for ln in code if "SilentlyContinue" in ln and "Scheduled" in ln]
+    assert not [ln for ln in code if re.match(r"\s*(try|catch)\b", ln, re.IGNORECASE)], "nothing swallows the error"
+
+    # The success line is the very next statement after the call, so nothing runs between a failure and the abort.
+    register = _index_of(code, "Register-ScheduledTask")
+    assert stripped[register + 1].startswith('Write-Output "registered ')
+    unregister = _index_of(code, "Unregister-ScheduledTask")
+    assert stripped[unregister + 1].startswith('Write-Output "removed ')
+
+
+def test_the_tenant_is_case_sensitive() -> None:
+    code = _script_code()
+    attrs = _lines_with(code, "ValidatePattern")
+    assert len(attrs) == 1
+    attr = attrs[0]
+    assert re.search(r"Options\s*=\s*'None'", attr), "ValidatePattern is IgnoreCase unless Options says otherwise"
+    assert "IgnoreCase" not in attr
+    quoted = re.search(r"\('((?:[^']|'')*)'", attr)
+    assert quoted
+    grammar = re.compile(quoted.group(1))  # no flags: PowerShell's default is the only thing that ignores case
+    for name in (
+        "isidium-factory",
+        "sartor",
+        "a",
+        "ISIDIUM-FACTORY",
+        "Sartor",
+        "-a",
+        "a-",
+        "",
+        "a" * 63,
+        "a" * 64,
+        "a..b",
+    ):
+        assert bool(grammar.match(name)) == bool(registration.TENANT.match(name)), name
+
+
+def test_the_actions_arguments_are_pinned() -> None:
+    code = _script_code()
+    lines = _lines_with(code, "$argLine =")
+    assert len(lines) == 1
+    parsed = re.fullmatch(r"\s*\$argLine = '(?P<template>.*)' -f (?P<args>.*?)\s*", lines[0])
+    assert parsed, "one template, formatted with a list of variables"
+    template = parsed["template"]
+    args = [a.strip() for a in parsed["args"].split(",")]
+    assert template.startswith("-NoProfile -NonInteractive -ExecutionPolicy Bypass ")
+    assert re.search(r"\s-Pass\s+-Tenant\b", template), "the pass switch is bare and precedes the tenant"
+    assert sorted(int(n) for n in re.findall(r"\{(\d+)\}", template)) == list(range(len(args)))
+
+    def bound(flag: str) -> str:
+        m = re.search(rf'\s{flag}\s+"\{{(\d+)\}}"', template)
+        assert m, flag
+        return args[int(m.group(1))]
+
+    assert bound("-File") == "$scriptPath"
+    assert bound("-Tenant") == "$Tenant"
+    assert bound("-Checkout") == "$checkoutPath"
+    assert bound("-Deploy") == "$deployPath"
+    assert bound("-Exe") == "$exePath"
+
+    actions = _lines_with(code, "New-ScheduledTaskAction")
+    assert len(actions) == 1
+    assert "-Execute 'powershell.exe'" in actions[0]
+    assert "-Argument $argLine" in actions[0]
+
+
+_PARSE = (
+    "$errors = $null; $tokens = $null; "
+    "[System.Management.Automation.Language.Parser]::ParseFile($env:ISIDIUM_PS1, [ref]$tokens, [ref]$errors) | Out-Null; "
+    "$errors | ForEach-Object { '{0}:{1} {2}' -f $_.Extent.StartLineNumber, $_.Extent.StartColumnNumber, $_.Message }; "
+    "if ($errors.Count -gt 0) { exit 1 }"
+)
+
+
+def test_the_script_parses() -> None:
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("pwsh is not on PATH: the script cannot be parsed here; the text pins still run")
+    # ParseFile reads and never runs the script, so no task is registered (card 36, A1). The path travels in the
+    # environment rather than being spliced into the command.
+    done = subprocess.run(
+        [pwsh, "-NoProfile", "-NonInteractive", "-Command", _PARSE],
+        env={**os.environ, "ISIDIUM_PS1": str(SCRIPT)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, f"{SCRIPT.name} does not parse:\n{done.stdout}{done.stderr}"
