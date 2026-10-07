@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, NoReturn
 
@@ -15,6 +17,7 @@ from isidium.store.client.transport import Transport
 from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
+from . import adapter as adapter_mod
 from . import checkout, context, forge, github, lander
 from . import close as close_mod
 from . import dispatch as dispatch_mod
@@ -41,6 +44,42 @@ def _refuse(r: Refusal) -> NoReturn:
     telemetry.record_refusal(r.rule)
     typer.echo(str(r), err=True)
     raise typer.Exit(2)
+
+
+# How long a `close` lease holds. `close` has no acceptance timeout of its own, so the bound is declared, not derived:
+# `close.RERUN_BOUND_S` is 1800 s and acceptance took 2 to 15 min on this workstation, so an hour covers a rerun
+# plus the slowest acceptance seen (C-13). A fixup's bound is derived instead: the signed policy's `wall_clock_s` per
+# attempt.
+CLOSE_LEASE_S: Final = 3600.0
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _leased(
+    led: ledger_mod.Ledger,
+    run_id: str,
+    action: ledger_mod.LeaseAction,
+    for_s: float,
+    act: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """`act` under the run's `action` lease, held as the operator [card 28]. Released with the action's outcome when it
+    ends -- the rule id for a refusal, `LEASE_RAISED` for any other exception; a process that dies never reaches the
+    release, and the lease expires on its own. The lease is the CLI's: `close()` and `run_fixup()` do not take it, so
+    their direct callers are unchanged."""
+    row = led.run(run_id)
+    lease = led.take_lease(run_id, action, "operator", None if row is None else row["head_sha"], _now(), for_s)
+    try:
+        out = act()
+    except Refusal as r:
+        led.release_lease(lease, _now(), r.rule)
+        raise
+    except BaseException:
+        led.release_lease(lease, _now(), ledger_mod.LEASE_RAISED)
+        raise
+    led.release_lease(lease, _now(), str(out["outcome"]))
+    return out
 
 
 def _out(value: Any) -> None:
@@ -279,7 +318,9 @@ def run_verb(
 
     `--phase fixup` (card 26) reads the required checks on the run's pull request head and, when some are red, runs the
     builder once on the run's own branch, handed each failed check's name and log tail; nothing red is refused
-    (`run.fixup-nothing-red`). It commits to the story branch and does not push or open anything — pushing is yours."""
+    (`run.fixup-nothing-red`). It commits to the story branch and does not push or open anything — pushing is yours.
+    It holds a `fixup` lease on the run as the operator for its duration; another holder's unexpired one refuses
+    `run.lease-held`."""
     try:
         ctx = context.load(tenant, checkout_path, base=base, root=root)
         reg = tenant_mod.require(ctx.registration, ctx.home)
@@ -288,7 +329,17 @@ def run_verb(
             if phase is None:
                 row = runner_mod.run_chain(ctx, reg, led, channel.call, run_id=run)
             elif phase == runner_mod.FIXUP:
-                row = runner_mod.run_fixup(ctx, reg, led, channel.call, github.GitHub(ctx), run_id=run)
+                from . import container  # lazy, as adapter.py does: the other verbs never load the container module
+
+                bound = adapter_mod.ExecutorPolicy.from_effective(ctx.eff).budgets.wall_clock_s * container.ATTEMPTS
+                forge_driver = github.GitHub(ctx)
+                row = _leased(
+                    led,
+                    run,
+                    "fixup",
+                    bound,
+                    lambda: runner_mod.run_fixup(ctx, reg, led, channel.call, forge_driver, run_id=run),
+                )
             else:
                 row = runner_mod.run_phase(ctx, reg, led, channel.call, run_id=run, phase=phase)
     except Refusal as r:
@@ -307,12 +358,19 @@ def close_verb(
 ) -> None:
     """Close a run (T-A9) over the chain that ran: its pull request merged, the checkout clean and holding the merge,
     the gate green on the merge commit, then drift, identity and acceptance — closed, or failed with its class, or
-    abandoned for a withdrawn card; the end landed on the store. A refusal leaves the run in flight."""
+    abandoned for a withdrawn card; the end landed on the store. A refusal leaves the run in flight. It holds a `close`
+    lease on the run as the operator for its duration; another holder's unexpired one refuses `run.lease-held`."""
     try:
         ctx, drv = _driver(tenant, checkout_path, base, root)
         channel = Transport(ctx.client, ctx.home)
         with ledger_mod.Ledger.open(ctx.home, tenant) as led:
-            row = close_mod.close(ctx, led, channel.call, drv, run_id=run, pr=pr)
+            row = _leased(
+                led,
+                run,
+                "close",
+                CLOSE_LEASE_S,
+                lambda: close_mod.close(ctx, led, channel.call, drv, run_id=run, pr=pr),
+            )
     except Refusal as r:
         _refuse(r)
     _out(row)

@@ -11,10 +11,11 @@ is never handed out for a row that was not written. A run id already held is `le
 unchanged (finding 18: *"idempotence by run id is the ledger's"* — made mechanical by the primary key).
 
 Tables are 03 §6's run record as rows: `runs` (the entry; `phases` / `verdicts` its two lists, V4/V5's to write), the
-ledger's own `events` (`dispatched` is a run's first), and `heads` (03 §1.15's history heads and journal head at every
-land — still unwritten after V5a: the store's `land` answers neither the journal head's hash nor the history heads,
-and the table's key, `landed_at`, is the cursor commit's time, which two lands at one cursor share). `report(run_id)`
-folds a run's events into the store's `RunReport`: *"the run report generated from it"* — since V5a
+ledger's own `events` (`dispatched` is a run's first), `leases` (card 28: one caller at a time on a run's close or
+fixup), and `heads` (03 §1.15's history heads and journal head at every land — still unwritten after V5a: the store's
+`land` answers neither the journal head's hash nor the history heads, and the table's key, `landed_at`, is the cursor
+commit's time, which two lands at one cursor share). `report(run_id)` folds a run's events into the store's
+`RunReport`: *"the run report generated from it"* — since V5a
 (`lander.land_run`) the land hands the store what the ledger says, never a hand-written file, and once.
 """
 
@@ -25,8 +26,9 @@ import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Final, get_args
+from typing import Any, Final, Literal, get_args
 
 from isidium.store.core import events as events_mod
 from isidium.store.core import telemetry
@@ -42,7 +44,9 @@ LEDGER_FILE: Final = "ledger.sqlite"
 # that the new thing takes its own name and the ordering term is left alone, so nothing in the ratified schema and
 # none of the records already written has to move. The particular word is the briefer's, within that ruling, and
 # says what happens: a failed run's work is carried onto this run's branch.
-SCHEMA: Final = 3
+# Schema 4 [card 28]: the `leases` table — a run's close or fixup, held by one caller at a time. A table arrives through
+# `_DDL`'s `IF NOT EXISTS` at every open, so a schema-3 file has it before the version moves.
+SCHEMA: Final = 4
 # Every column `runs` gained after schema 1, and what to declare it as. One list, read by the migration and by
 # nothing else: a column added to `_DDL` below and forgotten here would exist on a fresh ledger and never appear on
 # an upgraded one, which is the drift this pairs against.
@@ -59,6 +63,15 @@ ENDED: Final = "ended"
 CLOSED: Final = "closed"
 ABANDONED: Final = "abandoned"
 PARKED: Final = "parked"
+# The lease's closed sets (C-2): the actions that take one and the callers that hold one. The DDL's CHECKs say the same.
+LeaseAction = Literal["close", "fixup"]
+Holder = Literal["watcher", "operator"]
+LEASE_HELD: Final = "run.lease-held"
+# The outcome a lease is released with when its action ended in an exception that is not a refusal.
+LEASE_RAISED: Final = "raised"
+# The one time format the ledger writes lease instants in. The ledger compares them (expiry, the ceiling's `since`),
+# and fixed-width UTC text sorts as time does, so callers hand it aware datetimes and never a string to trust.
+_STAMP: Final = "%Y-%m-%dT%H:%M:%SZ"
 FAILED: Final = "failed:"
 ENDS: Final[frozenset[str]] = frozenset(
     {CLOSED, ABANDONED, PARKED, *(FAILED + c for c in get_args(events_mod.FailureClass))}
@@ -83,8 +96,27 @@ _DDL: Final = (
         kind TEXT NOT NULL, data TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS heads (
         landed_at TEXT PRIMARY KEY, cursor TEXT NOT NULL, journal_head TEXT NOT NULL, history_heads TEXT NOT NULL)""",
+    # Card 28: appended, never inserted -- tests index `_DDL[0]` and `_DDL[1]`. Rows are never deleted: the table is the
+    # lock, the history and the watcher's ceiling count. An expired lease whose holder died stays as written.
+    """CREATE TABLE IF NOT EXISTS leases (
+        run_id TEXT NOT NULL REFERENCES runs(run_id), action TEXT NOT NULL CHECK (action IN ('close', 'fixup')),
+        head_sha TEXT, holder TEXT NOT NULL CHECK (holder IN ('watcher', 'operator')), taken_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL, released_at TEXT, outcome TEXT)""",
 )
 _JSON_COLUMNS: Final = frozenset({"context", "score", "refs_resolved", "surfaces_actual", "price_table"})
+
+
+@dataclass(frozen=True)
+class Lease:
+    """A taken lease: `id` is the row's rowid, what `release_lease` finds it by."""
+
+    id: int
+    run_id: str
+    action: LeaseAction
+    holder: Holder
+    head_sha: str | None
+    taken_at: str
+    expires_at: str
 
 
 @dataclass(frozen=True)
@@ -139,6 +171,8 @@ class Ledger:
             # its actual shape **can disagree** — V5a's own test builds a "schema 1" table out of the current DDL —
             # and a migration that believes the number over the table adds a column that is already there. Reading
             # `table_info` costs one query and makes this idempotent, which a migration should be anyway.
+            # A table (card 28's `leases`) is not a column: it came through `_DDL`'s `IF NOT EXISTS` in the first
+            # transaction of this open, so only the version moves for it.
             have = {str(r[1]) for r in self.db.execute("PRAGMA table_info(runs)")}
             with self.transaction():
                 for column, decl in ADDED_COLUMNS.items():  # names from this module, never from input
@@ -418,6 +452,67 @@ class Ledger:
             if cur.rowcount == 0:
                 raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
 
+    def take_lease(
+        self,
+        run_id: str,
+        action: LeaseAction,
+        holder: Holder,
+        head_sha: str | None,
+        at: datetime,
+        for_s: float,
+    ) -> Lease:
+        """A run's action, held [card 28]. The check and the insert are ONE `BEGIN IMMEDIATE` transaction, so two
+        connections on one file serialise on sqlite's write lock and cannot both pass the check. An unreleased lease
+        for the same (run, action) that has not expired refuses `run.lease-held`, naming its holder and expiry; an
+        expired one (its holder died, and left it to expire) is left as written and no longer matches."""
+        with telemetry.span(
+            SPAN, **{"isidium.run_id": run_id, "isidium.lease.action": action, "isidium.lease.holder": holder}
+        ) as sp:
+            now = at.strftime(_STAMP)
+            expires = (at + timedelta(seconds=for_s)).strftime(_STAMP)
+            try:
+                with self.transaction():
+                    if self.run(run_id) is None:
+                        raise Refusal("ledger.unknown-run", run_id, "no such run in this ledger")
+                    held = self.db.execute(
+                        "SELECT holder, expires_at FROM leases"
+                        " WHERE run_id = ? AND action = ? AND released_at IS NULL AND expires_at > ?",
+                        (run_id, action, now),
+                    ).fetchone()
+                    if held is not None:
+                        raise Refusal(
+                            LEASE_HELD, run_id, f"{action} is held by {held['holder']} until {held['expires_at']}"
+                        )
+                    cur = self.db.execute(
+                        "INSERT INTO leases (run_id, action, head_sha, holder, taken_at, expires_at)"
+                        " VALUES (?, ?, ?, ?, ?, ?)",
+                        (run_id, action, head_sha, holder, now, expires),
+                    )
+            except Refusal as refusal:
+                telemetry.record_refusal_on(sp, refusal.rule)
+                raise
+            assert cur.lastrowid is not None  # an INSERT that returned has a rowid
+            return Lease(cur.lastrowid, run_id, action, holder, head_sha, now, expires)
+
+    def release_lease(self, lease: Lease, at: datetime, outcome: str) -> None:
+        """The lease, released with the action's outcome. An UPDATE and never a DELETE (R1); a lease already released
+        is left as it was."""
+        with (
+            telemetry.span(
+                SPAN,
+                **{
+                    "isidium.run_id": lease.run_id,
+                    "isidium.lease.action": lease.action,
+                    "isidium.lease.holder": lease.holder,
+                },
+            ),
+            self.transaction(),
+        ):
+            self.db.execute(
+                "UPDATE leases SET released_at = ?, outcome = ? WHERE rowid = ? AND released_at IS NULL",
+                (at.strftime(_STAMP), outcome, lease.id),
+            )
+
     def _event(self, run_id: str, at: str, kind: str, data: Mapping[str, Any]) -> None:
         self.db.execute(
             "INSERT INTO events (run_id, at, kind, data) VALUES (?, ?, ?, ?)", (run_id, at, kind, _dump(data))
@@ -429,6 +524,15 @@ class Ledger:
         """Runs dispatched and not ended — the WIP cap's count and the expedite dial's."""
         rows = self.db.execute("SELECT * FROM runs WHERE ended_at IS NULL ORDER BY dispatched_at, run_id").fetchall()
         return [_row(r) for r in rows]
+
+    def leases_taken(self, holder: Holder, action: LeaseAction, since: datetime) -> int:
+        """How many leases `holder` took for `action` since `since`, inclusive -- released or not, expired or not,
+        because a take is what the PR watcher's daily ceiling counts [card 28, R5]."""
+        row = self.db.execute(
+            "SELECT COUNT(*) FROM leases WHERE holder = ? AND action = ? AND taken_at >= ?",
+            (holder, action, since.strftime(_STAMP)),
+        ).fetchone()
+        return int(row[0])
 
     def run(self, run_id: str) -> dict[str, Any] | None:
         r = self.db.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
