@@ -14,7 +14,8 @@ cadence is the host timer's (card 30).
 lease rows, not from a table of the watcher's own. The closed set of lease actions is `close` and `fixup`
 (`ledger.LeaseAction`), so a rerun -- which is a request `close` already makes of the forge -- takes a `close` lease
 and is released with the outcome `RERUN`: it must not take a `fixup` lease, because every watcher fixup take counts
-against `fixup_per_day`.
+against `fixup_per_day`. A watcher action that a verb refused or raised ended its lease with the rule or `raised`, and
+is not chosen again at that head (card 35): the run is flagged once instead.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ from isidium.store.core import telemetry
 from isidium.store.core.refusal import Refusal
 
 from .forge import Checks, MergeableState, MergeState, Verdict
-from .ledger import DISPATCHED, LEASE_HELD, LEASE_RAISED, Holder, LeaseAction, Ledger
+from .ledger import DISPATCHED, ENDS, LEASE_HELD, LEASE_RAISED, Holder, LeaseAction, Ledger
 
 PASS_SPAN: Final = "isidium.factory.watch.pass"
 ACTION_SPAN: Final = "isidium.factory.watch.action"
@@ -52,6 +53,8 @@ RERUN_LEASE_S: Final = 300.0
 WATCHER_SCHEMA: Final = 8
 # What a pass logs an outcome as when it did not act: a lease taken by someone else between the read and the take.
 SKIPPED: Final = "skipped"
+# What a verb answers with when it completes: a lease released with anything else was refused (its rule id) or raised.
+_ANSWERED: Final = frozenset({DISPATCHED, RERUN, *ENDS})
 LOGGED: Final = "logged"
 ALREADY_LOGGED: Final = "already-logged"
 
@@ -69,7 +72,7 @@ REFUSALS: Final = _meter.create_counter(
     "isidium.factory.watch.refusals", unit="{refusal}", description="refusals met by a pass, by rule id"
 )
 
-FlagKind = Literal["stale", "conflicted", "red", "red-after-fixup", "unpushed"]
+FlagKind = Literal["stale", "conflicted", "red", "red-after-fixup", "unpushed", "fixup-refused", "rerun-refused"]
 
 
 class Watched(Protocol):
@@ -104,6 +107,14 @@ class Flag:
     run_id: str
     head: str
     kind: FlagKind
+
+
+@dataclass(frozen=True)
+class Refused(Flag):
+    """A flag for an action the watcher took at this head and the verb refused or raised: `rule` is the refusal's rule
+    id, or `LEASE_RAISED`. Typed, never a formatted string (C-2); the log row carries it."""
+
+    rule: str
 
 
 Action = Close | Rerun | Fixup | Flag
@@ -215,6 +226,23 @@ def _fixup_ran(past: Sequence[Past]) -> bool:
     return any(p.action == "fixup" and p.outcome == DISPATCHED for p in past)
 
 
+def _refused_at(past: Sequence[Past], action: str, head: str) -> str | None:
+    """Card 35 R1/R2: how the watcher's last `action` lease at `head` ended, when it ended in a refusal's rule id or
+    `LEASE_RAISED`; `None` when there is none. Only the watcher's own leases count, so an operator's refused fixup is
+    still not the watcher's to read. A rerun takes a `close` lease (module docstring), so a refused rerun is read from
+    one: the watcher's own `Close` is chosen only for a merged pull request, which never reaches the rerun branch."""
+    refused = [
+        p.outcome
+        for p in past
+        if p.holder == HOLDER
+        and p.action == action
+        and p.head_sha == head
+        and p.outcome is not None
+        and p.outcome not in _ANSWERED
+    ]
+    return refused[-1] if refused else None
+
+
 def _decide_one(v: View, taken: int, policy: Policy | None) -> tuple[Action, ...]:
     s = v.state
     if s.merged:
@@ -226,20 +254,28 @@ def _decide_one(v: View, taken: int, policy: Policy | None) -> tuple[Action, ...
     if v.checks is None or v.checks.verdict is not Verdict.RED:
         return ()
     if not _rerun_at(v.past, s.head):
+        reran = _refused_at(v.past, "close", s.head)
+        if reran is not None:
+            # Refused or raised once at this head: not asked again (card 35 R2); the flag is the escalation.
+            return (Refused(v.run_id, s.head, "rerun-refused", reran),)
         return (Rerun(v.run_id, s.head),)
     if v.head_sha != s.head:
         # The run's head is its fixup's commit and the operator has not pushed it: the pull request still reads the
         # old red head, and `run_fixup` would refuse it. Nothing the watcher may do (it never pushes) but say so.
         return (Flag(v.run_id, s.head, "unpushed"),)
+    refused = _refused_at(v.past, "fixup", s.head)
     if not _fixup_ran(v.past):
+        if refused is not None:
+            # Refused or raised once at this head: not taken again (card 35 R1), so a stuck run is one take.
+            return (Refused(v.run_id, s.head, "fixup-refused", refused),)
         if policy is not None and policy.fixup and taken < policy.fixup_per_day:
             return (Fixup(v.run_id, s.head),)
         return (Flag(v.run_id, s.head, "red"),)
-    # Red after the fixup, and rerun at this head: the fixup verb ends the run `failed:gate` with no model call, which
-    # is not the ceiling's to ration -- but it is still the opt-in's (R7).
-    if policy is not None and policy.fixup:
-        return (Fixup(v.run_id, s.head), Flag(v.run_id, s.head, "red-after-fixup"))
-    return (Flag(v.run_id, s.head, "red-after-fixup"),)
+    # Red after the fixup, and rerun at this head: the fixup verb ends the run `failed:gate` with no model call, so
+    # neither the ceiling nor the opt-in rations it (card 35 R3) -- it is called for every tenant, below config@8 too.
+    if refused is not None:
+        return (Refused(v.run_id, s.head, "fixup-refused", refused), Flag(v.run_id, s.head, "red-after-fixup"))
+    return (Fixup(v.run_id, s.head), Flag(v.run_id, s.head, "red-after-fixup"))
 
 
 def decide(views: Sequence[View], taken_today: int, policy: Policy | None, now: datetime) -> tuple[Action, ...]:
@@ -305,7 +341,15 @@ class _Log:
         if key in self.seen:
             return False
         self.seen.add(key)
-        self.append({"run": f.run_id, "head": f.head, "action": "flag", "kind": f.kind})
+        self.append(
+            {
+                "run": f.run_id,
+                "head": f.head,
+                "action": "flag",
+                "kind": f.kind,
+                **({"rule": f.rule} if isinstance(f, Refused) else {}),
+            }
+        )
         return True
 
 

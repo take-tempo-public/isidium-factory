@@ -1,0 +1,24 @@
+# Card 35 -- the retry limits are checked against this card's own test file only, never the whole suite:
+# mutate.py runs the whole suite per mutation by default, and `--show` is all it is used for here.
+#
+#     python tools/mutate.py tools/mutations/watch-retries.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_watch_retries.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "a refused fixup is chosen again -- the refusal history is not read, so a stuck run takes the day's ceiling every pass (killed by S1, test_a_refused_fixup_is_not_chosen_again)"
+file = "packages/isidium-factory/src/isidium/factory/watch.py"
+find = '''    refused = _refused_at(v.past, "fixup", s.head)'''
+replace = '''    refused = None'''
+
+[[mutation]]
+id = "M2"
+label = "a refusal leaves the lease unreleased -- the Refusal branch of _leased no longer releases (killed by S4, test_a_refused_action_releases_its_lease)"
+file = "packages/isidium-factory/src/isidium/factory/watch.py"
+find = '''    except Refusal as r:
+        ledger.release_lease(lease, now(), r.rule)
+        raise'''
+replace = '''    except Refusal:
+        raise'''

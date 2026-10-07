@@ -367,7 +367,9 @@ def test_red_after_the_fixup_ends_and_is_flagged(tmp_path: Path) -> None:
     assert watch.decide([again], 9, CAN_FIXUP, T) == (Fixup("r-1", H2), Flag("r-1", H2, "red-after-fixup")), (
         "no ceiling"
     )
-    assert watch.decide([again], 0, Policy(False, 0), T) == (Flag("r-1", H2, "red-after-fixup"),)
+    assert watch.decide([again], 0, Policy(False, 0), T) == (Fixup("r-1", H2), Flag("r-1", H2, "red-after-fixup")), (
+        "the verb spends nothing, so the opt-in does not ration it (card 35 R3)"
+    )
     unpushed = _view(state=_state(H1), head=F1, past=(ran, _past(head=H1)))
     assert watch.decide([unpushed], 0, CAN_FIXUP, T) == (Flag("r-1", H1, "unpushed"),)
     refused = _past("fixup", H1, "run.fixup-nothing-red", holder="operator")
@@ -541,7 +543,9 @@ def test_below_config8_no_fixup(tmp_path: Path) -> None:
     reran = (_past(),)
     after = (_past(), _past("fixup", H2, ledger_mod.DISPATCHED))
     assert watch.decide([_view(past=reran)], 0, None, T) == (Flag("r-1", H1, "red"),)
-    assert watch.decide([_view(past=after)], 0, None, T) == (Flag("r-1", H1, "red-after-fixup"),)
+    assert watch.decide([_view(past=after)], 0, None, T) == (Fixup("r-1", H1), Flag("r-1", H1, "red-after-fixup")), (
+        "red after a fixup ends through the verb below config@8 too (card 35 R3)"
+    )
     assert watch.decide([_view()], 0, None, T) == (Rerun("r-1", H1),), "rerun is still chosen"
     assert watch.decide([_view(state=_state(H1, merged=True))], 0, None, T) == (Close("r-1", H1),)
 
