@@ -1,7 +1,10 @@
 # Model evaluation, 2026-10: the five agents on Claude 5.5
 
-> **Status:** measured. The recommendations below are **proposed** until the owner rules. A re-tune is a signed
-> `config-policy` act; this document changes nothing by itself.
+> **Status:** measured and **ruled 2026-10-06 [owner]: "keep it as it is with the grids saved as reference"**. No
+> policy change: plan-author Opus 5.5/high, refuter Sonnet 5.5/high, judge Opus 5.5/high, builder Sonnet 5.5/high,
+> reviewer Opus 5.5/xhigh. The owner had weighed a Sonnet/medium judge and noted *"we need to review these when we
+> have the option of non Anthropic models"*. That is where the judge's lineage question, and every slot, is reopened.
+> This document is the reference for that review and for the next model release.
 > **Instrument:** `tools/replay.py`. Each replay reran a recorded first-pass `job.json` outside the ledger with only
 > the agent's model and effort changed. Every variant, the baseline included, ran on the current prompt
 > (plan-author v2, refuter v1, judge v1, builder v6, reviewer v3) and runner image `isidium-runner:v6`
@@ -89,7 +92,31 @@ revision.
 | Opus 5.5 / high | 4 | clean | 1.99, 2–3× slower |
 | Haiku 4.5 | 2 | several | 0.70 |
 
-## Proposed
+## Follow-ups (owner-requested)
+
+**Sonnet 5.5 as judge at every effort** (= live, out of 15; Opus/high's own repeat is 13): medium 13, $0.13; high 12,
+$0.22; xhigh 12, $0.44; max 11, $1.82. Higher effort does not help.
+
+**Sonnet 5.5 / xhigh and / max as reviewer, beyond the planted defect.**
+- Sonnet/xhigh: 13 findings, 2 real majors (repair-can-raise; `_diff`'s git refusals untested), $1.07.
+- Sonnet/max: planted 16/16, $3.11, 15.8 min, which is above Opus/xhigh on both.
+
+**Two natural defects on r-44, neither planted.** These separate the reviewers where planted faults do not:
+
+| reviewer | green-bar blind spot | orphaned M6 |
+|---|---|---|
+| Opus/xhigh (live) | 4/6 (the live run missed it) | 2/6 |
+| Opus/high | 3/4 | 0/4 |
+| Opus/medium | 1/4 | 0/4 |
+| Sonnet/max | 4/4 | 0/4 |
+| Sonnet/xhigh | 2/4 | 0/4 |
+| Sonnet/high | 1/4 | 0/4 |
+
+**The green-bar blind spot is an open defect.** This repository's required check is `green-bar`, an aggregator whose
+one step echoes `suite: <result>`. `failed_jobs` reads only required checks, so a live fixup is handed
+`suite: failure` and none of the lint, type or test output. The live r-44 review missed it; the evaluation found it.
+
+## Proposed (superseded by the ruling above: no change)
 
 | agent | live | proposal | why |
 |---|---|---|---|
