@@ -1661,14 +1661,14 @@
       "290b4d3ffad7e6ea1b8c676f524be1520007cf8ca844bf35ed9f5998fc5fcd20"
     ],
     "overflow": 0,
-    "run_id": "r-49"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:0e930d27587fab6ab0aa0012db8dac509e3dd5cc65c7c38b7dbb4c4a3d868462",
-    "seq": 340
+    "h": "sha256:a44e678922cbcbb4576e856b0d995f048dabd8ca3f27d5bfe067c5903f7da823",
+    "seq": 341
   },
-  "landed_at": "2026-10-07T13:11:50Z",
-  "ledger_cursor": "f492e9747e173f9f8365ba1224706cd5993d2a45",
+  "landed_at": "2026-10-07T13:43:20Z",
+  "ledger_cursor": "7043f328bfebcc70e09eda111c4952116b3d96e2",
   "schema": 2
 }
