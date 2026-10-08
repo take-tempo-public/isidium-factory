@@ -2,7 +2,7 @@
 schema = 1
 id = 40
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge"
 shape = "bdd"
@@ -77,5 +77,6 @@ Found live 2026-10-07, the watcher's first action: r-52 (card 37, #111) merged, 
 ```toml
 history = [
   { seq = 1, at = "2026-10-07T23:39:10Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:6c247aca63254cbfbb3e6644d4f902ff8d09e2337bdf1bf91168d10fec06152b", h = "sha256:7167d1a574ae50f594b8e21b9a65a6bcbc5d50bff8d56b1a256424aff4d8f272" },
+  { seq = 2, at = "2026-10-08T00:26:22Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:6c247aca63254cbfbb3e6644d4f902ff8d09e2337bdf1bf91168d10fec06152b", h = "sha256:edeb97c4b9e79d3e8ff698844ca218ee3dc7da4b5b446606a67c82e3330fa491", batch = 71 },
 ]
 ```
