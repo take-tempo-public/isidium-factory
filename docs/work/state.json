@@ -1792,10 +1792,29 @@
     "0040": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "b9c8d81c51134b2e77df58387941f3f0d86caad4",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "1ef2c3da74daf9cb19f2ee2921555f6ce5684825",
+            "path": "packages/isidium-factory/src/isidium/factory/watch.py"
+          },
+          {
+            "blob": "5c28b0160ea31d5b1d0630a8b42a92caec572ca7",
+            "path": "packages/isidium-factory/src/isidium/factory/close.py"
+          },
+          {
+            "blob": "2dc1f2e133617c3faba4f3c2d7d95d395777aade",
+            "path": "packages/isidium-factory/src/isidium/factory/cli.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:7167d1a574ae50f594b8e21b9a65a6bcbc5d50bff8d56b1a256424aff4d8f272",
-        "seq": 1
+        "h": "sha256:edeb97c4b9e79d3e8ff698844ca218ee3dc7da4b5b446606a67c82e3330fa491",
+        "seq": 2
       },
       "runs": []
     }
@@ -1920,14 +1939,14 @@
       "0e3fa1b65d1d968664a2d11ef35b37726dd14971f3ab28c1c2a8084384b0b4a4"
     ],
     "overflow": 0,
-    "run_id": "r-53"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:14d5bc6be1c779fe2b9d327fb2e6c1170366f612d41560f371067ae74a24a1b3",
-    "seq": 362
+    "h": "sha256:3cf0d8a03dbf42c4b1ea29e9b3e5d35cd59b79a54c61769bfff5a51b4523624d",
+    "seq": 364
   },
-  "landed_at": "2026-10-07T23:59:44Z",
-  "ledger_cursor": "a43eca17ed9ba433edc3a9eb5646fedf13e1a806",
+  "landed_at": "2026-10-08T00:26:22Z",
+  "ledger_cursor": "b9c8d81c51134b2e77df58387941f3f0d86caad4",
   "schema": 2
 }
