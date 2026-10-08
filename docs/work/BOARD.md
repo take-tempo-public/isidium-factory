@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -52,7 +52,7 @@ none
 - **35** · The PR watcher never retries a refused action at the same head, so one stuck run cannot spend the day's fixup ceiling · closed · software-grade · (derived)
 - **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · closed · software-grade · (derived)
 - **37** · An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull req… · closed · software-grade · (derived)
-- **38** · The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus · dispatched · software-grade · (derived)
+- **38** · The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus · closed · software-grade · (derived)
 - **40** · Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge · draft · (derived)
 
 ## Blocked
