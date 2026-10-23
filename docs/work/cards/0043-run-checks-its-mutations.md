@@ -2,7 +2,7 @@
 schema = 1
 id = 43
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconcile"
 shape = "bdd"
@@ -103,5 +103,6 @@ Ruled [owner, 2026-10-07]: 'Mutation check in the run', against 'The card's own 
 ```toml
 history = [
   { seq = 1, at = "2026-10-08T01:38:01Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e78edebc980de1efe535eb96958cd0a71bd8300e75f031dc5ae1de7c059102e8", h = "sha256:90e873d917b76171c701b9ad028efcce3b726816e733497ed4529168af820fb6" },
+  { seq = 2, at = "2026-10-23T21:18:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e78edebc980de1efe535eb96958cd0a71bd8300e75f031dc5ae1de7c059102e8", h = "sha256:76547f146e6f4fe47b31a05785f235cc897c826eafc0312d55bae38bbeed037f", batch = 72 },
 ]
 ```

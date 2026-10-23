@@ -2,7 +2,7 @@
 schema = 1
 id = 41
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The watcher task's health is read from its own log: a -Status switch reports the last pass's exit, since the headless launch hides it"
 shape = "bdd"
@@ -68,5 +68,6 @@ Found by r-53's review (card 38) and verified by hand 2026-10-07: `conhost.exe -
 ```toml
 history = [
   { seq = 1, at = "2026-10-08T00:28:26Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c4cc4ce53531584422fc702589cafd9735bd4af5d3d898d67b73ebf839f40ce6", h = "sha256:b94b41f9e6cd47e39c48fb3a8533fcf511ee4dfcd54f12cb9b7920dd74f449dc" },
+  { seq = 2, at = "2026-10-23T21:18:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c4cc4ce53531584422fc702589cafd9735bd4af5d3d898d67b73ebf839f40ce6", h = "sha256:62e77ab7d7f09f1ca733cb1ee1eba425c3a5ff49235cf5113c617268ad6c5a17", batch = 72 },
 ]
 ```
