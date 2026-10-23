@@ -54,6 +54,11 @@ none
 - **37** · An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull req… · closed · software-grade · (derived)
 - **38** · The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus · closed · software-grade · (derived)
 - **40** · Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge · ready · software-grade · (derived)
+- **41** · The watcher task's health is read from its own log: a -Status switch reports the last pass's exit, since the headless l… · ready · software-grade · (derived)
+- **42** · The PR watcher lands what the store holds unlanded, and flags a store image or schema registry that is behind · draft · blocked_by[40] · depends_on 40 · (derived)
+- **43** · A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconci… · ready · software-grade · (derived)
+- **44** · The config schema's [watcher] table gains a signed dispatch opt-in and a daily dispatch cap · draft · blocked_by[42] · depends_on 42 · (derived)
+- **45** · The PR watcher dispatches the next ready card when nothing is in flight, and starts its run as a separate one-shot task · draft · blocked_by[41, 42, 44] · depends_on 42,44,41 · (derived)
 
 ## Blocked
 
