@@ -2,7 +2,7 @@
 schema = 1
 id = 45
 kind = "story"
-status = "draft"
+status = "withdrawn"
 source = "session"
 title = "The PR watcher dispatches the next ready card when nothing is in flight, and starts its run as a separate one-shot task"
 shape = "bdd"
@@ -11,6 +11,7 @@ effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/watch.py", "packages/isidium-factory/src/isidium/factory/cli.py", "packages/isidium-factory/src/isidium/factory/dispatch.py", "packages/isidium-factory/src/isidium/factory/tenant.py", "deploy/watch-task.ps1", "deploy/README.md"]
 surfaces = ["packages/isidium-factory/src/isidium/factory/watch.py", "packages/isidium-factory/src/isidium/factory/cli.py", "packages/isidium-factory/src/isidium/factory/tenant.py", "deploy/run-task.ps1", "deploy/README.md", "tests/factory/test_watch_dispatches.py", "tests/factory/test_watch.py", "tools/mutations/watch-dispatch.toml"]
 priority = "P1"
+withdrawn_reason = "superseded 2026-10-23 by the owner's actor design: the witness only observes; the run owns its lifecycle to closed, the dispatcher starts the next card, the store ingests at the event (chunk plan)"
 
 [narrative]
 feature = "a signed card goes to build without anyone dispatching or launching it"
@@ -127,5 +128,6 @@ Not in scope: ship at gate-pass (the owner is weighing it) and auto-merge (held)
 ```toml
 history = [
   { seq = 1, at = "2026-10-08T01:38:33Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ed545caf5899f26633c7cfeceeef0795b13533c53b9c73f8f0aa2b8ef7803173", h = "sha256:f6bcb29475ca76fc697baab2ed15414347c15ffcd8aa97e68e50050d92f198cc" },
+  { seq = 2, at = "2026-10-25T20:51:07Z", by = "amodal1@users.noreply.github.com", act = "withdrawn", fields = ["status", "withdrawn_reason"], build = "sha256:ed545caf5899f26633c7cfeceeef0795b13533c53b9c73f8f0aa2b8ef7803173", h = "sha256:31bf900d9d7f2652a675e205875dd0a2849645bba276f2ac7b71a16c9f967b4d", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:HEgBH0BnKfzQrvUUOFCOkgVEqrB/rG82LZfhlIbZUxF0SLuNiPKYUMWA93OyFafm0liDwDjPW3UZNmYsPNM5AA==" },
 ]
 ```
