@@ -2,7 +2,7 @@
 schema = 1
 id = 42
 kind = "story"
-status = "draft"
+status = "withdrawn"
 source = "session"
 title = "The PR watcher lands what the store holds unlanded, and flags a store image or schema registry that is behind"
 shape = "bdd"
@@ -11,6 +11,7 @@ effort = "default"
 refs = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-factory/src/isidium/factory/watch.py", "packages/isidium-factory/src/isidium/factory/cli.py", "packages/isidium-factory/src/isidium/factory/lander.py", "packages/isidium-factory/src/isidium/factory/dispatch.py"]
 surfaces = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-factory/src/isidium/factory/watch.py", "packages/isidium-factory/src/isidium/factory/cli.py", "tests/factory/test_watch_lands_and_flags.py", "tests/factory/test_watch_idle_pass.py", "tests/factory/test_watch.py", "tests/store/test_queue_counts_pending_ingest.py"]
 priority = "P1"
+withdrawn_reason = "superseded 2026-10-23 by the owner's actor design: the witness only observes; the run owns its lifecycle to closed, the dispatcher starts the next card, the store ingests at the event (chunk plan)"
 
 [narrative]
 feature = "a signed card becomes dispatchable and a merge becomes landed without anyone running an empty land by hand"
@@ -118,5 +119,6 @@ Ruled [owner, 2026-10-07]: 'Watcher lands + flags'. Today every signature and ev
 ```toml
 history = [
   { seq = 1, at = "2026-10-08T01:37:45Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:8a618f4aca499316529f15d4147fd5124a8b1aaec6953421cbd8156a8a3f777c", h = "sha256:d5606f6a98be321902f988a4735d42ef196ea5f955edd040ab34f5c2c80f2910" },
+  { seq = 2, at = "2026-10-25T20:50:45Z", by = "amodal1@users.noreply.github.com", act = "withdrawn", fields = ["status", "withdrawn_reason"], build = "sha256:8a618f4aca499316529f15d4147fd5124a8b1aaec6953421cbd8156a8a3f777c", h = "sha256:050458ea776f2ef1e0097ffcba8f9551e3585c6d1885fadba0f05baf798d8f82", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:VdzMQEneCNZHPtEHVuCfmA9yJng5FseHXkjZfPOh3MdvSm/ZYTj+bmYkUJ8ddkkvDTl3zXK8EMGB08obSrsrDg==" },
 ]
 ```
