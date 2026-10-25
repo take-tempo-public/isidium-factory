@@ -2,7 +2,7 @@
 schema = 1
 id = 40
 kind = "story"
-status = "ratified"
+status = "withdrawn"
 source = "session"
 title = "Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge"
 shape = "bdd"
@@ -10,6 +10,7 @@ effort = "default"
 refs = ["packages/isidium-factory/src/isidium/factory/watch.py", "packages/isidium-factory/src/isidium/factory/close.py", "packages/isidium-factory/src/isidium/factory/cli.py"]
 surfaces = ["packages/isidium-factory/src/isidium/factory/watch.py", "tests/factory/test_watch_fast_forwards.py"]
 priority = "P1"
+withdrawn_reason = "superseded 2026-10-23 by the owner's actor design: the witness only observes; the run owns its lifecycle to closed, the dispatcher starts the next card, the store ingests at the event (chunk plan)"
 
 [narrative]
 feature = "the watcher's close works without a person pulling the checkout first"
@@ -78,5 +79,6 @@ Found live 2026-10-07, the watcher's first action: r-52 (card 37, #111) merged, 
 history = [
   { seq = 1, at = "2026-10-07T23:39:10Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:6c247aca63254cbfbb3e6644d4f902ff8d09e2337bdf1bf91168d10fec06152b", h = "sha256:7167d1a574ae50f594b8e21b9a65a6bcbc5d50bff8d56b1a256424aff4d8f272" },
   { seq = 2, at = "2026-10-08T00:26:22Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:6c247aca63254cbfbb3e6644d4f902ff8d09e2337bdf1bf91168d10fec06152b", h = "sha256:edeb97c4b9e79d3e8ff698844ca218ee3dc7da4b5b446606a67c82e3330fa491", batch = 71 },
+  { seq = 3, at = "2026-10-25T20:50:38Z", by = "amodal1@users.noreply.github.com", act = "withdrawn", fields = ["status", "withdrawn_reason"], build = "sha256:6c247aca63254cbfbb3e6644d4f902ff8d09e2337bdf1bf91168d10fec06152b", h = "sha256:afcc5c0423a6957910601b2fedf6542fa43e2de610c60fcd8ea9120379e74c64", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:7Vm27nibbEC2tBlFpbUBKmyO4LLTVim0NDNFg9eKw7tsyF+AjrkUq+VclVPlyVQw+TXAaGiMes0+PxU5WWmLCQ==" },
 ]
 ```
