@@ -2,7 +2,7 @@
 schema = 1
 id = 44
 kind = "story"
-status = "draft"
+status = "withdrawn"
 source = "session"
 title = "The config schema's [watcher] table gains a signed dispatch opt-in and a daily dispatch cap"
 shape = "bdd"
@@ -11,6 +11,7 @@ effort = "default"
 refs = ["packages/isidium-store/src/isidium/store/registry/schemas/config@8.toml", "packages/isidium-store/src/isidium/store/registry/config.py", "packages/isidium-factory/src/isidium/factory/watch.py", "docs/design/04-config-schema.md"]
 surfaces = ["packages/isidium-store/src/isidium/store/registry/schemas/config@9.toml", "packages/isidium-store/src/isidium/store/registry/config.py", "packages/isidium-factory/src/isidium/factory/watch.py", "docs/design/04-config-schema.md", "tests/store/test_config9.py", "tests/unit/test_lazy_registry.py", "tests/unit/test_registry.py", "tests/store/test_k6.py", "tests/store/test_k10.py", "tests/store/test_v3.py", "tests/store/test_k7b.py", "tests/store/test_verify_chain.py", "tests/store/test_config8.py", "tests/factory/test_v1.py"]
 priority = "P2"
+withdrawn_reason = "superseded 2026-10-23 by the owner's actor design: the witness only observes; the run owns its lifecycle to closed, the dispatcher starts the next card, the store ingests at the event (chunk plan)"
 
 [narrative]
 feature = "the owner turns unattended dispatch on, and caps it, with a signature"
@@ -78,5 +79,6 @@ Ruled [owner, 2026-10-07]: the dispatcher's spend guard is 'Signed opt-in + dail
 ```toml
 history = [
   { seq = 1, at = "2026-10-08T01:38:14Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:db63bc5dcd21beb2bfe1f1fdc2fdbd8820802fe0ad5cec722dcaf5cc930ba768", h = "sha256:ddb8a1c720d7c0a109d56bd5653371221ad7e5ae0d0f64ce95f23fc374a473c3" },
+  { seq = 2, at = "2026-10-25T20:50:59Z", by = "amodal1@users.noreply.github.com", act = "withdrawn", fields = ["status", "withdrawn_reason"], build = "sha256:db63bc5dcd21beb2bfe1f1fdc2fdbd8820802fe0ad5cec722dcaf5cc930ba768", h = "sha256:5aeb638a9c286861414599a845dc02c356ab0b2a3e373acaf45eb89c5bd09cda", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:8zmn/8+V050qrYaJm/O4Diswyd/tEkmRKvwdXYFjwq/6EdzYoq+C7ocZ49GXs8fHqJnkll8Sy8TyfTQpGNz6AQ==" },
 ]
 ```
