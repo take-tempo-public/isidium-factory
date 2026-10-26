@@ -2,7 +2,7 @@
 schema = 1
 id = 46
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The store ingests at the event: a signed ratification and a pending merge are landed by the store itself, not by an empty report"
 shape = "bdd"
@@ -98,5 +98,6 @@ Ruled [owner, 2026-10-23]: ingest is 'The store, at the event'. Every signature 
 ```toml
 history = [
   { seq = 1, at = "2026-10-25T21:44:17Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:697c9b586cb421862cb8147b0806b05889f50ac5fc9c9ec008d2d5f5b946e4a3", h = "sha256:16e721b4e1e7f678f27b1bbc6397b8a4e670544826101b0c59aec13c61658802" },
+  { seq = 2, at = "2026-10-26T13:43:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:697c9b586cb421862cb8147b0806b05889f50ac5fc9c9ec008d2d5f5b946e4a3", h = "sha256:e4dcd4b2d64e5e3ec779b1a0b15cd798da9a534f1c1660c4b37536c00d391b10", batch = 73 },
 ]
 ```

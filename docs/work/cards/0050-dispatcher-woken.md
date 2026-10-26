@@ -2,7 +2,7 @@
 schema = 1
 id = 50
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The witness wakes the dispatcher when the line is free; the dispatcher checks its signed cap, picks, and wakes the run"
 shape = "bdd"
@@ -121,5 +121,6 @@ Ruled [owner, 2026-10-07/23/25]: 'Dependencies + dispatcher'; 'Separate run task
 ```toml
 history = [
   { seq = 1, at = "2026-10-25T21:44:49Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:9eb95f04d5f46dd0f4bd1bc7a29e6dcaea3c21cb91960e5a27e6088538499f65", h = "sha256:8c62ccfc60f12cd143d3bd49b64d8f07e4f4bde013056117791f538428cc01b0" },
+  { seq = 2, at = "2026-10-26T13:43:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:9eb95f04d5f46dd0f4bd1bc7a29e6dcaea3c21cb91960e5a27e6088538499f65", h = "sha256:e59267ca4988b76243786bbe6642fe7e5c52167c3ab97be892c853d6516a877e", batch = 73 },
 ]
 ```

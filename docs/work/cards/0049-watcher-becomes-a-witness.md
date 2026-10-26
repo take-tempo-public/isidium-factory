@@ -2,7 +2,7 @@
 schema = 1
 id = 49
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The PR watcher becomes a witness: it records what it sees and wakes the owning run, and acts on nothing"
 shape = "bdd"
@@ -110,5 +110,6 @@ Ruled [owner, 2026-10-07/23]: 'the watcher shoudn't ship. it should watch. and t
 ```toml
 history = [
   { seq = 1, at = "2026-10-25T21:44:41Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:b844c585bb0b3e05a8bdab4f6a78a465c28b0b186b5f31ada4ba61d4cc1b6d00", h = "sha256:4cb4dca160fd937f39f7a90670a5bfa27e107ebe7f19d5b8f323ef38bbfd4f24" },
+  { seq = 2, at = "2026-10-26T13:43:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:b844c585bb0b3e05a8bdab4f6a78a465c28b0b186b5f31ada4ba61d4cc1b6d00", h = "sha256:33e852741c0d72403e52d4a73e98e246ff49220c896fa9f70e0e1a58ad33cf16", batch = 73 },
 ]
 ```

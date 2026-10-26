@@ -2,7 +2,7 @@
 schema = 1
 id = 48
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The run owns its life to closed: it ships when its review gate passes, and each resume re-reads its card and takes its own next step"
 shape = "bdd"
@@ -144,5 +144,6 @@ Ruled [owner, 2026-10-23/25]: 'The run owns it to closed'; 'Re-read the card fir
 ```toml
 history = [
   { seq = 1, at = "2026-10-25T21:44:34Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:f97c3526a3546bcbe0983a5bf64d8a18aee4c48cbfcb70fa46a79d56e7fca2e1", h = "sha256:63d0c61af4da5bd4b401f5c2bb87097dff7c9a72c50b7a30039ccd0392adcae9" },
+  { seq = 2, at = "2026-10-26T13:43:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:f97c3526a3546bcbe0983a5bf64d8a18aee4c48cbfcb70fa46a79d56e7fca2e1", h = "sha256:73138aba2a0c18af7e0aa499da4de69761c9774663024fe39d5a4068218daec7", batch = 73 },
 ]
 ```

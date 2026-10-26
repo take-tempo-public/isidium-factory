@@ -2,7 +2,7 @@
 schema = 1
 id = 47
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The ledger records typed observations, and a launcher named in the registration starts an actor's one-shot task"
 shape = "bdd"
@@ -115,5 +115,6 @@ Ruled [owner, 2026-10-23/25]: wake by 'Observation + run task' (the witness writ
 ```toml
 history = [
   { seq = 1, at = "2026-10-25T21:44:25Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:139c292e2d7fff6baccf10c9bfa2a43b096234a4e025ad1b2b25cf2cac5ad731", h = "sha256:2c82effaee1d2e6ae9e172622f1ea65516de49cb9a3dd2d6070bd345f231bcff" },
+  { seq = 2, at = "2026-10-26T13:43:32Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:139c292e2d7fff6baccf10c9bfa2a43b096234a4e025ad1b2b25cf2cac5ad731", h = "sha256:2aa2c3f52751a963fb8dc24465d7a06b661b47a5458dadd10f23f3f34073c11c", batch = 73 },
 ]
 ```
