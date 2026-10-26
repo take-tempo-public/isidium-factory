@@ -53,12 +53,17 @@ none
 - **36** · The watcher's scheduled task runs on battery, from absolute paths, and says so when registering fails · closed · software-grade · (derived)
 - **37** · An idle watcher pass reads the ledger and stops: no tenant context, no fetch, no forge, when no open run has a pull req… · closed · software-grade · (derived)
 - **38** · The watcher's scheduled task runs its pass in a headless console, so no window opens and nothing takes focus · closed · software-grade · (derived)
-- **40** · Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge · ready · software-grade · (derived)
+- **40** · Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge · withdrawn · software-grade · (derived)
 - **41** · The watcher task's health is read from its own log: a -Status switch reports the last pass's exit, since the headless l… · ready · software-grade · (derived)
-- **42** · The PR watcher lands what the store holds unlanded, and flags a store image or schema registry that is behind · draft · blocked_by[40] · depends_on 40 · (derived)
+- **42** · The PR watcher lands what the store holds unlanded, and flags a store image or schema registry that is behind · withdrawn · software-grade · depends_on 40 · (derived)
 - **43** · A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconci… · ready · software-grade · (derived)
-- **44** · The config schema's [watcher] table gains a signed dispatch opt-in and a daily dispatch cap · draft · blocked_by[42] · depends_on 42 · (derived)
-- **45** · The PR watcher dispatches the next ready card when nothing is in flight, and starts its run as a separate one-shot task · draft · blocked_by[41, 42, 44] · depends_on 42,44,41 · (derived)
+- **44** · The config schema's [watcher] table gains a signed dispatch opt-in and a daily dispatch cap · withdrawn · software-grade · depends_on 42 · (derived)
+- **45** · The PR watcher dispatches the next ready card when nothing is in flight, and starts its run as a separate one-shot task · withdrawn · software-grade · depends_on 42,44,41 · (derived)
+- **46** · The store ingests at the event: a signed ratification and a pending merge are landed by the store itself, not by an emp… · ready · software-grade · (derived)
+- **47** · The ledger records typed observations, and a launcher named in the registration starts an actor's one-shot task · ratified · blocked_by[41] · software-grade · depends_on 41 · (derived)
+- **48** · The run owns its life to closed: it ships when its review gate passes, and each resume re-reads its card and takes its … · ratified · blocked_by[43, 47] · software-grade · depends_on 47,43 · (derived)
+- **49** · The PR watcher becomes a witness: it records what it sees and wakes the owning run, and acts on nothing · ratified · blocked_by[48] · software-grade · depends_on 48 · (derived)
+- **50** · The witness wakes the dispatcher when the line is free; the dispatcher checks its signed cap, picks, and wakes the run · ratified · blocked_by[46, 49] · software-grade · depends_on 46,49 · (derived)
 
 ## Blocked
 
