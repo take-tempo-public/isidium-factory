@@ -1,6 +1,6 @@
 # Board
 
-WIP 0/1 · inbox 0
+WIP 1/1 · inbox 0
 
 ## Queue
 
@@ -56,7 +56,7 @@ none
 - **40** · Before it closes a merged run, the PR watcher fast-forwards a clean checkout to the base, so the close sees the merge · withdrawn · software-grade · (derived)
 - **41** · The watcher task's health is read from its own log: a -Status switch reports the last pass's exit, since the headless l… · ready · software-grade · (derived)
 - **42** · The PR watcher lands what the store holds unlanded, and flags a store image or schema registry that is behind · withdrawn · software-grade · depends_on 40 · (derived)
-- **43** · A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconci… · ready · software-grade · (derived)
+- **43** · A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconci… · dispatched · software-grade · (derived)
 - **44** · The config schema's [watcher] table gains a signed dispatch opt-in and a daily dispatch cap · withdrawn · software-grade · depends_on 42 · (derived)
 - **45** · The PR watcher dispatches the next ready card when nothing is in flight, and starts its run as a separate one-shot task · withdrawn · software-grade · depends_on 42,44,41 · (derived)
 - **46** · The store ingests at the event: a signed ratification and a pending merge are landed by the store itself, not by an emp… · ready · software-grade · (derived)
