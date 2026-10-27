@@ -28,6 +28,11 @@ The rules, each where it was ruled:
 * **The review gate follows the build** (V4a-ii-b, [owner, 2026-09-25/27]): review → nothing blocking, the end; any
   blocking finding → reconcile (the builder) → the reviewer's second pass, bounded to those findings → a finding still
   asserted parks `review-disputed`, none does and it is the end. One reconcile round; no third review.
+* **The mutation check follows a finished review gate** (card 43): when the card's surfaces list a
+  `tools/mutations/*.toml`, the wrapper's `mutations` step runs the card's own tests against each committed mutation. A
+  survivor goes to the builder's reconcile once, as a blocking finding naming the mutation, and the step runs once
+  more; a survivor then is the runner's end (`failed:gate`), not a step. Once the history holds a `mutations` row the
+  path is `_mutation_step`'s alone, so a mutation reconcile is never routed to a review second pass.
 """
 
 from __future__ import annotations
@@ -36,7 +41,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from . import artifacts
+from . import artifacts, mutations
 
 PLAN_FAILED: Final = "plan-failed"
 CARD_AMBIGUITY: Final = "card-ambiguity"
@@ -156,7 +161,26 @@ def next_step(history: Sequence[Done], payload: Mapping[str, Any]) -> Step:
             question="the plan did not pass the gate; the judge's account is attached",
             why_blocked=verdict.reasoning,
         )
-    return _review_step(history, last)
+    if any(d.phase == mutations.PHASE for d in history):
+        return _mutation_step(history)
+    step = _review_step(history, last)
+    # Only a review that ended the gate is followed by the check: a trailing fixup, or a history with no build, is not.
+    if step.kind == "done" and last.phase == "review" and _count(history, "build") and mutations.specs(payload):
+        return Step("phase", mutations.PHASE)
+    return step
+
+
+def _mutation_step(history: Sequence[Done]) -> Step:
+    """Card 43, after the first `mutations` row: a survivor on the first check goes to reconcile (the builder), a
+    reconcile goes back to the check, and anything else is the end -- a clean check, a trailing fixup, or a survivor on
+    the second check, which the runner has already ended `failed:gate` (R3: one reconcile round, one more check)."""
+    last = history[-1]
+    if last.phase == mutations.PHASE:
+        survived = mutations.Checked.model_validate(last.artifact).survivors
+        return Step("phase", "reconcile") if survived and _count(history, mutations.PHASE) == 1 else Step("done")
+    if last.phase == "reconcile":
+        return Step("phase", mutations.PHASE)
+    return Step("done")
 
 
 def _review_step(history: Sequence[Done], last: Done) -> Step:
@@ -191,6 +215,11 @@ def review_gate_done(history: Sequence[Done]) -> bool:
     about what "reviewed" means. A run with no build has nothing a review could have read."""
     if not any(d.phase == "build" for d in history):
         return False
+    if any(d.phase == mutations.PHASE for d in history):
+        # Card 43: a mutation round that is open (a survivor awaiting its reconcile, a reconcile awaiting its second
+        # check) is not a finished gate. What this cannot see is a clean review with no `mutations` row yet: whether the
+        # card declares specs is in the payload, and this reads the history alone.
+        return _mutation_step(history).kind == "done"
     return _review_step(history, history[-1]).kind == "done"
 
 
@@ -249,7 +278,14 @@ def inputs_for(
         else:
             named = [("findings", _first(history, "review")), ("reconcile-report", _latest(history, "reconcile"))]
     elif phase == "reconcile":
-        named = [("plan", plan), ("findings", _first(history, "review"))]
+        checked = _latest(history, mutations.PHASE)
+        # Card 43: once the mutation check has run, reconcile answers its survivors, as the review's own findings.
+        found = (
+            _first(history, "review")
+            if checked is None
+            else mutations.findings(mutations.Checked.model_validate(checked), payload)
+        )
+        named = [("plan", plan), ("findings", found)]
     elif phase == "judge":
         named = [("plan", plan), ("refutation", _latest(history, "refute"))]
         earlier = _answered(history, payload)
