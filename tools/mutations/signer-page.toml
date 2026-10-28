@@ -1,0 +1,28 @@
+# The signing service's page mutations (card 55) -- one per security property the card asserts about the page.
+#
+# Run one at a time, in the FOREGROUND, `--show` first (it runs nothing and proves each `find` appears once):
+#
+#   python tools/mutate.py tools/mutations/signer-page.toml --show
+#   python tools/mutate.py tools/mutations/signer-page.toml M1
+#
+# tools/mutate.py takes no test path (deliberately: it runs the whole suite), so "checked against this card's own test
+# file only" is read off its report: a mutation counts as killed by this card only when the `killed by` list names a
+# test in tests/signer/test_page.py. A mutation that died only to some other test proves nothing about this card.
+#
+# What each kill proves, and the test that kills it:
+#   M1  R1  a caller-supplied string is shown unescaped          -> test_page.py::test_the_page_lists_escaped
+#   M2  R3  the secret is written without a verified first code  -> test_page.py::test_enrolment_once
+
+[[mutation]]
+id = "M1"
+label = "the page's one escaping point returns its input -- a caller's markup reaches the owner's phone"
+file = "packages/isidium-signer/src/isidium/signer/page.py"
+find = "    return html.escape(text, quote=True)"
+replace = "    return text"
+
+[[mutation]]
+id = "M2"
+label = "enrolment writes the secret without a code from it -- anyone who reaches the page enrols their own"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if step is None:  # R3: no write without a verified code"
+replace = "if False:  # R3: no write without a verified code"

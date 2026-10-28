@@ -1363,6 +1363,143 @@ powershell -ExecutionPolicy Bypass -File deploy\watch-task.ps1 -Tenant <t> -Remo
 - **Not installed on tenant #0 by this change.** That is the owner's step, after the merge. Webhooks are not in this:
   polling first.
 
+## The signing service (remote-totp) — cards 52 and 55
+
+The signing service holds the key that signs a ratification, and signs only after the owner's Aegis code **for that
+request**, entered on a page the service serves itself. A session on the workstation can submit a request and wait; it
+cannot produce the code. The image is `deploy/Containerfile.signer`, built like the store's (two stages, both bases
+pinned by digest, `uv export --locked` installed under `pip --require-hashes`, an unprivileged user). It holds python
+and the service: no git, no ssh client.
+
+**It runs only in the owner-only zone** (agent-station): a host the owner reaches from their phone over WireGuard, and
+never a host where a store or a session runs. The page asks for no client certificate, so what keeps a stranger from
+it is the network, and what keeps a stranger who reaches it from signing is the Aegis code. Nothing here has run on a
+real host; the commands below were written against the code and its tests, not yet against agent-station.
+
+### Two listeners, three kinds of certificate
+
+| Listener | Setting | Who connects | What they present |
+|---|---|---|---|
+| the API | `listen_host`, `listen_port` | a store's remote-totp client | a client certificate the service's CA issued, whose subject is named in `callers` |
+| the page | `[page] host`, `port` | the owner's phone browser | nothing — it asks for no client certificate |
+
+One small CA for the service signs all three kinds, with the same extensions as *Issuing the certificates* above (a CA
+with `keyCertSign` and a SubjectKeyIdentifier; leaves with an AuthorityKeyIdentifier). **Keep it a different CA from
+the store's:** a leaf this CA issues is a credential for this service, and a CA shared with the store would hand out
+one as a side effect of the other.
+
+```sh
+mkdir -p signer/tls && cd signer/tls
+openssl req -x509 -newkey ed25519 -days 3650 -nodes -keyout ca.key.pem -out ca.crt.pem \
+  -subj "/CN=isidium-signer CA" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "subjectKeyIdentifier=hash"
+
+# The API's certificate (serverAuth; a name the store dials) and the page's (serverAuth; a name the PHONE dials).
+for leaf in server:signer.example.invalid page:page.signer.example.invalid; do
+  name=${leaf%%:*}; dns=${leaf#*:}
+  printf '%s\n' 'subjectKeyIdentifier=hash' 'authorityKeyIdentifier=keyid,issuer' \
+    'extendedKeyUsage=serverAuth' "subjectAltName=DNS:$dns" > "$name.ext"
+  openssl req -newkey ed25519 -nodes -keyout "$name.key.pem" -out "$name.csr" -subj "/CN=$dns"
+  openssl x509 -req -in "$name.csr" -CA ca.crt.pem -CAkey ca.key.pem -CAcreateserial -days 825 \
+    -out "$name.crt.pem" -extfile "$name.ext"
+done
+
+# One client certificate per caller: clientAuth and nothing else. Its subject, in RFC 4514 form, goes in `callers`.
+printf '%s\n' 'subjectKeyIdentifier=hash' 'authorityKeyIdentifier=keyid,issuer' 'extendedKeyUsage=clientAuth' > client.ext
+openssl req -newkey ed25519 -nodes -keyout store-client.key.pem -out store-client.csr -subj "/CN=store@example.invalid"
+openssl x509 -req -in store-client.csr -CA ca.crt.pem -CAkey ca.key.pem -CAcreateserial -days 825 \
+  -out store-client.crt.pem -extfile client.ext
+openssl x509 -in store-client.crt.pem -noout -subject -nameopt RFC2253    # the string `callers` needs, after `subject=`
+rm -f ./*.csr ./*.ext && cd ..
+```
+
+**The page's certificate must be one the phone trusts**, or the phone's browser will not open the page: install
+`ca.crt.pem` on the phone as a user CA certificate, and dial the name the page certificate carries. The signing key is
+the service's own Ed25519 key, made the way *The store's signing key* is: `openssl genpkey -algorithm ed25519 -out
+signing.pem`. Its public half is what the tenants pin as the ratifier.
+
+### The settings file
+
+Every key is required and none has a default in code (C-1). Relative paths resolve against the file's directory. The
+file names the secrets and never holds them. A host here is never a real one:
+
+```toml
+listen_host = "0.0.0.0"                 # inside the container; the runtime publishes the port to the WireGuard address
+listen_port = 8443
+tls_certificate = "tls/server.crt.pem"
+tls_key = "tls/server.key.pem"
+ca = "tls/ca.crt.pem"
+callers = ["CN=store@example.invalid"]  # at least one; RFC 4514 subjects of the client certificates that may call
+signing_key = "keys/signing.pem"
+totp_secret = "/var/lib/isidium-signer/state/totp.base32"   # absent on a first start: that is what opens enrolment
+state = "/var/lib/isidium-signer/state/signer.json"         # the last consumed TOTP step; a restart cannot replay a code
+time_skew_s = 600
+max_pending_per_caller = 4
+max_wrong_codes = 3
+request_lifetime_s = 600
+handshake_timeout_s = 10.0
+read_timeout_s = 30.0
+max_body_bytes = 65536
+
+[page]
+host = "0.0.0.0"
+port = 8444
+tls_certificate = "tls/page.crt.pem"
+tls_key = "tls/page.key.pem"
+```
+
+### Build and run
+
+```sh
+podman build -f deploy/Containerfile.signer -t isidium-signer:0.1.0 .      # from the repository root
+podman run -d --name isidium-signer \
+  -v "$PWD/signer/signer.toml:/etc/isidium-signer/signer.toml:ro" \
+  -v "$PWD/signer/tls:/etc/isidium-signer/tls:ro" \
+  -v "$PWD/signer/keys:/etc/isidium-signer/keys:ro" \
+  -v isidium-signer-state:/var/lib/isidium-signer/state \
+  -p <the WireGuard address>:8443:8443 -p <the WireGuard address>:8444:8444 \
+  isidium-signer:0.1.0
+```
+
+The settings above put `totp_secret` and `state` on the named volume (absolute paths, since relative ones resolve
+against the read-only settings directory): **the service writes both**, the volume arrives writable by the service's
+user, and a bind-mounted host directory arrives owned by whoever made it. The signing key is the opposite
+case: the service refuses a key (or a TOTP secret) that group or other can read (`signer.secret-permissions`), so
+`chmod 0600` the key on the host and mount it read-only. Bind the published ports to the WireGuard address only.
+
+**The entrypoint refuses to start, and says what is missing**, exit 2 and one line on stderr, before it binds anything:
+no `ISIDIUM_SIGNER_SETTINGS` (the image sets it to `/etc/isidium-signer/signer.toml`) or no file there; a key the
+settings do not carry or an empty `callers` (`signer.settings @ callers`); and the signing key, the CA, or either
+listener's certificate or key not on disk (`signer.missing-file @ <path>`). `signer.secret-permissions` is the mount's
+mode, above. What it does not refuse on is the TOTP secret, because its absence is the first start.
+
+### Enrolling the phone
+
+Do this **right after the first start**. Until a secret is enrolled the page offers enrolment to whoever reaches it, and
+shows them the secret to enrol with; this is the one moment the service renders a secret, and it is why the page lives
+only inside the owner-only zone.
+
+1. On the phone, open `https://page.signer.example.invalid:8444/`. With no secret on disk the page shows a fresh secret
+   as text and an **Open in the authenticator app** link (an `otpauth://` link; there is deliberately no QR code, as the
+   phone that would scan it is the phone showing it).
+2. Tap the link — Aegis opens and offers to add the entry — or type the text secret into Aegis by hand.
+3. Enter the six-digit code Aegis shows into the page's form and submit it. The secret is written to disk **only when
+   that code verifies**; a wrong code writes nothing and the same secret stays on offer.
+4. Once enrolled the page never shows the secret again. The code that proved the enrolment is spent: wait for the next
+   one before approving anything.
+
+**Re-enrolling** is deliberately not something the page can do. Stop the container, delete the `totp_secret` file on the
+host (inside the named volume: `podman volume inspect isidium-signer-state` finds it), start it, and enrol again. The
+`state` file may stay; it only records the last consumed step.
+
+### Using it
+
+A store's remote-totp client submits `{tenant, hash, display}` to the API and polls. The request appears on the phone's
+page with its tenant, the value's hash, and the display exactly as the service received it, and the Approve and Decline
+buttons share one code field. Both need a valid code: a stranger who reaches the page can neither sign nor cancel a
+request. A request nobody answers expires after `request_lifetime_s`, and `max_wrong_codes` wrong codes decline it.
+
 ## What is not here yet
 
 - **Compose was verified with `podman-compose` 1.6.0, not with Docker Compose.** `podman compose` needs a provider

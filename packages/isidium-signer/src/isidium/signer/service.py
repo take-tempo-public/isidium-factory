@@ -1,18 +1,23 @@
 """The signing service's state machine: requests in, a signature out only after the owner's Aegis code.
 
-`submit` and `poll` are what the API listener (`http.py`) exposes to a named caller; `approve` is a Python method
-only, called by the code-entry page the next card builds. Three things make a signature rare:
+`submit` and `poll` are what the API listener (`http.py`) exposes to a named caller; `approve` and `decline` are
+Python methods only, called by the code-entry page (`page.py`), which is the one place the owner's code is typed.
+Three things make a signature rare:
 
-- the key and the TOTP secret live in files only this service's user can read, and are never rendered (C3);
+- the key and the TOTP secret live in files only this service's user can read, and are never rendered (C3) -- with
+  one exception, R3 of card 55: until a secret is enrolled, the candidate the page offers for enrolment is rendered,
+  and it is written to disk only when a first code from it verifies;
 - each code is bound to one request and its time step is consumed once, durably, before anything is signed (R3);
 - a request has a lifetime and a wrong-code budget, both from the settings (C2).
 
-Every refusal is a `signer.*` rule (C5). Two counters (C-11), neither carrying a caller, a value or a code:
-`isidium.signer.refusal` keyed by rule, and `isidium.signer.signed`.
+Every refusal is a `signer.*` rule (C5). Four counters (C-11), none carrying a caller, a value, a code or a secret:
+`isidium.signer.refusal` keyed by rule, `isidium.signer.signed`, `isidium.signer.declined` (the owner declined) and
+`isidium.signer.enrolled`.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
@@ -35,12 +40,18 @@ from .settings import Settings
 _meter = metrics.get_meter("isidium.signer")
 REFUSAL: Final = _meter.create_counter("isidium.signer.refusal", description="requests the signing service refused")
 SIGNED: Final = _meter.create_counter("isidium.signer.signed", description="signatures the signing service produced")
+OWNER_DECLINED: Final = _meter.create_counter(
+    "isidium.signer.declined", description="requests the owner declined with a valid code"
+)
+ENROLLED: Final = _meter.create_counter("isidium.signer.enrolled", description="TOTP secrets enrolled")
 _RULE: Final = "rule"
 
 _PENDING: Final = "pending"
 _SIGNED: Final = "signed"
 _DECLINED: Final = "declined"
 _GROUP_OTHER_BITS: Final = 0o077
+# 160 bits, the length RFC 4226 recommends for an HMAC-SHA1 secret and what an authenticator app expects of one.
+_SECRET_BYTES: Final = 20
 
 
 @dataclass
@@ -54,6 +65,17 @@ class _Request:
     status: str = _PENDING
     sig: str | None = None
     closed_at: int | None = None
+
+
+@dataclass(frozen=True)
+class PendingView:
+    """What the page may show of an open request: the display is the object `submit` received, as received."""
+
+    request_id: str
+    tenant: str
+    value: str
+    display: Sequence[Any]
+    created: int
 
 
 def _refuse(rule: str, path: str = "", detail: str = "") -> Refusal:
@@ -78,12 +100,19 @@ class Service:
         self._clock = clock
         self._lock = threading.Lock()
         _owner_only(settings.signing_key)
-        _owner_only(settings.totp_secret)
         key = serialization.load_pem_private_key(settings.signing_key.read_bytes(), password=None)
         if not isinstance(key, ed25519.Ed25519PrivateKey):
             raise _refuse("signer.key-type", str(settings.signing_key), "an Ed25519 private key is required")
         self._key = key
-        self._secret = totp.secret_from_base32(settings.totp_secret.read_text(encoding="ascii"))
+        # No secret file means not enrolled (R3): a candidate is drawn once, here, in memory, so every GET of the
+        # enrolment page shows the same one and none of them writes anything.
+        self._secret: bytes | None = None
+        self._candidate: bytes | None = None
+        if settings.totp_secret.exists():
+            _owner_only(settings.totp_secret)
+            self._secret = totp.secret_from_base32(settings.totp_secret.read_text(encoding="ascii"))
+        else:
+            self._candidate = secrets.token_bytes(_SECRET_BYTES)
         raw = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         self.key_fpr = chain.fingerprint(raw)
         self._last_step = self._read_state()
@@ -165,27 +194,101 @@ class Service:
     def approve(self, request_id: str, code: str) -> None:
         with self._lock:
             self._housekeeping()
-            r = self._requests.get(request_id)
-            if r is None:
-                raise _refuse("signer.unknown-request")
-            if r.status == _DECLINED:
-                raise _refuse("signer.declined", "", request_id)
-            if r.status == _SIGNED:
-                raise _refuse("signer.not-pending", "", request_id)
-            step = totp.matching_step(self._secret, code, self._clock())
-            if step is None or step <= self._last_step:
-                # A replayed code spends the same budget as a guess.
-                rule = "signer.wrong-code" if step is None else "signer.code-reused"
-                r.wrong += 1
-                if r.wrong >= self.settings.max_wrong_codes:
-                    r.status, r.closed_at = _DECLINED, self._clock()
-                    raise _refuse("signer.declined", "", request_id)
-                raise _refuse(rule)
-            # The step is made durable *before* the signature exists: a crash between the two costs the owner one
-            # code, and the other order would let a restart sign twice on one code.
-            self._write_state(step)
-            self._last_step = step
+            r = self._open_request(request_id)
+            self._spend_code(r, request_id, code)
+            # The step is durable *before* the signature exists: a crash between the two costs the owner one code,
+            # and the other order would let a restart sign twice on one code.
             raw = self._key.sign(chain.sig_bytes(r.tenant, r.value))
             r.sig = chain.format_sig("ed25519", self.key_fpr, raw)
             r.status, r.closed_at = _SIGNED, self._clock()
             SIGNED.add(1)
+
+    def decline(self, request_id: str, code: str) -> None:
+        """The owner's refusal. It needs a valid code like an approval does: a page anyone on the network can reach
+        must not let a stranger cancel the owner's request."""
+        with self._lock:
+            self._housekeeping()
+            r = self._open_request(request_id)
+            self._spend_code(r, request_id, code)
+            r.status, r.closed_at = _DECLINED, self._clock()
+            OWNER_DECLINED.add(1)
+
+    def _open_request(self, request_id: str) -> _Request:
+        r = self._requests.get(request_id)
+        if r is None:
+            raise _refuse("signer.unknown-request")
+        if r.status == _DECLINED:
+            raise _refuse("signer.declined", "", request_id)
+        if r.status == _SIGNED:
+            raise _refuse("signer.not-pending", "", request_id)
+        return r
+
+    def _spend_code(self, r: _Request, request_id: str, code: str) -> None:
+        """Under the lock: check `code` against the enrolled secret for this request, and consume its step durably.
+        The one check approve and decline share, so neither can be reached with a weaker one."""
+        if self._secret is None:
+            raise _refuse("signer.not-enrolled")
+        step = totp.matching_step(self._secret, code, self._clock())
+        if step is None or step <= self._last_step:
+            # A replayed code spends the same budget as a guess.
+            rule = "signer.wrong-code" if step is None else "signer.code-reused"
+            r.wrong += 1
+            if r.wrong >= self.settings.max_wrong_codes:
+                r.status, r.closed_at = _DECLINED, self._clock()
+                raise _refuse("signer.declined", "", request_id)
+            raise _refuse(rule)
+        self._write_state(step)
+        self._last_step = step
+
+    # ---- the page's reads, and enrolment -----------------------------------------------------------------------------
+
+    @property
+    def enrolled(self) -> bool:
+        return self._secret is not None
+
+    def enrolment_secret(self) -> str | None:
+        """The candidate secret as unpadded base32 for the enrolment page, or None once enrolled: after that the
+        service holds the secret and renders it nowhere."""
+        with self._lock:
+            return None if self._candidate is None else base64.b32encode(self._candidate).decode("ascii").rstrip("=")
+
+    def enrol(self, code: str) -> None:
+        """Write the candidate secret only if `code` is a code of it. The code's step is consumed like any other, so
+        the code that proved the enrolment cannot also approve."""
+        with self._lock:
+            candidate = self._candidate
+            if self._secret is not None or candidate is None:
+                raise _refuse("signer.enrolled")
+            step = totp.matching_step(candidate, code, self._clock())
+            if step is None:  # R3: no write without a verified code
+                raise _refuse("signer.wrong-code")
+            # State first, secret second: a crash between them leaves a consumed step and no secret, which is
+            # enrolment still open, and the other order would leave an enrolled secret whose first code can replay.
+            self._write_state(step)
+            self._last_step = step
+            self._write_secret(candidate)
+            self._secret, self._candidate = candidate, None
+            ENROLLED.add(1)
+
+    def _write_secret(self, secret: bytes) -> None:
+        """Atomically, at 0600: a temp file in the same directory, then a rename (as `_write_state`)."""
+        path = self.settings.totp_secret
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(base64.b32encode(secret).decode("ascii").rstrip("="))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+
+    def pending(self) -> list[PendingView]:
+        """The open requests, oldest first. **It does not call `_housekeeping`**: that marks expired requests
+        declined, and a page read must change nothing; an expired request is filtered out here instead."""
+        with self._lock:
+            now, life = self._clock(), self.settings.request_lifetime_s
+            return [
+                PendingView(rid, r.tenant, r.value, r.display, r.created)
+                for rid, r in self._requests.items()
+                if r.status == _PENDING and now < r.created + life
+            ]
