@@ -68,6 +68,7 @@ none
 - **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · ratified · blocked_by[52] · software-grade · depends_on 52 · (derived)
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · ratified · blocked_by[52] · software-grade · depends_on 52 · (derived)
 - **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ratified · blocked_by[54] · software-grade · depends_on 54 · (derived)
+- **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · draft · (derived)
 
 ## Blocked
 
