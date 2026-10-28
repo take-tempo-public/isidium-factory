@@ -2074,6 +2074,158 @@
         "seq": 2
       },
       "runs": []
+    },
+    "0052": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "926550308ddb2351b04ca9c68ab9068169a9f464",
+            "path": "packages/isidium-store/src/isidium/store/server/signer.py"
+          },
+          {
+            "blob": "ca2c6a96be60334a08213cceac45d6989da01d3a",
+            "path": "packages/isidium-store/src/isidium/store/server/http.py"
+          },
+          {
+            "blob": "27c91aca256af17fd7b9fcd266ece7297bd43875",
+            "path": "packages/isidium-store/src/isidium/store/client/transport.py"
+          },
+          {
+            "blob": "8f5f111287737177676abf45e33642f0de7a4624",
+            "path": "packages/isidium-store/src/isidium/store/core/chain.py"
+          },
+          {
+            "blob": "10737fdd5f02d40ebaecf7ade52ca7994c057682",
+            "path": "pyproject.toml"
+          },
+          {
+            "blob": "03f79d3946dc31ed00983d8cb14e884cdcdf7111",
+            "path": ".github/workflows/ci.yml"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:3182a8816f68687b137243a107255a79d87ad5b21280a3ca4ff208ee1149abec",
+        "seq": 2
+      },
+      "runs": []
+    },
+    "0054": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
+            "path": "packages/isidium-store/src/isidium/store/client/cli.py"
+          },
+          {
+            "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
+          },
+          {
+            "blob": "926550308ddb2351b04ca9c68ab9068169a9f464",
+            "path": "packages/isidium-store/src/isidium/store/server/signer.py"
+          },
+          {
+            "blob": "792645111ce5bf87a681d159c62445780bc151b8",
+            "path": "packages/isidium-store/src/isidium/store/registry/config.py"
+          },
+          {
+            "blob": "ca2c6a96be60334a08213cceac45d6989da01d3a",
+            "path": "packages/isidium-store/src/isidium/store/server/http.py"
+          },
+          {
+            "blob": "27c91aca256af17fd7b9fcd266ece7297bd43875",
+            "path": "packages/isidium-store/src/isidium/store/client/transport.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:169429f07a600645663bfacff4a62267618d3aaec1d4607c9875debec4b84911",
+        "seq": 2
+      },
+      "runs": []
+    },
+    "0055": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "926550308ddb2351b04ca9c68ab9068169a9f464",
+            "path": "packages/isidium-store/src/isidium/store/server/signer.py"
+          },
+          {
+            "blob": "66c13e34e2d848ca6cf2132e4d7728dbea334705",
+            "path": "deploy/Containerfile.store"
+          },
+          {
+            "blob": "cfc371554bf08c9a37bb8b4ea7e84a3ae9e5df4d",
+            "path": "deploy/entrypoint.sh"
+          },
+          {
+            "blob": "a7b73f1a742ba6140230e43d9ebc77803a9ca202",
+            "path": "deploy/README.md"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:9923c5a1106eee730c4c2a6de06bb2157ff30bea6c75ec3b4feb8aeb2a5ea740",
+        "seq": 2
+      },
+      "runs": []
+    },
+    "0056": {
+      "closures": [],
+      "execution": null,
+      "fingerprint": {
+        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
+          },
+          {
+            "blob": "8f5f111287737177676abf45e33642f0de7a4624",
+            "path": "packages/isidium-store/src/isidium/store/core/chain.py"
+          },
+          {
+            "blob": "17e5c5bea88e034dcb88a94bec9285d8628c0dc6",
+            "path": "packages/isidium-store/src/isidium/store/server/api.py"
+          },
+          {
+            "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
+            "path": "packages/isidium-store/src/isidium/store/client/cli.py"
+          },
+          {
+            "blob": "926550308ddb2351b04ca9c68ab9068169a9f464",
+            "path": "packages/isidium-store/src/isidium/store/server/signer.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
+      "history_head": {
+        "h": "sha256:fe69d68470cb59169c283765df228158517f7ea6507e1d0d3a6a6f0ed27173df",
+        "seq": 2
+      },
+      "runs": []
     }
   },
   "ingest": {
@@ -2197,14 +2349,14 @@
       "f9769e7f611ca73b372dcb8935f45a35a33b144bfa71f6dc18ef2b2acd508632"
     ],
     "overflow": 0,
-    "run_id": "r-54"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:9b3907691de652170bcbeb10eb381eb928459cbb49f2203bc15816959e11da2b",
-    "seq": 383
+    "h": "sha256:248b5aa61f4f21f40afb5ca6a277972f667ab8b74849186bff51b4546a6099b5",
+    "seq": 389
   },
-  "landed_at": "2026-10-26T13:43:51Z",
-  "ledger_cursor": "1ed0bd3304e0a5b0331c51b2b3838f159dde73d0",
+  "landed_at": "2026-10-28T03:37:21Z",
+  "ledger_cursor": "22b1322a87c36265527d44f2e06b9d6af842af9b",
   "schema": 2
 }
