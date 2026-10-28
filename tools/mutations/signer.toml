@@ -1,0 +1,81 @@
+# The signing service's mutations (card 52) -- one per security or limit property the card asserts.
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
+# in the FOREGROUND, against this card's own test files (tests/signer/):
+#
+#   python tools/mutate.py tools/mutations/signer.toml --show M1     # the diff that would run; runs nothing
+#
+# What each kill proves, and the test that kills it:
+#   M1  R1  the TOTP window is one step either side            -> test_totp.py::test_rfc6238_vectors_and_window
+#   M2  R3  a consumed step is refused (<=, not <)             -> test_service.py::test_a_code_signs_once
+#   M3  R4  the request is declined AT the wrong-code limit    -> test_service.py::test_wrong_codes_decline
+#   M4  R2  a request exactly at the skew bound is accepted    -> test_service.py::test_submit_refusals
+#   M5  R2  the pending limit refuses the request AT the limit -> test_service.py::test_submit_refusals
+#   M6  R5  the listener requires a client certificate         -> test_service.py::test_mtls_required
+#   M7  R5  the listener's floor is TLS 1.3                    -> test_service.py::test_mtls_required
+#   M8  R5  the listener itself refuses an unnamed subject     -> test_service.py::test_mtls_required (the count of
+#           requests that reached the service; the service's own caller check alone would give the same 403)
+#   M9  R2  a caller's skew can narrow the settings' skew and never widen it -> test_service.py::test_submit_refusals
+
+[[mutation]]
+id = "M1"
+label = "the TOTP window is two steps either side -- a code stays usable for ninety seconds more"
+file = "packages/isidium-signer/src/isidium/signer/totp.py"
+find = "WINDOW: Final = 1"
+replace = "WINDOW: Final = 2"
+
+[[mutation]]
+id = "M2"
+label = "a step equal to the last consumed one is accepted -- one code signs twice"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if step is None or step <= self._last_step:"
+replace = "if step is None or step < self._last_step:"
+
+[[mutation]]
+id = "M3"
+label = "the request is declined one wrong code late -- the owner's budget is one larger than the settings say"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if r.wrong >= self.settings.max_wrong_codes:"
+replace = "if r.wrong > self.settings.max_wrong_codes:"
+
+[[mutation]]
+id = "M4"
+label = "a request exactly at the skew bound is refused"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if abs(at_epoch - self._clock()) > skew:"
+replace = "if abs(at_epoch - self._clock()) >= skew:"
+
+[[mutation]]
+id = "M5"
+label = "a caller may hold one request more than its pending limit"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if pending >= self.settings.max_pending_per_caller:"
+replace = "if pending > self.settings.max_pending_per_caller:"
+
+[[mutation]]
+id = "M6"
+label = "the listener asks for a client certificate and goes on without one"
+file = "packages/isidium-signer/src/isidium/signer/http.py"
+find = "    context.verify_mode = ssl.CERT_REQUIRED"
+replace = "    context.verify_mode = ssl.CERT_OPTIONAL"
+
+[[mutation]]
+id = "M7"
+label = "the listener's TLS floor is dropped -- TLS 1.2 is negotiated"
+file = "packages/isidium-signer/src/isidium/signer/http.py"
+find = "    context.minimum_version = ssl.TLSVersion.TLSv1_3\n    context.verify_mode"
+replace = "    context.verify_mode"
+
+[[mutation]]
+id = "M8"
+label = "the listener no longer checks the subject -- an unnamed CA-issued peer reaches the service"
+file = "packages/isidium-signer/src/isidium/signer/http.py"
+find = "        if self._subject is None or self._subject not in self._listener.settings.callers:"
+replace = "        if False:"
+
+[[mutation]]
+id = "M9"
+label = "a caller's own skew replaces the settings' skew -- a session can widen the window"
+file = "packages/isidium-signer/src/isidium/signer/service.py"
+find = "if time_skew_s is None else min(self.settings.time_skew_s, time_skew_s)"
+replace = "if time_skew_s is None else time_skew_s"

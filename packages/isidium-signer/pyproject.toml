@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "isidium-signer"
+version = "0.1.0"
+description = "The remote-totp signing service: signs a ratification only after the owner's Aegis code for that request. Runs only on the owner's own host; never installed by a tenant."
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+dependencies = [
+  "isidium-store",
+  "cryptography>=42",
+  # The OpenTelemetry **API** only, for the same reason as isidium-store (C-11): the counters are no-ops until the
+  # deployment configures an SDK.
+  "opentelemetry-api>=1.30,<2",
+]
+
+# PEP 420: `isidium` is a namespace shared with isidium-store and isidium-factory; no src/isidium/__init__.py exists.
+# No [project.scripts]: the entry point and the container are the next card's.
+[tool.hatch.build.targets.wheel]
+only-include = ["src/isidium/signer"]
+sources = ["src"]
