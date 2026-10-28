@@ -63,6 +63,21 @@ def _name(common_name: str) -> x509.Name:
     return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
 
 
+def _key_usage(*, ca: bool) -> x509.KeyUsage:
+    """A CA signs certificates; a leaf signs the TLS handshake. Nothing else is set."""
+    return x509.KeyUsage(
+        digital_signature=not ca,
+        content_commitment=False,
+        key_encipherment=False,
+        data_encipherment=False,
+        key_agreement=False,
+        key_cert_sign=ca,
+        crl_sign=ca,
+        encipher_only=False,
+        decipher_only=False,
+    )
+
+
 def authority(directory: Path, common_name: str) -> Authority:
     key = ec.generate_private_key(ec.SECP256R1())
     certificate = (
@@ -74,6 +89,11 @@ def authority(directory: Path, common_name: str) -> Authority:
         .not_valid_before(NOW - _dt.timedelta(days=1))
         .not_valid_after(NOW + _dt.timedelta(days=30))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        # A client built by `ssl.create_default_context` sets VERIFY_X509_STRICT from Python 3.13, and strict
+        # verification refuses a CA without a key identifier and a certificate-signing key usage. The service's own
+        # context is not strict; the test client is, so the certificates minted here carry what it requires.
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+        .add_extension(_key_usage(ca=True), critical=True)
         .sign(key, hashes.SHA256())
     )
     path = directory / f"{common_name}.ca.pem"
@@ -92,6 +112,9 @@ def issue(directory: Path, ca: Authority, label: str, common_name: str, *, serve
         .not_valid_before(NOW - _dt.timedelta(days=1))
         .not_valid_after(NOW + _dt.timedelta(days=30))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca.key.public_key()), critical=False)
+        .add_extension(_key_usage(ca=False), critical=True)
         .add_extension(
             x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH if server else ExtendedKeyUsageOID.CLIENT_AUTH]),
             critical=False,
