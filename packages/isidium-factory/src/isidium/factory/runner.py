@@ -28,6 +28,7 @@ import datetime as _dt
 import json
 import os
 import subprocess
+import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
@@ -39,7 +40,7 @@ from isidium.store.core.refusal import Refusal
 
 from . import adapter as adapter_mod
 from . import artifacts as artifacts_mod
-from . import checkout, gate, guard, lander
+from . import checkout, gate, guard, lander, mutations
 from . import payload as payload_mod
 from .context import TenantContext
 from .forge import Forge
@@ -233,7 +234,8 @@ def run_chain(
 
     **The path is the gates'** (`gate.next_step`, a function of the history the ledger holds and the card): plan,
     the lint, refute, judge, at most one revision, then the build or a park; after the build, the review gate — review,
-    and on a blocking finding reconcile and the bounded second pass (V4a-ii-b). The chain ends at the review gate's end,
+    and on a blocking finding reconcile and the bounded second pass (V4a-ii-b) — and then, when the card declares
+    mutation specs, the wrapper's own `mutations` step (card 43). The chain ends at the review gate's end,
     at a park, or when a phase ends the run. A resumed chain takes the path it would have taken uninterrupted, because
     the step is a function of the history and nothing else."""
     with telemetry.span(CHAIN_SPAN, **{"isidium.run_id": run_id}):
@@ -306,11 +308,17 @@ def _drive(
                     break
                 assert step.phase is not None
                 phase = step.phase
-            with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
-                sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
-                _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now, failures)
+            if phase == mutations.PHASE:
+                # Card 43: the wrapper's own step, with no agent behind it -- so no `AGENT_OF` row, no policy lookup and
+                # no `run.phase` span (its own span is `isidium.factory.mutations`, outside the chain's pinned list).
+                _mutations(ctx, ledger, call, row, work, p, history, policy, now)
                 history = _history(ledger, ctx.home, run_id)
-                _review_attributes(sp, phase, history)
+            else:
+                with telemetry.span(SPAN, **{"isidium.run_id": run_id, "isidium.phase": phase}) as sp:
+                    sp.set_attribute("isidium.model", policy.agent(AGENT_OF[phase]).model)
+                    _phase(ctx, ledger, call, row, drv, policy, work, phase, p, history, carried, park, now, failures)
+                    history = _history(ledger, ctx.home, run_id)
+                    _review_attributes(sp, phase, history)
             carried = None  # the carry is told to the phase it was replayed for, and to no later one
             after = ledger.run(run_id)
             if after is not None and after["ended_at"]:
@@ -326,6 +334,56 @@ def _drive(
     after = ledger.run(run_id)
     assert after is not None
     return {**after, "phases": ledger.phases_of(run_id)}
+
+
+def _mutations(
+    ctx: TenantContext,
+    ledger: Ledger,
+    call: Call,
+    row: Mapping[str, Any],
+    work: Path,
+    p: payload_mod.Payload,
+    history: Sequence[gate.Done],
+    policy: adapter_mod.ExecutorPolicy,
+    now: Now,
+) -> None:
+    """Card 43: the card's committed mutations checked against the card's own tests, on the host in the run's worktree
+    (R1), and recorded as a `mutations` phase row -- no agent, no model, no cost, the results named by hash (R2, C4).
+    Written by the wrapper like the commit is: nothing here is the model's.
+
+    A marker a killed step left is restored first, by the existing repair, and named on the row (C2). The one deadline
+    is the signed `wall_clock_s` (C-1). A survivor on the first check is the gate's to route to reconcile (R3); one on
+    the second ends the run `failed:gate` here, with the head reconcile committed -- the work is kept and never pushed.
+    The results are a file of the run's own, not a directory, for the reason `_fixup_docs` gives."""
+    run_id = str(row["run_id"])
+    named = _repaired(work, mutations.PHASE)
+    round_ = 1 + sum(1 for d in history if d.phase == mutations.PHASE)
+    started = time.monotonic()
+    with telemetry.span(mutations.SPAN, **{"isidium.run_id": run_id, "isidium.mutations.round": round_}) as sp:
+        try:
+            checked = mutations.check(work, p.value, deadline_s=policy.budgets.wall_clock_s, clock=time.monotonic)
+        except Refusal as r:
+            telemetry.record_refusal_on(sp, r.rule)
+            raise
+        survivors = checked.survivors
+        sp.set_attribute("isidium.mutations.count", len(checked.results))
+        sp.set_attribute("isidium.mutations.survived", len(survivors))
+        sp.set_attribute("isidium.mutations.killed", len(checked.results) - len(survivors))
+    data = artifacts_mod.canonical(checked.model_dump(mode="json"))
+    rel = f"runs/{run_id}/{mutations.PHASE}.{round_}.json"
+    (ctx.home / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ctx.home / rel).write_bytes(data)
+    made = [{"name": mutations.PHASE, "sha256": artifacts_mod.sha256(data), "path": rel}]
+    at = now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    ledger.phase(run_id, at, mutations.phase_row(int((time.monotonic() - started) * 1000), made, named))
+    if survivors and round_ > 1:
+        ledger.end(
+            run_id,
+            at,
+            "failed:gate",
+            detail={"mutations": "survived", "survivors": [mutations.finding_id(r) for r in survivors]},
+        )
+        lander.land_run(ledger, call, run_id)
 
 
 def _phase(
