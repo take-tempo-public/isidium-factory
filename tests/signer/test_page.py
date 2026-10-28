@@ -346,6 +346,19 @@ def _run_entrypoint(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _stop(proc: subprocess.Popen[bytes]) -> None:
+    """End the entrypoint the way the runtime does. On POSIX that is SIGTERM, and a clean stop exits 0. Windows has no
+    SIGTERM to deliver: `send_signal(SIGTERM)` there is `TerminateProcess` on `sh` alone, which exits 1 and leaves the
+    python it started running, so a graceful exit is not observable and the tree is ended with `taskkill /T` instead.
+    The exit-0 assertion therefore holds where the signal does (Linux, which is where the image runs)."""
+    if os.name == "posix":
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=30) == 0
+        return
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False, timeout=30)
+    proc.wait(timeout=30)
+
+
 def test_entrypoint_refuses_missing_files(tmp_path: Path) -> None:
     if shutil.which("sh") is None:
         pytest.skip("no `sh` on PATH: the entrypoint cannot run here (CI on Linux runs it)")
@@ -405,8 +418,7 @@ def test_entrypoint_refuses_missing_files(tmp_path: Path) -> None:
                 time.sleep(0.1)
             assert proc.poll() is None, err_file.read_text(encoding="utf-8")
             assert re.search(r"isidium-signer: api=\S+ page=\S+ enrolled=no", err_file.read_text(encoding="utf-8"))
-            proc.send_signal(signal.SIGTERM)
-            assert proc.wait(timeout=30) == 0
+            _stop(proc)
         finally:
             if proc.poll() is None:
                 proc.kill()
