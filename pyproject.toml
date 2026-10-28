@@ -31,7 +31,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["packages/isidium-store/src", "packages/isidium-factory/src", "tests"]
+src = ["packages/isidium-store/src", "packages/isidium-factory/src", "packages/isidium-signer/src", "tests"]
 extend-exclude = ["review-artifacts"]
 
 [tool.ruff.format]
@@ -51,7 +51,7 @@ known-first-party = ["isidium"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = "packages/isidium-store/src:packages/isidium-factory/src"
+mypy_path = "packages/isidium-store/src:packages/isidium-factory/src:packages/isidium-signer/src"
 namespace_packages = true
 explicit_package_bases = true
 warn_unreachable = true
@@ -70,11 +70,11 @@ module = ["opentelemetry.exporter.*"]
 ignore_missing_imports = true
 
 [tool.pyright]
-extraPaths = ["packages/isidium-store/src", "packages/isidium-factory/src"]
+extraPaths = ["packages/isidium-store/src", "packages/isidium-factory/src", "packages/isidium-signer/src"]
 exclude = ["review-artifacts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["packages/isidium-store/src", "packages/isidium-factory/src"]
+pythonpath = ["packages/isidium-store/src", "packages/isidium-factory/src", "packages/isidium-signer/src"]
 # No `addopts = "-q"` [K7c, F21]: every recorded command, CI and `tools/mutate.py` pass `-q` themselves, and a second
 # one here made each of them `-qq`, which drops the `N passed in ...` summary line. One `-q` is the command line's.
