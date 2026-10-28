@@ -2150,13 +2150,21 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "commit": "7dcacab99fe96074701ea9fe0472cb8373030a89",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 3,
         "refs_resolved": [
           {
             "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
             "path": "packages/isidium-store/src/isidium/store/client/cli.py"
+          },
+          {
+            "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
+            "path": "packages/isidium-store/src/isidium/store/client/cli.py"
+          },
+          {
+            "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
           },
           {
             "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
@@ -2171,19 +2179,31 @@
             "path": "packages/isidium-store/src/isidium/store/registry/config.py"
           },
           {
+            "blob": "792645111ce5bf87a681d159c62445780bc151b8",
+            "path": "packages/isidium-store/src/isidium/store/registry/config.py"
+          },
+          {
+            "blob": "792645111ce5bf87a681d159c62445780bc151b8",
+            "path": "packages/isidium-store/src/isidium/store/registry/config.py"
+          },
+          {
             "blob": "ca2c6a96be60334a08213cceac45d6989da01d3a",
             "path": "packages/isidium-store/src/isidium/store/server/http.py"
           },
           {
             "blob": "27c91aca256af17fd7b9fcd266ece7297bd43875",
             "path": "packages/isidium-store/src/isidium/store/client/transport.py"
+          },
+          {
+            "blob": "c7afd55b6a41cd34219c1c0cb50ef4809691e338",
+            "path": "packages/isidium-signer/src/isidium/signer/http.py"
           }
         ],
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:169429f07a600645663bfacff4a62267618d3aaec1d4607c9875debec4b84911",
-        "seq": 2
+        "h": "sha256:4a7d588cc92e21bb558a99c8e250b49b71eb172145dd7c96661d59308e7fab78",
+        "seq": 3
       },
       "runs": []
     },
@@ -2420,14 +2440,14 @@
       "c85ff88eb0968dee47d42c72c4d31e0851d6198aa2ec2ed3fae26c61da79dffa"
     ],
     "overflow": 0,
-    "run_id": "r-56"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:ccc940b73199139c6ba4d4182b0ce75ac0f8c890d72ebad390901a57eba98a55",
-    "seq": 400
+    "h": "sha256:a0ade1a63e789a15cb7112149c0a8abe2ebab8e06e38d5e344047b4053ac0ee3",
+    "seq": 402
   },
-  "landed_at": "2026-10-28T07:08:20Z",
-  "ledger_cursor": "ce81bd7b9209eec4710f351ab3a987723ea96585",
+  "landed_at": "2026-10-28T15:00:13Z",
+  "ledger_cursor": "7dcacab99fe96074701ea9fe0472cb8373030a89",
   "schema": 2
 }
