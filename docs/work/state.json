@@ -1885,8 +1885,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:76547f146e6f4fe47b31a05785f235cc897c826eafc0312d55bae38bbeed037f",
-        "seq": 2
+        "h": "sha256:e85f1ee4e1ffb8adfd7d597164357d5d96a4fe4d02955d950b93ca47c449dfca",
+        "seq": 3
       },
       "runs": []
     },
@@ -2350,14 +2350,14 @@
       "0bceccf1bc47a15967cd296a8a959669a48f8773a080447d73b141baed414628"
     ],
     "overflow": 0,
-    "run_id": "r-54"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:cf73c7617be0daccf77f44cee6ae9c992f85cd5e901b3f82204a7a74d971f0f1",
-    "seq": 390
+    "h": "sha256:f4b60839618fdcc469b50ab9054100c626a211ade2f13d6959c41930f166b9d2",
+    "seq": 392
   },
-  "landed_at": "2026-10-28T05:07:26Z",
-  "ledger_cursor": "08be43e7b9c03798db60b07567904b4af827f203",
+  "landed_at": "2026-10-28T05:23:57Z",
+  "ledger_cursor": "bba12378548ce04e42ce226a6e81bf6e53519eb3",
   "schema": 2
 }
