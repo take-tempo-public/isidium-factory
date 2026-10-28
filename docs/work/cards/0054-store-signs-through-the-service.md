@@ -31,6 +31,14 @@ text = "a card signed through remote-totp is not software-grade and a card signe
 id = "R4"
 text = "a service that declines or times out leaves nothing signed and nothing journaled, and ratify's answer names the refusal"
 
+[[rules]]
+id = "R5"
+text = "RemoteTotp's wait for the owner is bounded by the clock (monotonic time since the submit, every round trip included), not by a sum of its sleeps; the store answers signer.timeout before the client channel's own timeout can fire, however slowly the service answers each poll within its per-call timeout"
+
+[[rules]]
+id = "R6"
+text = "before a remote signature is used, the store verifies it over tenant and value and checks that its key is the configured service key (--signing-service-fpr); a signature that fails either is refused in the signer. namespace, and nothing is signed or journaled"
+
 [[guidance.avoid]]
 id = "A1"
 option = "replacing ratification.pin with the service's key"
@@ -53,8 +61,18 @@ because = "checked when filing: store.py:1301-1319"
 
 [[guidance.constraints]]
 id = "C4"
-text = "tools/mutations/remote-signer.toml commits a mutation for R2's default backend and one for R2's use_backend check; each kill is checked against this card's own test file only"
+text = "tools/mutations/remote-signer.toml commits a mutation for R2's default backend, R2's use_backend check, R5's clock bound and R6's signature check; each kill is checked against this card's own test file only"
 because = "the card-writing checklist"
+
+[[guidance.constraints]]
+id = "C5"
+text = "this card's test file passes on Linux and on a Windows host alike: no test depends on the platform's TCP refusal timing (a connection to a bound, non-listening port is refused at once on Linux and after about 2 s on Windows, measured 2.06 s), so a test of an unreachable service gives its client a timeout above that or reaches unreachable another way"
+because = "r-57 ended failed:gate on exactly this: the host's mutation check ran the file red (signer.timeout read where signer.unreachable was meant, with a 1.0 s client timeout), and the build container, Linux and without pytest, could not see it"
+
+[[guidance.constraints]]
+id = "C6"
+text = "the README gives the true reason for its backend order (a write declaring remote-totp is signed through a service key no binding holds until card 56, so it reads unverified), server/signer.py's docstring says the HTTPS transport now lives there and why, and any module-level import there carries its C-13 reason"
+because = "r-57's review F6, F3, F5"
 
 [[guidance.constraints]]
 id = "C8"
@@ -93,11 +111,27 @@ kind = "test-marker"
 title = "a declined or timed-out signature leaves nothing signed"
 rule = "R4"
 observable = { test = "tests/store/test_remote_signer.py::test_a_declined_signature_leaves_nothing" }
+
+[[acceptance.scenarios]]
+id = "S5"
+kind = "test-marker"
+title = "the wait is bounded by the clock, not by the sleeps"
+rule = "R5"
+observable = { test = "tests/store/test_remote_signer.py::test_the_wait_is_bounded_by_the_clock" }
+
+[[acceptance.scenarios]]
+id = "S6"
+kind = "test-marker"
+title = "a signature that does not verify, or is by another key, is refused"
+rule = "R6"
+observable = { test = "tests/store/test_remote_signer.py::test_a_wrong_signature_is_refused" }
 ```
 
 ## Scope
 
 Ruled [owner, 2026-10-26/27]: the waiver 'Keep it, no allowance' (the file key a fallback, never dispatched unattended). Today serve builds only SoftwareKeyAck (cli.py:485); RemoteTotp is constructed nowhere.
+
+Amended [owner, 2026-10-28]: 'amend AND RE-DISPATCH', after r-57 ended failed:gate. Its own test file was red on the host only: Windows refuses a connection to a bound, non-listening port after about 2 s, and the test's 1.0 s client timeout read that as signer.timeout (C5). The review's F2 (major: the wait bound sums sleeps, so a slow service outlasts the 660 s channel) becomes R5, and F4 (the returned signature is never verified against the configured key) becomes R6. Re-dispatched carrying r-57's work.
 
 ## History
 
@@ -109,5 +143,6 @@ history = [
   { seq = 4, at = "2026-10-28T17:20:26Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:43f23f0359c842a05e00dc9c31cc4be2cb00770d545d93d1f01a3283153ee3f2", h = "sha256:f881061d30ee395a0ad587f69de0f55502820c1ab3354af4796024ef21ceb243" },
   { seq = 5, at = "2026-10-28T17:20:45Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:43f23f0359c842a05e00dc9c31cc4be2cb00770d545d93d1f01a3283153ee3f2", h = "sha256:e63e2e28fabdd17f32d6fbbac3e53004af1c49967fd2f009d7004486d3f4b740", batch = 76 },
   { seq = 6, at = "2026-10-28T21:21:16Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:43f23f0359c842a05e00dc9c31cc4be2cb00770d545d93d1f01a3283153ee3f2", h = "sha256:7ee45464966d6f6279848aaa2ace2521969e739c2ac1b462c288e9d2d7913e66" },
+  { seq = 7, at = "2026-10-28T21:23:21Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["acceptance", "guidance", "rules", "scope"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:694768fff72079ed6b3fb2242cb5c1ba35dd3d6cdd733bc6d8f3a060598747bf" },
 ]
 ```
