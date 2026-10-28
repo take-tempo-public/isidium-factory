@@ -2,7 +2,7 @@
 schema = 1
 id = 56
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an Aegis code"
 shape = "bdd"
@@ -115,5 +115,6 @@ Ruled [owner, 2026-10-27]: enrolment by a 'Binding, signed twice'. The store che
 ```toml
 history = [
   { seq = 1, at = "2026-10-27T16:39:55Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c2335b4ec4d4740e8418f41f129519f76dfdf8ab18b8063088614b1236612734", h = "sha256:869ec4d08ade04f1f0c5e380a8c2d3e8a9952714fa15048025cfb6f37ff9f98b" },
+  { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c2335b4ec4d4740e8418f41f129519f76dfdf8ab18b8063088614b1236612734", h = "sha256:fe69d68470cb59169c283765df228158517f7ea6507e1d0d3a6a6f0ed27173df", batch = 74 },
 ]
 ```

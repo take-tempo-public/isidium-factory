@@ -2,7 +2,7 @@
 schema = 1
 id = 52
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing service signs a request only after the owner's Aegis code for that request, and answers only callers holding a named client certificate"
 shape = "bdd"
@@ -140,5 +140,6 @@ Ruled [owner, 2026-10-26/27]: 'use aegis keys (or some remote-totp) for signing'
 ```toml
 history = [
   { seq = 1, at = "2026-10-27T16:39:06Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:2e543fdf17fbe26191a6bb0e70593dde442e00f4438f683d130839971622c18c", h = "sha256:556775274a7cf766021426d8b667a1e22650d9c32214f9cc04d03742579bb73c" },
+  { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:2e543fdf17fbe26191a6bb0e70593dde442e00f4438f683d130839971622c18c", h = "sha256:3182a8816f68687b137243a107255a79d87ad5b21280a3ca4ff208ee1149abec", batch = 74 },
 ]
 ```

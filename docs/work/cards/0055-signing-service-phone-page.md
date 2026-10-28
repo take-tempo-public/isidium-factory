@@ -2,7 +2,7 @@
 schema = 1
 id = 55
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container image"
 shape = "bdd"
@@ -109,5 +109,6 @@ Ruled [owner, 2026-10-26/27]: approval on a 'Phone web page' (over WireGuard; no
 ```toml
 history = [
   { seq = 1, at = "2026-10-27T16:39:46Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:ab247e52d210635a622a675f9cead24e8b7d8727a69ede447beee3d95776ec11", h = "sha256:4eadb883a32d4da843dddc5a3c06ef260246254a1798d73580e7fe1653b67f2a" },
+  { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:ab247e52d210635a622a675f9cead24e8b7d8727a69ede447beee3d95776ec11", h = "sha256:9923c5a1106eee730c4c2a6de06bb2157ff30bea6c75ec3b4feb8aeb2a5ea740", batch = 74 },
 ]
 ```

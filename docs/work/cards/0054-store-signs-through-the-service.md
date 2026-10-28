@@ -2,7 +2,7 @@
 schema = 1
 id = 54
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The store signs a ratification through the remote-totp service, and the file key stays as a named fallback"
 shape = "bdd"
@@ -104,5 +104,6 @@ Ruled [owner, 2026-10-26/27]: the waiver 'Keep it, no allowance' (the file key a
 ```toml
 history = [
   { seq = 1, at = "2026-10-27T16:39:27Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:1f21710c8a2e0d2475ab50ed8f4ad4ee124b9f87593b7044c0a6a9160ae6f24e", h = "sha256:5f3abda7ced315d608f8481888dc6de6f7db44b2c9e5107fb51e2bd48663dbd1" },
+  { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1f21710c8a2e0d2475ab50ed8f4ad4ee124b9f87593b7044c0a6a9160ae6f24e", h = "sha256:169429f07a600645663bfacff4a62267618d3aaec1d4607c9875debec4b84911", batch = 74 },
 ]
 ```
