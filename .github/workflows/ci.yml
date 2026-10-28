@@ -51,7 +51,7 @@ jobs:
       - name: mypy --strict over packages/, tests/ and tools/
         # tests/ and tools/ joined the bar in K5b (ruled 2026-09-04): at `python_version = "3.12"` the checker
         # rejects a 3.13-only call on sight, and the three that reached `main` were all in a test file it never saw.
-        run: uv run --no-sync python -m mypy packages/isidium-store/src packages/isidium-factory/src tests tools
+        run: uv run --no-sync python -m mypy packages/isidium-store/src packages/isidium-factory/src packages/isidium-signer/src tests tools
       - name: ruff
         run: |
           set -eu
