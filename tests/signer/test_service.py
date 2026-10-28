@@ -13,6 +13,7 @@ import ipaddress
 import json
 import socket
 import ssl
+import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -388,7 +389,11 @@ def test_mtls_required(rig: Rig) -> None:
     assert not _raw_submit(rig, old).startswith(b"HTTP/")
 
     # a certificate the CA issued but the settings do not name is answered, with a refusal and no more
+    # and promptly: the body rides in the same TLS record as the headers, so the refusal must not wait out the
+    # listener's read timeout for bytes it already holds (the connection closes as soon as the answer is written)
+    began = time.monotonic()
     answer = _raw_submit(rig, _client_context(rig, rig.unnamed))
+    assert time.monotonic() - began < 2.0
     head, _, body = answer.partition(b"\r\n\r\n")
     assert head.split(b"\r\n")[0].split()[1] == b"403"
     assert json.loads(body)["rule"] == "signer.unknown-caller"

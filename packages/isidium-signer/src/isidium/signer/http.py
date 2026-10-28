@@ -118,7 +118,26 @@ class _Handler(BaseHTTPRequestHandler):
 
     do_PUT = do_DELETE = do_PATCH = do_HEAD = do_OPTIONS = do_GET
 
-    def unread(self) -> int:
+    def finish(self) -> None:
+        """Discard the body a refusal never read, then close. Closing a socket that still holds unread bytes makes the
+        kernel reset the connection, and the reset can destroy the answer in flight: a client that sends its headers
+        and its body separately would see the connection drop instead of the 403. **Read through `rfile`**, not the
+        socket: `rfile` is buffered, so a body that arrived in the same TLS record as the headers is already in it and
+        the socket holds nothing more to wait for; draining the socket would block for the read timeout and hold the
+        peer's EOF back until then. Bounded by the body cap and the read timeout; nothing read here is parsed."""
+        try:
+            left = min(self._unread(), self._listener.settings.max_body_bytes)
+            while left > 0:
+                chunk = self.rfile.read(min(left, 65536))
+                if not chunk:
+                    break
+                left -= len(chunk)
+        except (OSError, ValueError):
+            pass  # the peer's connection dies with the peer's mistake
+        finally:
+            super().finish()
+
+    def _unread(self) -> int:
         """The body bytes the peer declared and this handler never read (a refusal answers before the body)."""
         headers = getattr(self, "headers", None)
         if self._consumed or headers is None:
@@ -178,24 +197,11 @@ class Listener(socketserver.ThreadingTCPServer):
         try:
             subject = _subject_of(tls)
             tls.settimeout(self.settings.read_timeout_s)
-            handler = _Handler(tls, client_address, self, subject)
-            self._drain(tls, handler.unread())
+            _Handler(tls, client_address, self, subject)
         except (OSError, ValueError):
             return  # the peer's connection dies with the peer's mistake
         finally:
             tls.close()
-
-    def _drain(self, tls: ssl.SSLSocket, count: int) -> None:
-        """Read and discard the body a refusal never read, after the answer is written. Closing a socket that still
-        holds unread bytes makes the kernel reset the connection, and the reset can destroy the answer in flight: a
-        client that sends its headers and its body separately would see the connection drop instead of the 403.
-        Bounded by the body cap and by the read timeout; nothing read here is parsed."""
-        left = min(count, self.settings.max_body_bytes)
-        while left > 0:
-            chunk = tls.recv(min(left, 65536))
-            if not chunk:
-                return
-            left -= len(chunk)
 
     def close(self) -> None:
         self.shutdown()
