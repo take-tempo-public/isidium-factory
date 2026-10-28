@@ -2148,11 +2148,11 @@
     },
     "0054": {
       "closures": [],
-      "execution": "failed(gate)",
+      "execution": null,
       "fingerprint": {
-        "commit": "5ff27dd50bf12a3f3ca4fe2dc1f2d7263f78d2f2",
+        "commit": "bfb2278a39f30a08b09e9513132b6025e64e493c",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 5,
+        "ratified_seq": 8,
         "refs_resolved": [
           {
             "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
@@ -2202,8 +2202,8 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:e63e2e28fabdd17f32d6fbbac3e53004af1c49967fd2f009d7004486d3f4b740",
-        "seq": 5
+        "h": "sha256:aa94bc82d776d001875cf3808d46dd14660704b0f85d2229b498d2b1b1f8830d",
+        "seq": 8
       },
       "runs": []
     },
@@ -2382,20 +2382,74 @@
     "0062": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "bfb2278a39f30a08b09e9513132b6025e64e493c",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "011f753489d7d22672ab3e224fcc93b7f86e13c9",
+            "path": "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+          },
+          {
+            "blob": "011f753489d7d22672ab3e224fcc93b7f86e13c9",
+            "path": "packages/isidium-store/src/isidium/store/server/gitrepo.py"
+          },
+          {
+            "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
+          },
+          {
+            "blob": "7faf3e6286a24ea750cc52b8737a5cb9a0eb5648",
+            "path": "packages/isidium-store/src/isidium/store/server/reconcile.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:cef7f7ecbbf7c88279a5c602db0dbc5ecd486038d911b3c5ef274457c7e5dec3",
-        "seq": 1
+        "h": "sha256:56a37687229a68a68f70f47720462f10afafd9c525f17cc575c6ea01f66910a9",
+        "seq": 2
       },
       "runs": []
     },
     "0063": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "bfb2278a39f30a08b09e9513132b6025e64e493c",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 2,
+        "refs_resolved": [
+          {
+            "blob": "3755e5095883b32737b55fbbeb08e190bc6b20ff",
+            "path": "packages/isidium-signer/src/isidium/signer/http.py"
+          },
+          {
+            "blob": "3755e5095883b32737b55fbbeb08e190bc6b20ff",
+            "path": "packages/isidium-signer/src/isidium/signer/http.py"
+          },
+          {
+            "blob": "3a63198cab911a5485d5cbea1e503534bb8e1288",
+            "path": "packages/isidium-signer/src/isidium/signer/service.py"
+          },
+          {
+            "blob": "3a63198cab911a5485d5cbea1e503534bb8e1288",
+            "path": "packages/isidium-signer/src/isidium/signer/service.py"
+          },
+          {
+            "blob": "ca2c6a96be60334a08213cceac45d6989da01d3a",
+            "path": "packages/isidium-store/src/isidium/store/server/http.py"
+          },
+          {
+            "blob": "ca2c6a96be60334a08213cceac45d6989da01d3a",
+            "path": "packages/isidium-store/src/isidium/store/server/http.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:462fdd37c2793fa9ac8fd75e2c83a3887ec4275d86b5f1021bf8c52417d70218",
-        "seq": 1
+        "h": "sha256:4c39e3622000554c320a46a69b184c1623122d0402272b8f28c7a5fc4a2bef57",
+        "seq": 2
       },
       "runs": []
     }
@@ -2528,14 +2582,14 @@
       "d6bdc378d2e70ca5e01fe8cd9f408faf8f2ca849d9a258f84d49adccb62bcb61"
     ],
     "overflow": 0,
-    "run_id": "r-57"
+    "run_id": "r-0"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:3bb26040167affb92e3f0a3d1844ba60e364755507d30ed62758d9eead92f9cc",
-    "seq": 412
+    "h": "sha256:647b5d558433c30e305d27692f71357c0aca28477502cc263d12174dbd98804e",
+    "seq": 416
   },
-  "landed_at": "2026-10-28T17:58:29Z",
-  "ledger_cursor": "ae52c9a0ea4e95ac38068ecf3418a775831817e8",
+  "landed_at": "2026-10-28T21:24:28Z",
+  "ledger_cursor": "bfb2278a39f30a08b09e9513132b6025e64e493c",
   "schema": 2
 }
