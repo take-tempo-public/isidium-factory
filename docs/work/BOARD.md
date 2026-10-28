@@ -69,7 +69,7 @@ none
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · closed · software-grade · depends_on 52 · (derived)
 - **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ratified · blocked_by[54] · software-grade · depends_on 54 · (derived)
 - **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · ready · software-grade · (derived)
-- **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · draft · depends_on 55 · (derived)
+- **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · ready · software-grade · depends_on 55 · (derived)
 
 ## Blocked
 
