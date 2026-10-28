@@ -1384,13 +1384,13 @@ real host; the commands below were written against the code and its tests, not y
 | the page | `[page] host`, `port` | the owner's phone browser | nothing — it asks for no client certificate |
 
 One small CA for the service signs all three kinds, with the same extensions as *Issuing the certificates* above (a CA
-with `keyCertSign` and a SubjectKeyIdentifier; leaves with an AuthorityKeyIdentifier). **Keep it a different CA from
+with `keyCertSign` and a SubjectKeyIdentifier; leaves with an AuthorityKeyIdentifier). **The keys are ECDSA P-256, not Ed25519 as in the store's recipe.** The store's callers are Python, whose OpenSSL accepts Ed25519; the page's caller is a phone browser, and Chrome, the Android WebView, Safari and Firefox neither offer Ed25519 in the handshake nor verify an Ed25519-signed chain. The CA signs the page's certificate, so the CA's key is P-256 too, or the chain fails whatever the page's own key is. **Keep it a different CA from
 the store's:** a leaf this CA issues is a credential for this service, and a CA shared with the store would hand out
 one as a side effect of the other.
 
 ```sh
 mkdir -p signer/tls && cd signer/tls
-openssl req -x509 -newkey ed25519 -days 3650 -nodes -keyout ca.key.pem -out ca.crt.pem \
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 3650 -nodes -keyout ca.key.pem -out ca.crt.pem \
   -subj "/CN=isidium-signer CA" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -addext "subjectKeyIdentifier=hash"
@@ -1400,14 +1400,14 @@ for leaf in server:signer.example.invalid page:page.signer.example.invalid; do
   name=${leaf%%:*}; dns=${leaf#*:}
   printf '%s\n' 'subjectKeyIdentifier=hash' 'authorityKeyIdentifier=keyid,issuer' \
     'extendedKeyUsage=serverAuth' "subjectAltName=DNS:$dns" > "$name.ext"
-  openssl req -newkey ed25519 -nodes -keyout "$name.key.pem" -out "$name.csr" -subj "/CN=$dns"
+  openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout "$name.key.pem" -out "$name.csr" -subj "/CN=$dns"
   openssl x509 -req -in "$name.csr" -CA ca.crt.pem -CAkey ca.key.pem -CAcreateserial -days 825 \
     -out "$name.crt.pem" -extfile "$name.ext"
 done
 
 # One client certificate per caller: clientAuth and nothing else. Its subject, in RFC 4514 form, goes in `callers`.
 printf '%s\n' 'subjectKeyIdentifier=hash' 'authorityKeyIdentifier=keyid,issuer' 'extendedKeyUsage=clientAuth' > client.ext
-openssl req -newkey ed25519 -nodes -keyout store-client.key.pem -out store-client.csr -subj "/CN=store@example.invalid"
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout store-client.key.pem -out store-client.csr -subj "/CN=store@example.invalid"
 openssl x509 -req -in store-client.csr -CA ca.crt.pem -CAkey ca.key.pem -CAcreateserial -days 825 \
   -out store-client.crt.pem -extfile client.ext
 openssl x509 -in store-client.crt.pem -noout -subject -nameopt RFC2253    # the string `callers` needs, after `subject=`
