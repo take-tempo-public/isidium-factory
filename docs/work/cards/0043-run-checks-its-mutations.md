@@ -2,7 +2,7 @@
 schema = 1
 id = 43
 kind = "story"
-status = "ratified"
+status = "closed"
 source = "session"
 title = "A run checks its card's committed mutations against the card's own tests before it ends, and a survivor goes to reconcile"
 shape = "bdd"
@@ -92,6 +92,14 @@ kind = "test-marker"
 title = "a find that does not match is a survivor"
 rule = "R4"
 observable = { test = "tests/factory/test_run_checks_its_mutations.py::test_an_unmatched_find_is_a_survivor" }
+
+[[closures]]
+id = "c1"
+kind = "human"
+outcome = "met"
+verdicts = { S1 = "pass", S2 = "pass", S3 = "pass", S4 = "pass" }
+evidence = ["sha256:612a979c755db781f52b3569f166a7b79c48ea34e95a9ab73e22573f72f28dec"]
+retracted = false
 ```
 
 ## Scope
@@ -104,5 +112,6 @@ Ruled [owner, 2026-10-07]: 'Mutation check in the run', against 'The card's own 
 history = [
   { seq = 1, at = "2026-10-08T01:38:01Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:e78edebc980de1efe535eb96958cd0a71bd8300e75f031dc5ae1de7c059102e8", h = "sha256:90e873d917b76171c701b9ad028efcce3b726816e733497ed4529168af820fb6" },
   { seq = 2, at = "2026-10-23T21:18:16Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e78edebc980de1efe535eb96958cd0a71bd8300e75f031dc5ae1de7c059102e8", h = "sha256:76547f146e6f4fe47b31a05785f235cc897c826eafc0312d55bae38bbeed037f", batch = 72 },
+  { seq = 3, at = "2026-10-28T05:23:57Z", by = "amodal1@users.noreply.github.com", act = "closed", fields = ["closures", "status"], build = "sha256:e78edebc980de1efe535eb96958cd0a71bd8300e75f031dc5ae1de7c059102e8", ref = "c1:sha256:8a2298dabb16f16396de5d08fc7b5c3f3cc3fb9e0883d3a9b871a30c3b154193", h = "sha256:e85f1ee4e1ffb8adfd7d597164357d5d96a4fe4d02955d950b93ca47c449dfca", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:63OJiEhdt2YSsz/2uWt+9mtrA2ZxmgHVJDxSi7RLQlUQKlKeAIxez4U0DMEGaifcPlra8oPDbS0xPE031vM1Cg==" },
 ]
 ```
