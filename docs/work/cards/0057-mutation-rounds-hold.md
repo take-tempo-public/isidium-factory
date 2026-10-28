@@ -2,7 +2,7 @@
 schema = 1
 id = 57
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a deadline"
 shape = "bdd"
@@ -120,5 +120,6 @@ Ruled [owner, 2026-10-27]: '1', answering the option 'merge once green and card 
 history = [
   { seq = 1, at = "2026-10-28T06:09:01Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:2ae4ca70a37f87bac4b569cccca0db700b1dd155e45c485f8ed5a6d54724c36c", h = "sha256:c015bd783c3f53d23c97aa8d0ecee92ca2644618894f25b719e30b4325ac3f99" },
   { seq = 2, at = "2026-10-28T06:17:04Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["refs"], build = "sha256:1c68f42a66a6f7e8bf5e586721e6f2f0a2be33606dd66ea3ba3fb46498656d3a", h = "sha256:84a178cc9c812d24e356f33a24563e502f69a0346bad08ab15292934d8922c18" },
+  { seq = 3, at = "2026-10-28T06:17:28Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1c68f42a66a6f7e8bf5e586721e6f2f0a2be33606dd66ea3ba3fb46498656d3a", h = "sha256:522f431f761673cd4c9a9842bfd831c11e2486f5c7913e967778b2c43fe75a02", batch = 75 },
 ]
 ```
