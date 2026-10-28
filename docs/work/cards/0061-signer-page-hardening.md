@@ -2,7 +2,7 @@
 schema = 1
 id = 61
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its first signal and names the file it cannot read"
 shape = "bdd"
@@ -109,5 +109,6 @@ Ruled [owner, 2026-10-28]: 'Push + P0 follow-up card (Recommended)', answering h
 ```toml
 history = [
   { seq = 1, at = "2026-10-28T16:10:27Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:0ca6937a11e75f35233e413c5c0ec4645bdbf2b8baedee0dcb18f742f367d2b0", h = "sha256:235fbd973edb503818eea8f30f852e1dd85a6027fd47643c10ff1ccf5b29d7a9" },
+  { seq = 2, at = "2026-10-28T17:20:45Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:0ca6937a11e75f35233e413c5c0ec4645bdbf2b8baedee0dcb18f742f367d2b0", h = "sha256:62117cd090821505ed12433807bd53b335c668fb4f8c50dc2563e731a0f9cb6f", batch = 76 },
 ]
 ```
