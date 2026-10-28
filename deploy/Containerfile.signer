@@ -1,0 +1,58 @@
+# The signing service's container (card 55; the service is card 52, its page this card). It signs a ratification only
+# after the owner's Aegis code, entered on the service's own phone page, and it runs only in the owner-only zone
+# (deploy/README.md, "The signing service") -- never where a store or a session runs.
+#
+# **Built as the store's image is** (deploy/Containerfile.store, whose comments carry the reasons and are not repeated
+# here): two stages, both bases pinned by digest -- the same lines, resolved 2026-09-04, so a bump moves both images
+# -- a locked install under `pip --require-hashes`, and a user that is not root. What differs is only what the
+# service is: python and the service, with no git and no ssh client, because it clones nothing and pushes nothing.
+#
+# **One process.** The service terminates both of its listeners itself (the API's mTLS, the page's plain HTTPS) and
+# the entrypoint `exec`s it as PID 1.
+
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS build
+COPY --from=ghcr.io/astral-sh/uv:0.12.10@sha256:2bb3ebca0a796a155094a27773d290c4b074572e6107f171d88d086682fd2500 /uv /usr/local/bin/uv
+WORKDIR /src
+# The whole workspace, because one lock covers it (as for the store). None of this stage survives into the image.
+COPY pyproject.toml uv.lock /src/
+COPY packages /src/packages
+# **The export is the lock, narrowed**: the runtime dependencies of `isidium-signer`, no dev group and no workspace
+# member, every version `==` and every artifact carrying its sha256. `--no-emit-workspace` also drops `isidium-store`,
+# which the signer imports (`core.chain` and `Refusal`), so **both** wheels are built below and both go in `--no-deps`.
+# `--locked` refuses a lock that no longer matches `pyproject.toml`, so a drifted manifest fails the build.
+RUN uv export --locked --no-dev --no-emit-workspace --package isidium-signer --format requirements-txt \
+      -o /wheels/requirements.txt \
+ && uv build --wheel --package isidium-store --out-dir /wheels \
+ && uv build --wheel --package isidium-signer --out-dir /wheels
+
+FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+COPY --from=build /wheels /wheels
+# Two installs, and the order is the point (the store's image says why): the dependencies from the exported lock under
+# `--require-hashes`, which makes pip refuse anything whose bytes do not match, then the two workspace wheels with
+# `--no-deps`, safe only because the line before it cannot silently resolve anything.
+RUN python -m pip install --no-cache-dir --require-hashes -r /wheels/requirements.txt \
+ && python -m pip install --no-cache-dir --no-deps \
+      "$(printf '%s' /wheels/isidium_store-*.whl)" "$(printf '%s' /wheels/isidium_signer-*.whl)" \
+ && rm -rf /wheels
+
+# The service runs as its own unprivileged user. **`state/` is the one writable directory**: the service writes the
+# last consumed TOTP step there on every approval, and the TOTP secret itself at enrolment (the settings name both
+# paths; the README mounts a named volume over this directory, because a host directory arrives owned by someone else).
+RUN useradd --system --create-home --home-dir /var/lib/isidium-signer isidium-signer \
+ && mkdir -p /var/lib/isidium-signer/state /etc/isidium-signer \
+ && chown -R isidium-signer:isidium-signer /var/lib/isidium-signer
+
+COPY deploy/signer-entrypoint.sh /usr/local/bin/isidium-signer-entrypoint
+RUN chmod 0755 /usr/local/bin/isidium-signer-entrypoint
+
+# The image's own layout, not policy: where the settings file is mounted. Every decision -- the addresses, the
+# certificates, the callers, the limits -- is in that file, and the entrypoint refuses without it (C-1).
+ENV ISIDIUM_SIGNER_SETTINGS=/etc/isidium-signer/signer.toml \
+    HOME=/var/lib/isidium-signer
+
+WORKDIR /var/lib/isidium-signer
+USER isidium-signer
+
+# No EXPOSE and no HEALTHCHECK on purpose: the two ports are the settings' (`listen_port`, `[page].port`), and a check
+# of the API must present a client certificate whose subject is a named caller, which is the deployment's to mount.
+ENTRYPOINT ["/usr/local/bin/isidium-signer-entrypoint"]

@@ -6,8 +6,8 @@ thread and not the accept loop, and a peer whose handshake fails is closed witho
 that passes the handshake is a caller only if its certificate's subject (RFC 4514) is named in the settings; that is
 checked once the request line and headers are parsed and before any body byte is read, and an unnamed peer gets a
 403 `signer.unknown-caller` and nothing reaches the service. The stdlib's `http.server` owns the HTTP grammar; one
-request per connection (`Connection: close`). `approve` is not on this listener: the code is entered on the
-service's own page (the next card), never over this API.
+request per connection (`Connection: close`). `approve` and `decline` are not on this listener: the code is
+entered on the service's own page (`page.py`, which asks no client certificate), never over this API.
 
 **The client**, `HttpsService`, implements `RemoteTotpContract` against it, so `RemoteTotp` signs through a running
 service. A refusal the service sent is rebuilt as the typed `Refusal` it was raised as.
