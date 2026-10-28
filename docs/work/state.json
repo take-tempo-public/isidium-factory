@@ -2444,10 +2444,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:a0ade1a63e789a15cb7112149c0a8abe2ebab8e06e38d5e344047b4053ac0ee3",
-    "seq": 402
+    "h": "sha256:8f70e5da26a451e2a8ff4d624480760618bcdbb266c1d2246b93b67c470d5351",
+    "seq": 403
   },
-  "landed_at": "2026-10-28T15:00:13Z",
-  "ledger_cursor": "7dcacab99fe96074701ea9fe0472cb8373030a89",
+  "landed_at": "2026-10-28T16:05:30Z",
+  "ledger_cursor": "773012444b1966af8b6085681b5e200e960bf870",
   "schema": 2
 }
