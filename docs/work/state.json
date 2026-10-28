@@ -2077,7 +2077,7 @@
     },
     "0052": {
       "closures": [],
-      "execution": null,
+      "execution": "dispatched",
       "fingerprint": {
         "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2384,17 +2384,18 @@
       "b0620f6726ca809edaecb6aec76392b461e548a539c7c39590422cadaa207dd8",
       "0e3fa1b65d1d968664a2d11ef35b37726dd14971f3ab28c1c2a8084384b0b4a4",
       "f9769e7f611ca73b372dcb8935f45a35a33b144bfa71f6dc18ef2b2acd508632",
-      "0bceccf1bc47a15967cd296a8a959669a48f8773a080447d73b141baed414628"
+      "0bceccf1bc47a15967cd296a8a959669a48f8773a080447d73b141baed414628",
+      "fa59c80475efe7ba4c1976ebd8a59f3b67d749b2e2c94917909610c4d7bd8801"
     ],
     "overflow": 0,
-    "run_id": "r-0"
+    "run_id": "r-55"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:701d62ca36251051e926bc6797e8b2757c4bac31d2c709928c6666e3695e2703",
-    "seq": 397
+    "h": "sha256:7cce4073c041c157d449eb301484ab4ad4e5d10348488f73a15139b2ca8e4ccd",
+    "seq": 398
   },
-  "landed_at": "2026-10-28T06:17:28Z",
-  "ledger_cursor": "a9bc3bc96820ceb98a0cc41764f33a1d6894552f",
+  "landed_at": "2026-10-28T06:17:39Z",
+  "ledger_cursor": "9568b195121c7a7bb204bf90bbe02869c708dd9c",
   "schema": 2
 }
