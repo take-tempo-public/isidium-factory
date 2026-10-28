@@ -2,7 +2,7 @@
 schema = 1
 id = 63
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing service's body cap and secret-file guard are proven, and every refusal either listener answers is counted by its rule"
 shape = "bdd"
@@ -88,5 +88,6 @@ Ruled [owner, 2026-10-28]: 'yes, card the follow-up and continue', answering the
 ```toml
 history = [
   { seq = 1, at = "2026-10-28T17:58:29Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:0e90a89fec775c3e82170ab1e2fa19e66243362ec06520065c56fa15ddbb501f", h = "sha256:462fdd37c2793fa9ac8fd75e2c83a3887ec4275d86b5f1021bf8c52417d70218" },
+  { seq = 2, at = "2026-10-28T21:24:28Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:0e90a89fec775c3e82170ab1e2fa19e66243362ec06520065c56fa15ddbb501f", h = "sha256:4c39e3622000554c320a46a69b184c1623122d0402272b8f28c7a5fc4a2bef57", batch = 77 },
 ]
 ```

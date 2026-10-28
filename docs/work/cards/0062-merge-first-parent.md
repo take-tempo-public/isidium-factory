@@ -2,7 +2,7 @@
 schema = 1
 id = 62
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit is not a second writer"
 shape = "bdd"
@@ -87,5 +87,6 @@ Ruled [owner, 2026-10-28]: 'Card it, P0 (Recommended)'. Found 2026-10-28: after 
 ```toml
 history = [
   { seq = 1, at = "2026-10-28T17:22:34Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c23014fa17b6e796c67eb987b610a8f054ae3f37713a7a6e3d42c396a394233a", h = "sha256:cef7f7ecbbf7c88279a5c602db0dbc5ecd486038d911b3c5ef274457c7e5dec3" },
+  { seq = 2, at = "2026-10-28T21:24:28Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c23014fa17b6e796c67eb987b610a8f054ae3f37713a7a6e3d42c396a394233a", h = "sha256:56a37687229a68a68f70f47720462f10afafd9c525f17cc575c6ea01f66910a9", batch = 77 },
 ]
 ```

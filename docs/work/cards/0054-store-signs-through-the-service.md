@@ -2,7 +2,7 @@
 schema = 1
 id = 54
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The store signs a ratification through the remote-totp service, and the file key stays as a named fallback"
 shape = "bdd"
@@ -144,5 +144,6 @@ history = [
   { seq = 5, at = "2026-10-28T17:20:45Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:43f23f0359c842a05e00dc9c31cc4be2cb00770d545d93d1f01a3283153ee3f2", h = "sha256:e63e2e28fabdd17f32d6fbbac3e53004af1c49967fd2f009d7004486d3f4b740", batch = 76 },
   { seq = 6, at = "2026-10-28T21:21:16Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:43f23f0359c842a05e00dc9c31cc4be2cb00770d545d93d1f01a3283153ee3f2", h = "sha256:7ee45464966d6f6279848aaa2ace2521969e739c2ac1b462c288e9d2d7913e66" },
   { seq = 7, at = "2026-10-28T21:23:21Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["acceptance", "guidance", "rules", "scope"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:694768fff72079ed6b3fb2242cb5c1ba35dd3d6cdd733bc6d8f3a060598747bf" },
+  { seq = 8, at = "2026-10-28T21:24:28Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:aa94bc82d776d001875cf3808d46dd14660704b0f85d2229b498d2b1b1f8830d", batch = 77 },
 ]
 ```
