@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -172,3 +173,20 @@ def test_the_adapter_passes_an_explicit_pids_limit(disk: Disk) -> None:
     assert "--pids-limit" in run_argv
     assert run_argv[run_argv.index("--pids-limit") + 1] == str(container_mod.PIDS_LIMIT)
     assert container_mod.PIDS_LIMIT == 2048, "podman's own default, named rather than inherited"
+
+
+def test_podman_maps_the_host_user_onto_the_image_runner_user(disk: Disk) -> None:
+    pod = Podman()
+    Container(disk.home, _reg(disk), run=pod).execute(a_job(disk))
+    run_argv = next(a for a in pod.seen if a[1] == "run")
+    want = f"keep-id:uid={container_mod.RUNNER_ID},gid={container_mod.RUNNER_ID}"
+    assert run_argv[run_argv.index("--userns") + 1] == want
+    assert "--user" not in run_argv
+
+
+def test_docker_runs_the_image_as_the_host_user(disk: Disk) -> None:
+    pod = Podman()
+    Container(disk.home, _reg(disk), run=pod, podman="/usr/bin/docker").execute(a_job(disk))
+    run_argv = next(a for a in pod.seen if a[1] == "run")
+    assert run_argv[run_argv.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+    assert "--userns" not in run_argv

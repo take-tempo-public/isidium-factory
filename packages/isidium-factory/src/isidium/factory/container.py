@@ -39,6 +39,10 @@ NAME: Final = "container"
 HARNESS: Final = "claude-code"
 TOKEN_FILE: Final = "claude.token"
 PODMAN: Final = "podman"
+# The image's `runner` user (Containerfile.runner: `useradd --system`, uid and gid 999 -- measured 2026-10-28). The two
+# mounts are owned by the host user, which rootless podman shows as container root; without a mapping `runner` cannot
+# write `/run` or `/work` (r-59: `PermissionError: /run/input.md`, failed:infra before any spend).
+RUNNER_ID: Final = 999
 # The runner image's prompt set, written at build by `deploy/build-runner.sh` as `<agent>/<version>,…` [owner,
 # 2026-09-23]. A second statement of what `prompts/` holds, true only while that script is how an image is made — the
 # cost named at the ruling; an image built any other way carries no label and is refused, never trusted.
@@ -217,6 +221,7 @@ class Container:
             str(PIDS_LIMIT),
             "--name",
             _name(job),
+            *self._identity(),
             "--volume",
             f"{job.worktree}:{render.WORK}:rw",
             "--volume",
@@ -230,6 +235,14 @@ class Container:
             argv += ["--env", f"{k}={v}"]
         argv.append(image)
         return argv
+
+    def _identity(self) -> list[str]:
+        """Who the phase is inside, so the host user's mounts are writable by it under either runtime. Podman maps the
+        host user onto the image's `runner` (`keep-id`); Docker has no such flag and runs the image as the host user
+        itself. Files the phase writes are the host user's either way."""
+        if Path(self._podman).name == "docker":
+            return ["--user", f"{os.getuid()}:{os.getgid()}"]
+        return ["--userns", f"keep-id:uid={RUNNER_ID},gid={RUNNER_ID}"]
 
     def _kill(self, job: RunJob) -> None:
         """The watchdog's hand. The image's PID 1 is `isidium.factory.harness`, which forwards the `TERM` to the
