@@ -147,6 +147,12 @@ rule = "R6"
 observable = { test = "tests/store/test_remote_signer.py::test_a_wrong_signature_is_refused" }
 ```
 
+## Scope
+
+Ruled [owner, 2026-10-26/27]: the waiver 'Keep it, no allowance' (the file key a fallback, never dispatched unattended). Today serve builds only SoftwareKeyAck (cli.py:485); RemoteTotp is constructed nowhere.
+
+Amended [owner, 2026-10-28]: 'amend AND RE-DISPATCH', after r-57 ended failed:gate. Its own test file was red on the host only: Windows refuses a connection to a bound, non-listening port after about 2 s, and the test's 1.0 s client timeout read that as signer.timeout (C5). The review's F2 (major: the wait bound sums sleeps, so a slow service outlasts the 660 s channel) becomes R5, and F4 (the returned signature is never verified against the configured key) becomes R6. Re-dispatched carrying r-57's work.
+
 ## History
 
 ```toml
@@ -163,5 +169,6 @@ history = [
   { seq = 10, at = "2026-10-29T21:14:18Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:7bb3530c3d88b6c5bdb35b608f5f90dc3bd9f80dd175e89aff586b0ecc711226", batch = 81 },
   { seq = 11, at = "2026-10-29T22:56:36Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:5d9f0aba74bee424bb836ad990f06d6b7a8d55c7d3d8e00fe57d990d90cf659a", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:ONf4kWb1Bu7Izm0XDi2Q2G2ttpoIhnIcRmpzfhRvhgvwQrIAvLmlsEP0GzizcylRj3sJ2nvkySTNbJCruiSeDA==" },
   { seq = 12, at = "2026-10-29T22:56:55Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:01cb994cc68ef9574e9484dd3e00e96c54e2164e0f5a9d8df4edb553ba48dbe8", h = "sha256:0787e98ea2f709f2b577ff4b91c054bddb781fe71ce68b4fa49ce2477b5b9f0e" },
+  { seq = 13, at = "2026-10-29T22:57:39Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:1e716130f6f0a312b60423af2b9315ea53f7eed689ebdbc3d4a27640949df983", h = "sha256:1df9fa3986553ddb59a964342cb8ab2d5d646128e3bfa36029b8b640008fdb51" },
 ]
 ```
