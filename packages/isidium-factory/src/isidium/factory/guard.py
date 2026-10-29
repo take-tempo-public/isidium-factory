@@ -19,6 +19,14 @@ the container's own process table (`signal 6`, `Cannot fork`) before either coul
 would split it, and a pytest invocation naming no test file and no test node is blocked here, mechanically, rather
 than left to a prompt a crashed run already ignored twice.
 
+**Card 65: a third rule, the sibling of card 19's, and it is read first.** The image now carries the lock's test
+environments (`pytest`, `ruff` and `mypy` on PATH, 3.13 at `ISIDIUM_PY313`), so a phase that lacks a tool has
+nothing to install: `r-58` ran `python3 -m venv /tmp/v && pip install ruff mypy pytest` and a wheel landed in /work.
+`installs` reads a `Bash` call with card 19's own separators and tokens and blocks a segment that installs packages
+or makes an environment. It runs before the whole-suite rule because an install line that names pytest
+(`pip install pytest`) reads as a whole-suite run too, and read second it would be answered with card 19's reason
+instead of the one that says what to do.
+
 Exit code 2 is the block — the PreToolUse contract's "deny and tell the model why", with the reason on stderr.
 """
 
@@ -51,6 +59,13 @@ BLOCK_EXIT: Final = 2
 # && pytest`, r-18's and r-19's own shape — is judged on the segment that actually runs pytest.
 _SEPARATORS: Final = re.compile(r"&&|\|\||[;|\n]")
 _PYTEST_NAMES: Final[frozenset[str]] = frozenset({"pytest", "py.test"})
+# Card 65: what installs packages or makes an environment, as whole tokens (never substrings, so a test path that
+# merely contains `install` passes). `pip`, `pip3` and `pip3.N`; the verbs that fetch; the module names after `-m`.
+_PIP_NAME: Final = re.compile(r"pip(3(\.\d+)?)?")
+_PIP_VERBS: Final[frozenset[str]] = frozenset({"install", "download"})
+_UV_VERBS: Final[frozenset[str]] = frozenset({"add", "sync"})
+_UV_SUBCOMMANDS: Final[frozenset[str]] = frozenset({"pip", "tool"})
+_ENV_MAKERS: Final[frozenset[str]] = frozenset({"venv", "virtualenv"})
 
 
 def whole_suite(command: str) -> bool:
@@ -63,6 +78,38 @@ def whole_suite(command: str) -> bool:
 def _segment_is_whole_suite(segment: str) -> bool:
     tokens = _tokens(segment)
     return _invokes_pytest(tokens) and not any(t.endswith(".py") or "::" in t for t in tokens)
+
+
+def installs(command: str) -> bool:
+    """Card 65 R3: a shell segment that installs packages or makes an environment — `pip`/`pip3`/`python -m pip`
+    with `install` or `download`, `uv pip install`, `uv add`, `uv sync`, `uv tool install`, `python -m venv`,
+    `virtualenv` — whatever runs beside it on the line. Read per segment with card 19's `_SEPARATORS` and `_tokens`,
+    so `cd x && pip install y` is judged on the segment that installs. This is `r-58`'s shape
+    (`python3 -m venv /tmp/v && pip install ruff mypy pytest`, which left a wheel in /work).
+
+    The limit is the whole-suite rule's, because it is the same reading of a shell line: a subshell (`(pip install
+    x)`, whose first token is `(pip`), `sh -c "pip install x"` (one token) and `uv --opt value sync` (the first
+    non-option token is the option's value) are not read. The run record's scope check still sees what lands in
+    the worktree."""
+    return any(_segment_installs(seg) for seg in _SEPARATORS.split(command))
+
+
+def _segment_installs(segment: str) -> bool:
+    tokens = _tokens(segment)
+    for i, tok in enumerate(tokens):
+        name = tok.rsplit("/", 1)[-1]
+        rest = tokens[i + 1 :]
+        if _PIP_NAME.fullmatch(name) and any(t in _PIP_VERBS for t in rest):
+            return True
+        if name == "virtualenv" or (tok == "-m" and len(rest) > 0 and rest[0] in _ENV_MAKERS):
+            return True
+        if name == "uv":
+            words = [t for t in rest if not t.startswith("-")]
+            if len(words) > 0 and words[0] in _UV_VERBS:
+                return True
+            if len(words) > 1 and words[0] in _UV_SUBCOMMANDS and words[1] == "install":
+                return True
+    return False
 
 
 def _tokens(segment: str) -> list[str]:
@@ -176,6 +223,15 @@ def _whole_suite_reason(spec: dict[str, Any]) -> str:
     )
 
 
+def _install_reason() -> str:
+    return (
+        "this phase installs nothing and makes no environment: the image already carries the tools. `pytest`, `ruff` "
+        'and `mypy` are on PATH (Python 3.12, from the lock), and 3.13 is `"$ISIDIUM_PY313/bin/python" -m pytest '
+        "<file or node>`. Both environments are the lock's and read-only. A tool you cannot find is a line in your "
+        "report, not an install."
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """The hook. Reads the PreToolUse payload on stdin; blocks with exit 2 and a reason the model can act on."""
     del argv
@@ -194,6 +250,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     tool = payload.get("tool_name")
     if tool == BASH:
         command = _bash_command(payload)
+        if command is not None and installs(command):
+            reason = _install_reason()
+            _record(spec, "", reason)
+            print(reason, file=sys.stderr)
+            return BLOCK_EXIT
         if command is not None and whole_suite(command):
             reason = _whole_suite_reason(spec)
             _record(spec, "", reason)

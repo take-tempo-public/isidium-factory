@@ -30,6 +30,39 @@ RUN uv export --locked --no-dev --no-emit-workspace --package isidium-factory \
       --format requirements-txt -o /wheels/requirements.txt \
  && uv build --wheel --package isidium-factory --out-dir /wheels \
  && uv build --wheel --package isidium-store --out-dir /wheels
+# **The phase's test environment, from the same lock** [card 65]: the resolution CI's `uv sync --locked
+# --all-packages --all-extras` installs, with the dev group (pytest, ruff, mypy), minus the workspace packages -- the
+# tests put the *worktree's* src trees on the path (pytest's `pythonpath`, mypy's `mypy_path`), so the code under test
+# is the worktree's and never an installed wheel. **The environment is the lock at image build**: a card that changes
+# `uv.lock` is checked here against the old one until the image is rebuilt, while `green-bar` still checks the new
+# one -- the drift is bounded and named, and builder v7 tells the phase to say so.
+RUN uv export --locked --all-packages --all-extras --group dev --no-emit-workspace \
+      --format requirements-txt -o /tests/requirements.txt
+
+# **Two test environments, one per CI Python, in a stage of their own** [card 65, A1, C1, C2]. They are not the
+# runtime install: the guard and the harness run on the system interpreter, and one environment serving both would
+# let a card that bumps a test dependency move the interpreter the guard runs on. 3.12 is a venv on the base image's
+# own interpreter (the same digest as the final stage, so the symlink resolves there too). 3.13 is an exact patch
+# installed by the pinned uv above, which checks its download against the checksum in its own manifest -- no second
+# base image, because a tag is a moving name (K5, ruling 7bg.5). **Cost, stated at design time:** one install step
+# in the build and roughly 200 to 300 MB in the image; `UV_NO_CACHE` keeps wheels from being shipped beside them.
+FROM build AS test-env
+ENV UV_PYTHON_INSTALL_DIR=/opt/isidium/uv-python \
+    UV_NO_CACHE=1
+RUN uv python install 3.13.9 \
+ && uv venv --python /usr/local/bin/python3.12 /opt/isidium/py312 \
+ && uv venv --python 3.13.9 /opt/isidium/py313 \
+ && uv pip install --python /opt/isidium/py312/bin/python3.12 --require-hashes -r /tests/requirements.txt \
+ && uv pip install --python /opt/isidium/py313/bin/python --require-hashes -r /tests/requirements.txt
+# The 3.12 environment's `bin` goes first on the final PATH, so `python` and `python3` must not exist in it: they
+# would shadow /usr/local/bin's, which is the interpreter that has `isidium.factory` -- `render.GUARD_COMMAND` is
+# `python -m isidium.factory.guard` and the entrypoint execs `python3 -m isidium.factory.harness`, and a hook that
+# exits 1 for want of an import is not a block (PreToolUse reads only exit 2 as one), so the guard would be silently
+# off. The console scripts keep working because their shebang is pointed at the one name that stays.
+# Consequence: `python -m pytest` reaches the runtime interpreter, which has no pytest; the phase runs `pytest`.
+RUN rm /opt/isidium/py312/bin/python /opt/isidium/py312/bin/python3 \
+ && grep -lIZ '^#!/opt/isidium/py312/bin/python3\?$' /opt/isidium/py312/bin/* \
+    | xargs -0 -r sed -i '1s|^#!/opt/isidium/py312/bin/python3\?$|#!/opt/isidium/py312/bin/python3.12|'
 
 FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 
@@ -60,6 +93,22 @@ RUN python -m pip install --no-cache-dir --require-hashes -r /wheels/requirement
 # `org.isidium.prompts` label, which the factory reads before any spend now that the version is signed policy
 # (config@7). An image built with a bare `podman build` has no label, and the factory refuses it.
 COPY prompts /opt/isidium/prompts
+
+# The test environments [card 65]: root-owned as COPY leaves them, so the runner user cannot write into either (the
+# phase installs nothing; the guard refuses the attempt and says a missing tool is a line in the report). The 3.13
+# venv points into uv's managed-Python directory, so that whole directory is copied to the same path. `PATH` puts the
+# 3.12 environment's `bin` first, which is what makes `pytest`, `ruff` and `mypy` resolve to it; 3.13 is reached only
+# by `$ISIDIUM_PY313/bin/python -m pytest <file or node>`. The runtime install above is unchanged and carries no dev
+# group. The check fails the build, rather than a run, if a PATH change ever hid the interpreter the guard needs.
+COPY --from=test-env /opt/isidium/uv-python /opt/isidium/uv-python
+COPY --from=test-env /opt/isidium/py312 /opt/isidium/py312
+COPY --from=test-env /opt/isidium/py313 /opt/isidium/py313
+ENV PATH=/opt/isidium/py312/bin:$PATH \
+    ISIDIUM_PY313=/opt/isidium/py313
+RUN test "$(command -v python3)" = /usr/local/bin/python3 \
+ && python3 -c 'import isidium.factory.guard' \
+ && pytest --version && ruff --version && mypy --version \
+ && "$ISIDIUM_PY313/bin/python" -m pytest --version
 
 # The phase runs as its own unprivileged user. The worktree is bind-mounted writable and is the only thing it may
 # write to — and even there, only inside the card's surfaces, which the guard enforces at write time.
