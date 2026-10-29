@@ -2632,14 +2632,14 @@
       "2ba4336bac3724245b446a6354a02d3feb33272a857536dc3ea201eed06eeaed"
     ],
     "overflow": 0,
-    "run_id": "r-59"
+    "run_id": "maintenance"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:345abe317054845ad07740d822a971c6d237e3cd47b02abd0b1ba4447035da31",
-    "seq": 423
+    "h": "sha256:69790ff44f3e1d1a6baee96841a6f9e7827fd926fd160f9f54e047f0d62cef23",
+    "seq": 424
   },
-  "landed_at": "2026-10-29T01:55:50Z",
-  "ledger_cursor": "b66d2faa1ec43ba5acacaf50127c601ed46de4dd",
+  "landed_at": "2026-10-29T02:17:13Z",
+  "ledger_cursor": "8e547475084dbba6def643c659c2940586e325bc",
   "schema": 2
 }
