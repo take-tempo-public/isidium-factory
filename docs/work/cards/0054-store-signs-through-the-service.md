@@ -84,6 +84,26 @@ id = "C9"
 text = "every file this card changes passes ruff check, ruff format --check and mypy --strict, by path"
 because = "r-38 and r-39 each lost a whole run to a one-line style miss"
 
+[[guidance.constraints]]
+id = "C10"
+text = "S5's store-level case is checked red against the carried code and green against the fix before it is committed: with a 5 s advance in the store's own work before the signer is called, a 3.75 s submit, 59 s polls (within serve's per-call 60 s) and a 0.25 s interval, a wait started at the submit ends at 660.5 s (not under the client channel's 660 s) and a wait started at the verb's first line ends at 601.25 s; the case asserts the end time is under 660 s. Arithmetic checked 2026-10-29 with a simulation of the carried loop (signer.py sign()) and of the plan's own numbers (5 s, 59 s submit, 59 s polls), which end at 656.5 s on both loops and so cannot tell them apart"
+because = "r-61's judge parked this card at round 2: the plan's S5 numbers do not discriminate, so M6 would survive and the run would end failed:gate, as r-57 did"
+
+[[guidance.constraints]]
+id = "C11"
+text = "M6 (the clock bound started at the verb's first line, dropped) is run with `tools/mutate.py tools/mutations/remote-signer.toml M6` against S5's case before it is committed, and is killed by tests/store/test_remote_signer.py alone"
+because = "C4's kill check, stated for the one mutation the plan had left unproven"
+
+[[guidance.constraints]]
+id = "C12"
+text = "the carried patch's stray root file `ruff-0.17.3-*.whl` (r-58's pip install) is not part of this change: the build drops it, and a path restored to its base_sha content is not a scope violation"
+because = "r-58 ended failed:scope on it; the plan's Q1 asked for this ruling"
+
+[[guidance.constraints]]
+id = "C13"
+text = "a default for signer.remote-totp.poll_interval_ms is declared by config@8, so a KeyError branch for its absence is not added; the builder confirms by reading the store's effective-config reader"
+because = "r-61's F-2 (minor): the branch is dead code"
+
 [[acceptance.scenarios]]
 id = "S1"
 kind = "test-marker"
@@ -127,12 +147,6 @@ rule = "R6"
 observable = { test = "tests/store/test_remote_signer.py::test_a_wrong_signature_is_refused" }
 ```
 
-## Scope
-
-Ruled [owner, 2026-10-26/27]: the waiver 'Keep it, no allowance' (the file key a fallback, never dispatched unattended). Today serve builds only SoftwareKeyAck (cli.py:485); RemoteTotp is constructed nowhere.
-
-Amended [owner, 2026-10-28]: 'amend AND RE-DISPATCH', after r-57 ended failed:gate. Its own test file was red on the host only: Windows refuses a connection to a bound, non-listening port after about 2 s, and the test's 1.0 s client timeout read that as signer.timeout (C5). The review's F2 (major: the wait bound sums sleeps, so a slow service outlasts the 660 s channel) becomes R5, and F4 (the returned signature is never verified against the configured key) becomes R6. Re-dispatched carrying r-57's work.
-
 ## History
 
 ```toml
@@ -148,5 +162,6 @@ history = [
   { seq = 9, at = "2026-10-29T21:14:01Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:3e42c9a5a073ab4f3be3e292ebd184a031fad914520a28b192aa25991cbe68c0" },
   { seq = 10, at = "2026-10-29T21:14:18Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:7bb3530c3d88b6c5bdb35b608f5f90dc3bd9f80dd175e89aff586b0ecc711226", batch = 81 },
   { seq = 11, at = "2026-10-29T22:56:36Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:8828c0b0c313a32dff48c20ca9634284ab0a52328844d08f66d414febca910eb", h = "sha256:5d9f0aba74bee424bb836ad990f06d6b7a8d55c7d3d8e00fe57d990d90cf659a", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:ONf4kWb1Bu7Izm0XDi2Q2G2ttpoIhnIcRmpzfhRvhgvwQrIAvLmlsEP0GzizcylRj3sJ2nvkySTNbJCruiSeDA==" },
+  { seq = 12, at = "2026-10-29T22:56:55Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance", "scope"], build = "sha256:01cb994cc68ef9574e9484dd3e00e96c54e2164e0f5a9d8df4edb553ba48dbe8", h = "sha256:0787e98ea2f709f2b577ff4b91c054bddb781fe71ce68b4fa49ce2477b5b9f0e" },
 ]
 ```
