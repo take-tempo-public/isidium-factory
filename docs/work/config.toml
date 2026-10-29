@@ -41,7 +41,7 @@ tools = ["Read", "Glob", "Grep"]
 model = "claude-sonnet-5-5"
 effort = "high"
 tools = ["Read", "Glob", "Grep", "Edit", "Write", "Bash", "TodoWrite"]
-prompt = "v6"
+prompt = "v7"
 
 [agents.reviewer]
 model = "claude-opus-5-5"
@@ -170,4 +170,5 @@ entries = [
   { seq = 77, at = "2026-10-28T21:24:28Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:a2108ff26d25a92aeea251436c775b409dd99da5689d6e7f439561b7fe0bae8b", ref = ["sha256:4c39e3622000554c320a46a69b184c1623122d0402272b8f28c7a5fc4a2bef57", "sha256:56a37687229a68a68f70f47720462f10afafd9c525f17cc575c6ea01f66910a9", "sha256:aa94bc82d776d001875cf3808d46dd14660704b0f85d2229b498d2b1b1f8830d"], h = "sha256:b2ce4bdaf13c807cdc770fedfff52ac33f4b093370cc69319cf70ed246e1e7ac", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:otzPSIGRtQPMDr+O7AUnhfP33VPWZmUt3D8yZ3xR8wiNW9Lj77paukDexcJEDyFARtv4teJbikIFVb1QcLQdBw==" },
   { seq = 78, at = "2026-10-29T01:54:39Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:a2108ff26d25a92aeea251436c775b409dd99da5689d6e7f439561b7fe0bae8b", ref = ["sha256:134dec7d6dd4161520b842ea985f04b1d5a7a5e158b0adebfd0584c3454e51b1"], h = "sha256:5c01075a2576eff3fd25f0fde2f5ea4a1d74d1c85deb749bbb0bd40f75e630f4", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:t0/ma56Zs7Tjv/snQ8s0qpEx1CDAaEG8cB7aEyejZ7c2r/6uHqwdiIpXHWsDzNifdr0sCStdcs4DcY96BiRhCg==" },
   { seq = 79, at = "2026-10-29T06:32:38Z", by = "amodal1@users.noreply.github.com", act = "batch-manifest", fields = [], build = "sha256:a2108ff26d25a92aeea251436c775b409dd99da5689d6e7f439561b7fe0bae8b", ref = ["sha256:adace4412b7053a2dc26e9eac6468374d59f1fe242afc7cb5792669c08128744"], h = "sha256:fb103bec1fa0e53ed2217200e4a2f74b7e6f2a6d7576c7ede8267eb8ed61ca95", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:A60gzBTSXKZoAwnMEF4KBU5BGNTJNbergRNwNQuOZJ+JzMWNtN1QIzdVObqlDEIPio8puEb1v9kEHc9k81+CCQ==" },
+  { seq = 80, at = "2026-10-29T21:13:49Z", by = "amodal1@users.noreply.github.com", act = "config-policy", fields = ["agents"], build = "sha256:1ad7ca2cac81cf6b8f7eea8f80e559789c07e8a342f67a667912d8c33c602886", h = "sha256:3f16bb7f68b3f4cfba55b9ae638957753dba38814ff859047b3d8f7e69ecaeec", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:3XZgYyJxtivj9Yad0FtpL/a9yhMRKnecrtCfhpNdH+2eK6B3kG0fW/YnP/asy4/UNsXMbpKt/0nja5TDezPJCQ==" },
 ]
