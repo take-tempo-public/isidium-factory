@@ -1,0 +1,15 @@
+# Card 65 (2026-10-29) — a phase installs nothing: the guard refuses a Bash segment that installs packages or makes an
+# environment. The property is checked against this card's own test file only, never the whole suite (card 19's C4:
+# mutate.py runs the whole suite per mutation by default, and that is the failure card 19 exists to prevent).
+#
+#     python tools/mutate.py tools/mutations/runner-test-env.toml --show
+#     # then, by hand, one at a time: apply with Edit, run
+#     #   python -m pytest tests/factory/test_guard_installs.py -q
+#     # confirm the scenario's own test fails, restore with Edit.
+
+[[mutation]]
+id = "M1"
+label = "R3's install rule never matches -- `pip install ruff` and r-58's own line reach the shell unblocked (killed by test_every_install_form_is_blocked_and_recorded, S1)"
+file = "packages/isidium-factory/src/isidium/factory/guard.py"
+find = '''        if command is not None and installs(command):'''
+replace = '''        if command is not None and False and installs(command):'''
