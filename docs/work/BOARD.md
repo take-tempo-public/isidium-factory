@@ -8,8 +8,8 @@ WIP 0/1 · inbox 0
 - holds on the owner: none
 - closures pending review: none
 - withdrawals pending: none
-- failed runs: **54**
-- blocked by any of those: **56**
+- failed runs: none
+- blocked by any of those: none
 - dispositions since the last batch signature: 0
 - merged, not landed: 0
 
@@ -65,7 +65,7 @@ none
 - **49** · The PR watcher becomes a witness: it records what it sees and wakes the owning run, and acts on nothing · ratified · blocked_by[48] · software-grade · depends_on 48 · (derived)
 - **50** · The witness wakes the dispatcher when the line is free; the dispatcher checks its signed cap, picks, and wakes the run · ratified · blocked_by[46, 49] · software-grade · depends_on 46,49 · (derived)
 - **52** · The signing service signs a request only after the owner's Aegis code for that request, and answers only callers holdin… · closed · software-grade · (derived)
-- **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · failed(scope) · software-grade · depends_on 52 · (derived)
+- **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · ready · software-grade · depends_on 52 · (derived)
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · closed · software-grade · depends_on 52 · (derived)
 - **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ratified · blocked_by[54] · software-grade · depends_on 54 · (derived)
 - **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · ready · software-grade · (derived)
@@ -73,6 +73,13 @@ none
 - **62** · The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit… · ready · software-grade · (derived)
 - **63** · The signing service's body cap and secret-file guard are proven, and every refusal either listener answers is counted b… · ratified · blocked_by[61] · software-grade · depends_on 61 · (derived)
 - **65** · The build container carries the lock's test environment on Python 3.12 and 3.13, and a phase cannot install packages · closed · software-grade · (derived)
+- **66** · The runner image's build proves the guard's interpreter, the hash check is told apart per environment, and the builder … · draft · (derived)
+- **67** · The container runtime is a registration setting with a start-up git-version check, and the phase's identity mapping fol… · draft · (derived)
+- **69** · The watcher timer, a run's transient unit and the store's quadlet are product files the tenant installs, replacing the … · draft · (derived)
+- **70** · The store's mounts name only the files it reads, and each secret reaches the container's user without a host chown · draft · (derived)
+- **72** · The ratify dry run refuses what the signed act refuses · draft · (derived)
+- **73** · A signed card is dispatchable without a hand land · draft · (derived)
+- **74** · No tracked text file holds CRLF: a rule, a CI check, and the one-time normalisation · draft · (derived)
 
 ## Blocked
 
