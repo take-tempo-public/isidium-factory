@@ -2,7 +2,7 @@
 schema = 1
 id = 65
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The build container carries the lock's test environment on Python 3.12 and 3.13, and a phase cannot install packages"
 shape = "bdd"
@@ -118,5 +118,6 @@ history = [
   { seq = 1, at = "2026-10-29T01:50:53Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:8ab4ac2e02264b807bfedec562caaffe906357ca3877b2da317f3aeb706d747f", h = "sha256:29a69ac24418791b3c130fd7101b756a4d4218a19b3663fd196f208d8b37f6c9" },
   { seq = 2, at = "2026-10-29T01:54:39Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:8ab4ac2e02264b807bfedec562caaffe906357ca3877b2da317f3aeb706d747f", h = "sha256:134dec7d6dd4161520b842ea985f04b1d5a7a5e158b0adebfd0584c3454e51b1", batch = 78 },
   { seq = 3, at = "2026-10-29T02:17:43Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:8ab4ac2e02264b807bfedec562caaffe906357ca3877b2da317f3aeb706d747f", h = "sha256:1989485bf2410c1228af6d170cfc032493b6482e58865fd1909527ac1c924a1f" },
+  { seq = 4, at = "2026-10-29T06:32:38Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:8ab4ac2e02264b807bfedec562caaffe906357ca3877b2da317f3aeb706d747f", h = "sha256:adace4412b7053a2dc26e9eac6468374d59f1fe242afc7cb5792669c08128744", batch = 79 },
 ]
 ```
