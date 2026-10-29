@@ -78,9 +78,11 @@ def test_the_containerfile_installs_the_locked_dev_group_for_both_pythons() -> N
     runtime_install = "pip install --no-cache-dir --require-hashes -r /wheels/requirements.txt"
     (runtime_pip,) = [ln for ln in lines if runtime_install in ln]
     assert "--group" not in runtime_pip and "/tests/" not in runtime_pip
-    assert any(f"rm {PY312}/bin/python {PY312}/bin/python3" in ln for ln in lines), (
-        "the 3.12 environment shadows neither `python` nor `python3`, which must stay the runtime's"
-    )
+    (removal,) = [ln for ln in lines if f"rm {PY312}/bin/python {PY312}/bin/python3" in ln]
+    # `uv venv` links `python3.12` to `python`; removing `python` first would leave the kept name (and every console
+    # script's shebang) dangling, so the kept name is re-pointed at the base interpreter before the removal.
+    repoint = f"ln -sfn /usr/local/bin/python3.12 {PY312}/bin/python3.12"
+    assert repoint in removal and removal.index(repoint) < removal.index(f"rm {PY312}/bin/python "), removal
 
     # The build-time check: a PATH that hid the guard's interpreter, or a missing tool, fails the build.
     (check,) = [ln for ln in lines if ln.startswith("RUN ") and "command -v python3" in ln]

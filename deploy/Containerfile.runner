@@ -59,8 +59,14 @@ RUN uv python install 3.13.9 \
 # `python -m isidium.factory.guard` and the entrypoint execs `python3 -m isidium.factory.harness`, and a hook that
 # exits 1 for want of an import is not a block (PreToolUse reads only exit 2 as one), so the guard would be silently
 # off. The console scripts keep working because their shebang is pointed at the one name that stays.
+# **That name is re-pointed first, absolutely** [reviewer F1]: `uv venv` makes `bin/python` the one real link (to the
+# base interpreter) and `bin/python3` and `bin/python3.12` relative links to `python`, so removing `python` alone would
+# leave `python3.12` dangling and every console script with no interpreter. `python3.12` is made a link to the base
+# interpreter itself; `pyvenv.cfg` is still found from the unresolved path, so it is still the venv's interpreter.
 # Consequence: `python -m pytest` reaches the runtime interpreter, which has no pytest; the phase runs `pytest`.
-RUN rm /opt/isidium/py312/bin/python /opt/isidium/py312/bin/python3 \
+RUN ln -sfn /usr/local/bin/python3.12 /opt/isidium/py312/bin/python3.12 \
+ && rm /opt/isidium/py312/bin/python /opt/isidium/py312/bin/python3 \
+ && /opt/isidium/py312/bin/python3.12 -c 'import sys; assert sys.prefix == "/opt/isidium/py312", sys.prefix' \
  && grep -lIZ '^#!/opt/isidium/py312/bin/python3\?$' /opt/isidium/py312/bin/* \
     | xargs -0 -r sed -i '1s|^#!/opt/isidium/py312/bin/python3\?$|#!/opt/isidium/py312/bin/python3.12|'
 
