@@ -8,7 +8,7 @@ WIP 0/1 · inbox 0
 - holds on the owner: none
 - closures pending review: none
 - withdrawals pending: none
-- failed runs: **54**, **65**
+- failed runs: **54**
 - blocked by any of those: **56**
 - dispositions since the last batch signature: 0
 - merged, not landed: 0
@@ -72,7 +72,7 @@ none
 - **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · ready · software-grade · depends_on 55 · (derived)
 - **62** · The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit… · ready · software-grade · (derived)
 - **63** · The signing service's body cap and secret-file guard are proven, and every refusal either listener answers is counted b… · ratified · blocked_by[61] · software-grade · depends_on 61 · (derived)
-- **65** · The build container carries the lock's test environment on Python 3.12 and 3.13, and a phase cannot install packages · failed(infra) · software-grade · (derived)
+- **65** · The build container carries the lock's test environment on Python 3.12 and 3.13, and a phase cannot install packages · ready · software-grade · (derived)
 
 ## Blocked
 
