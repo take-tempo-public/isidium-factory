@@ -10,6 +10,8 @@
 #   ./tls/probe.cert.pem, probe.key.pem   the healthcheck's certificate — CA-issued, and NOT in the registration
 #   ./registration.json               {"<client certificate subject>": ["<principal>", "<grant>"]}
 #   ./signer.key.pem                  the store's own Ed25519 signing key — the software-grade waiver path
+#   ./signing-service/                the signing service's CA and this store's client certificate and key — only
+#                                     when ISIDIUM_SIGNING_SERVICE_HOST is set (card 54; README, "The store's half")
 #   ./ssh/store-deploy-key            the store's deploy key, private half — only when ISIDIUM_ORIGIN is SSH (K8)
 #   ISIDIUM_ORIGIN                    the tenant repository the store clones and pushes to
 #
@@ -50,6 +52,14 @@ services:
       # is pinned` — measured here 2026-09-01, against a container that was otherwise entirely healthy. Unset it
       # when the tenant's ratifier is a realm rather than a key on this disk.
       ISIDIUM_SIGNER: ${ISIDIUM_SIGNER-/etc/isidium/signer.key.pem}
+      # The signing service (remote-totp), all four or none. **Unset means the file key alone**, which is how a tenant
+      # is initialized and how it adopts `signer.backends = [remote-totp, software_key_ack]` (the README's order).
+      # Set, the store signs by default through the service and waits for the owner's code; the file key stays the
+      # named fallback. The entrypoint refuses a partial set. No default here: the address is the deployment's.
+      ISIDIUM_SIGNING_SERVICE_HOST: ${ISIDIUM_SIGNING_SERVICE_HOST-}
+      ISIDIUM_SIGNING_SERVICE_PORT: ${ISIDIUM_SIGNING_SERVICE_PORT-}
+      ISIDIUM_SIGNING_SERVICE_FPR: ${ISIDIUM_SIGNING_SERVICE_FPR-}
+      ISIDIUM_SIGNING_SERVICE_TIMEOUT_S: ${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S-}
     ports:
       - "${STORE_PORT:-8443}:8443"
     volumes:
@@ -65,6 +75,9 @@ services:
       - ./registration.json:/etc/isidium/registration.json:ro
       # Not TLS, and mounted on its own so it reads as what it is: the key the store signs the policy chain with.
       - ./signer.key.pem:/etc/isidium/signer.key.pem:ro
+      # The signing service's CA and this store's client certificate and key (ca.crt.pem, store-client.crt.pem,
+      # store-client.key.pem). Whole directory, like ./ssh: a deployment with no service mounts an empty one.
+      - ./signing-service:/etc/isidium/signing-service:ro
     # The store writes its clone (inside the image's own layer) and its state volume; everything else is read-only,
     # and nothing is privileged.
     security_opt:
