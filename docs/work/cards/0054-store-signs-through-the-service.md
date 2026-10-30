@@ -86,17 +86,12 @@ because = "r-38 and r-39 each lost a whole run to a one-line style miss"
 
 [[guidance.constraints]]
 id = "C10"
-text = "S5's store-level case is checked red against the carried code and green against the fix before it is committed: with a 5 s advance in the store's own work before the signer is called, a 3.75 s submit, 59 s polls (within serve's per-call 60 s) and a 0.25 s interval, a wait started at the submit ends at 660.5 s (not under the client channel's 660 s) and a wait started at the verb's first line ends at 601.25 s; the case asserts the end time is under 660 s. Arithmetic checked 2026-10-29 with a simulation of the carried loop (signer.py sign()) and of the plan's own numbers (5 s, 59 s submit, 59 s polls), which end at 656.5 s on both loops and so cannot tell them apart"
+text = "S5's store-level case is checked red against the carried code and green against the fix before it is committed: with a 5 s advance in the store's own work before the signer is called, a 3.75 s submit, 59 s polls (within serve's per-call 60 s) and a 0.25 s interval, a wait started at the submit ends at 660.5 s (not under the client channel's 660 s) and a wait started at the verb's first line ends at 601.25 s; the case asserts the end time is under 660 s. Arithmetic checked 2026-10-29 with a simulation of the carried loop (signer.py sign()) and of the plan's own numbers (5 s, 59 s submit, 59 s polls), which end at 656.5 s on both loops and so cannot tell them apart; the builder does not run tools/mutate.py (the host's mutation step after the build runs M6 and every other mutation, outside the container, and M6 must be killed there by tests/store/test_remote_signer.py alone)"
 because = "r-61's judge parked this card at round 2: the plan's S5 numbers do not discriminate, so M6 would survive and the run would end failed:gate, as r-57 did"
 
 [[guidance.constraints]]
-id = "C11"
-text = "M6 (the clock bound started at the verb's first line, dropped) is run with `tools/mutate.py tools/mutations/remote-signer.toml M6` against S5's case before it is committed, and is killed by tests/store/test_remote_signer.py alone"
-because = "C4's kill check, stated for the one mutation the plan had left unproven"
-
-[[guidance.constraints]]
 id = "C12"
-text = "the carried patch's stray root file `ruff-0.17.3-*.whl` (r-58's pip install) is not part of this change: the build drops it, and a path restored to its base_sha content is not a scope violation"
+text = "the carried patch's stray root file `ruff-0.17.3-*.whl` (r-58's pip install) is removed before the commit and is not part of this change: the builder deletes it, and a path restored to its base_sha content is not a scope violation"
 because = "r-58 ended failed:scope on it; the plan's Q1 asked for this ruling"
 
 [[guidance.constraints]]
@@ -172,5 +167,6 @@ history = [
   { seq = 13, at = "2026-10-29T22:57:39Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["scope"], build = "sha256:1e716130f6f0a312b60423af2b9315ea53f7eed689ebdbc3d4a27640949df983", h = "sha256:1df9fa3986553ddb59a964342cb8ab2d5d646128e3bfa36029b8b640008fdb51" },
   { seq = 14, at = "2026-10-29T22:57:51Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:1e716130f6f0a312b60423af2b9315ea53f7eed689ebdbc3d4a27640949df983", h = "sha256:b9bdbcc52e1945c70568121bba4e7e2f7dc12825fe61c352a30aafdde1483988", batch = 82 },
   { seq = 15, at = "2026-10-30T20:08:33Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:1e716130f6f0a312b60423af2b9315ea53f7eed689ebdbc3d4a27640949df983", h = "sha256:3c3abd970dcef5814106ee82114cb1b34c56628deb301645e44019d89c0805e1" },
+  { seq = 16, at = "2026-10-30T20:08:38Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["guidance"], build = "sha256:8c6992065d2f7271f820db1b4dc26afa66ec5595511182243a163223d60f0341", h = "sha256:0a6244acd56178438f54bfeb786b2e9ed29f8e07d46998d564a1c4899c95cf1e" },
 ]
 ```
