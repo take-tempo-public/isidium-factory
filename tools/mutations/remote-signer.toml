@@ -1,4 +1,4 @@
-# The remote-totp signer's mutations (card 54) -- one per security property of R2 that the card asserts.
+# The remote-totp signer's mutations (card 54) -- R2's default backend and use_backend check, R5's clock bound, R6's signature check (M1-M6).
 #
 # Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
 # in the FOREGROUND. `tools/mutate.py` runs the whole suite and takes no test path, on purpose, so a kill counts for
@@ -8,8 +8,8 @@
 #   python tools/mutate.py tools/mutations/remote-signer.toml M1
 #
 # What each kill proves, and the test that kills it:
-#   M1  R2  the store's default signer is remote-totp, not the file key -> all four tests in test_remote_signer.py;
-#           test_backend_choice is the one that names it (a ratify with no backend is signed by the service's key)
+#   M1  R2  the store's default signer is remote-totp, not the file key -> test_remote_signer.py::
+#           test_backend_choice, which names it (a ratify with no backend is signed by the service's key)
 #   M2  R2  `use_backend` is asked of the effective signer.backends at signing, so an undeclared backend is refused
 #           before its signer is called                                  -> test_remote_signer.py::test_backend_choice
 #   M3  R5  the wait reverts to the sum of its sleeps, not the clock since the submit -> test_remote_signer.py::

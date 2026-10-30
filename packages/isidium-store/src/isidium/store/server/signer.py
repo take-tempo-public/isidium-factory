@@ -139,10 +139,11 @@ class RemoteTotp:
         `timeout_s` bounds the owner's wait **by the clock**, every round trip included, and not by a sum of the sleeps
         (R5): a service that is slow to answer each poll would otherwise stretch the wait without limit. The clock
         runs from `started` — the moment the store received the call, which `Store._sign` passes in, so the store's own
-        work before the submit counts — or from the submit when no start is given. Every poll, the first included, starts before the deadline and lasts at most one service call's own
-        timeout, so the whole wait is at most `timeout_s` plus one call; `serve` keeps that sum under the client
-        channel's timeout, so the store answers `signer.timeout` before its caller's channel gives up. `sleep` and
-        `monotonic` are seams for the tests, not policy."""
+        work before the submit counts — or from the submit when no start is given. Every poll, the first included,
+        starts before the deadline. So for a service that answers each call within c in total (R5's condition) the
+        whole wait is at most `timeout_s` plus c, and `serve` keeps that sum under the client channel's timeout: the
+        store answers `signer.timeout` before its caller's channel gives up. A service that trickles a single call
+        past c is outside that bound. `sleep` and `monotonic` are seams for the tests, not policy."""
         self.backend = "remote-totp"
         self.service, self.key_fpr = service, key_fpr
         self.poll_interval_ms, self.timeout_s, self._sleep = poll_interval_ms, timeout_s, sleep
@@ -193,8 +194,9 @@ class HttpsService:
 
     The wire is `isidium.signer.http.HttpsService`'s: `POST /submit {tenant, value, at_epoch, display, time_skew_s}`
     answers `{request_id}`; `POST /poll {request_id}` answers `{sig}`, `null` while pending. A non-200 carrying a
-    `rule` is rebuilt as that `Refusal`; anything else is `signer.malformed`. `timeout_s` bounds one call (one
-    connection), not the owner's whole wait: that is `RemoteTotp`'s."""
+    `rule` is rebuilt as that `Refusal`; anything else is `signer.malformed`. `timeout_s` is http.client's
+    per-socket-operation timeout (connect, each send, each receive), not a whole-call deadline, and not the owner's
+    whole wait: that is `RemoteTotp`'s."""
 
     def __init__(self, host: str, port: int, ca: Path, cert: Path, key: Path, timeout_s: float) -> None:
         import ssl  # C-13: only a store given a signing service pays for `ssl`, `http.client` and `json`

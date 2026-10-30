@@ -1511,6 +1511,9 @@ software_key_ack`. A card signed through the service is **not** software-grade; 
 the factory's dispatch refuses it unless the tenant allows software-grade work. A service that declines or times out
 leaves nothing signed and nothing journaled, and ratify answers `signer.declined` or `signer.timeout`.
 
+Only `isidium ratify` takes `--backend` (card 54's R2). Every other signing act (a born-ratified write, a config-policy
+write, a repair) signs with the store's default, which is the service once it is configured.
+
 `serve` takes seven options, all or none (a partial set stops the store at start, `signer.service-options`, naming what
 is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is set:
 
@@ -1519,7 +1522,7 @@ is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is s
 | `ISIDIUM_SIGNING_SERVICE_HOST` | `--signing-service-host` | the name the service's API certificate carries, e.g. `signer.example.invalid` |
 | `ISIDIUM_SIGNING_SERVICE_PORT` | `--signing-service-port` | the API's published port |
 | `ISIDIUM_SIGNING_SERVICE_FPR` | `--signing-service-fpr` | the key fingerprint the service signs under (the bare key fingerprint, not the `ed25519:` form the pin uses) |
-| `ISIDIUM_SIGNING_SERVICE_TIMEOUT_S` | `--signing-service-timeout-s` | one call's bound, not the owner's wait: the owner's 600 s wait plus one call must stay under the client channel's 660 s, so `0` or less, or `60` or more, is refused at start (`signer.service-options`); keep it small |
+| `ISIDIUM_SIGNING_SERVICE_TIMEOUT_S` | `--signing-service-timeout-s` | the client's per-socket-operation timeout (not a whole-call deadline, and not the owner's wait): the owner's 600 s wait plus one call must stay under the client channel's 660 s for a service that answers each call within it, so `0` or less, or `60` or more, is refused at start (`signer.service-options`); keep it small |
 | `./signing-service/ca.crt.pem` | `--signing-service-ca` | the service's CA, which the service's certificate must chain to |
 | `./signing-service/store-client.crt.pem` | `--signing-service-cert` | the store's client certificate, issued by that CA |
 | `./signing-service/store-client.key.pem` | `--signing-service-key` | its private key |

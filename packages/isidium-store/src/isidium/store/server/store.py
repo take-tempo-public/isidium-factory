@@ -12,7 +12,7 @@ import copy
 import datetime as _dt
 import json
 import re
-import time  # module scope: `Store.__init__` reads `time.monotonic` once, at construction; a builtin module, nothing to defer (C-13)
+import time  # C-13: module scope; `Store.__init__` reads `time.monotonic` at construction; a builtin, nothing to defer
 import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass

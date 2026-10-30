@@ -264,6 +264,8 @@ def test_backend_choice(monkeypatch: pytest.MonkeyPatch) -> None:
         ratify(b, c2, "software_key_ack")
     assert err.value.rule == "signer.backend-unavailable" and "not declared" in err.value.detail
     assert b.file.calls == filed and len(b.stub.requests) == asked and st.journal.head == rows
+    # only ratify names a backend (R2's scope), so the config write that undeclares remote-totp signs with the store's
+    # default: the test holds the file key for it
     st.signer = b.file  # the write that drops remote-totp from the declaration cannot itself be signed by it
     declare(st, ["software_key_ack"])
     st.signer = b.remote
@@ -442,8 +444,10 @@ def test_the_wait_is_bounded_by_the_clock(monkeypatch: pytest.MonkeyPatch) -> No
     # The store-level case, through `Api.call` (C10): the wait counts from the moment the call reached the store, so
     # the store's own work before the signer is inside the bound. Numbers: the store spends 5 s before the signer, the
     # submit takes 3.75 s, each poll 59 s (within serve's per-call 60 s), the interval is 0.25 s.
-    #   counted from the call (0): poll 9 ends at 601, the sleep is clipped to 601.25 (left -1.25) -> raises at 601.25.
-    #   counted from the submit (5): poll 10 begins at 601.25 (left 3.75), ends at 660.25, sleeps to 660.5 >= 660.
+    #   counted from the call (0): poll 10 begins at 542 (left 58), ends at 601, sleeps 0.25 to 601.25 (left -1.25) ->
+    #   raises at 601.25.
+    #   counted from `sign`'s own start (5, M6): poll 11 begins at 601.25 (left 3.75), ends at 660.25, sleeps to 660.5 >=
+    #   660.
     # (A 59 s submit and 59 s polls end at 656.5 on both loops and cannot tell them apart.)
     b = both()
     card = b.h.draft("the-store-level-wait")
