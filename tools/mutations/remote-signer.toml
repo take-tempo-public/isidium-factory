@@ -1,0 +1,78 @@
+# The remote-totp signer's mutations (card 54) -- R2's default backend and use_backend check, R5's clock bound, R6's signature check (M1-M6).
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
+# in the FOREGROUND. `tools/mutate.py` runs the whole suite and takes no test path, on purpose, so a kill counts for
+# this card only when a test in tests/store/test_remote_signer.py is in the failure list it prints (C4):
+#
+#   python tools/mutate.py tools/mutations/remote-signer.toml --show M1     # the diff that would run; runs nothing
+#   python tools/mutate.py tools/mutations/remote-signer.toml M1
+#
+# What each kill proves, and the test that kills it:
+#   M1  R2  the store's default signer is remote-totp, not the file key -> test_remote_signer.py::
+#           test_backend_choice, which names it (a ratify with no backend is signed by the service's key)
+#   M2  R2  `use_backend` is asked of the effective signer.backends at signing, so an undeclared backend is refused
+#           before its signer is called                                  -> test_remote_signer.py::test_backend_choice
+#   M3  R5  the wait reverts to the sum of its sleeps, not the clock since the submit -> test_remote_signer.py::
+#           test_the_wait_is_bounded_by_the_clock (its stand-in's poll cap fires: 1000 slow polls, far past the bound).
+#           This is the variant that TERMINATES in every test, because `waited` grows by the interval on each pass
+#           whatever any clock does, so `tools/mutate.py` (no subprocess timeout) cannot hang on it
+#   M4  R6  the signature is not verified over tenant and value                 -> test_remote_signer.py::
+#           test_a_wrong_signature_is_refused (the signature over a different value is accepted)
+#   M5  R6  the signature's key is not checked against the configured service key -> test_remote_signer.py::
+#           test_a_wrong_signature_is_refused (a valid signature by another key is accepted)
+#   M6  R5  the clock bound started at the verb's first line is dropped, so the wait counts from the submit and the
+#           store's own work before it stretches the wait past the client channel -> test_remote_signer.py::
+#           test_the_wait_is_bounded_by_the_clock (the store-level case: 660.5 s, not under the channel's 660 s)
+
+
+[[mutation]]
+id = "M1"
+label = "the default stays the file key -- a ratify with no backend named is signed without the owner's code"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = 'self.signer = self.signers.get("remote-totp", self.signer)'
+replace = 'self.signer = self.signers.get("software_key_ack", self.signer)'
+
+[[mutation]]
+id = "M2"
+label = "the effective signer.backends is not consulted at signing -- an undeclared backend signs"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "r = cfg.use_backend(self.eff, name) if self.config_tree else None"
+replace = "r = None"
+
+[[mutation]]
+id = "M3"
+label = "the wait is the sum of its sleeps -- a service slow to answer each poll outlasts the client channel"
+file = "packages/isidium-store/src/isidium/store/server/signer.py"
+find = """\n        while (left := self.timeout_s - (self._monotonic() - start)) > 0:
+            sig = self.service.poll(rid)
+            if sig is not None:
+                return self._verified(sig, tenant, value)
+            self._sleep(min(self.poll_interval_ms / 1000, left))"""
+replace = """\n        waited = 0.0
+        while (left := self.timeout_s - waited) > 0:
+            sig = self.service.poll(rid)
+            if sig is not None:
+                return self._verified(sig, tenant, value)
+            self._sleep(min(self.poll_interval_ms / 1000, left))
+            waited += self.poll_interval_ms / 1000"""
+
+[[mutation]]
+id = "M4"
+label = "the signature is not verified over tenant and value -- a signature over something else is used"
+file = "packages/isidium-store/src/isidium/store/server/signer.py"
+find = "if not chain.verify_sig(sig, tenant, value):"
+replace = "if False:"
+
+[[mutation]]
+id = "M5"
+label = "the signature's key is not checked against the configured service key -- any key's signature is used"
+file = "packages/isidium-store/src/isidium/store/server/signer.py"
+find = "if fpr != self.key_fpr:"
+replace = "if False:"
+
+[[mutation]]
+id = "M6"
+label = "the clock bound started at the verb's first line, dropped -- the store's own work before the submit stretches the wait past the client channel"
+file = "packages/isidium-store/src/isidium/store/server/signer.py"
+find = "start = self._monotonic() if started is None else started"
+replace = "start = self._monotonic()"

@@ -298,6 +298,13 @@ def ratify(
     ids: Annotated[list[int] | None, typer.Argument(help="the cards to ratify")] = None,
     writes: Annotated[Path | None, typer.Option(help="a JSON file: [{card|new_slug, document, base?, ref?}]")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run/--sign", help="the dry run is the default (round 48)")] = True,
+    backend: Annotated[
+        str | None,
+        typer.Option(
+            help="the signer for this sitting: remote-totp (the owner's code on the phone) or software_key_ack "
+            "(the file key); omitted, the store's default"
+        ),
+    ] = None,
 ) -> None:
     """The sitting (03 §1.12): the batch is a list of typed writes under ONE signature. Always dry-run first.
 
@@ -307,6 +314,8 @@ def ratify(
     args: dict[str, Any] = {"ids": list(ids or []), "dry_run": dry_run}
     if writes is not None:
         args["writes"] = json.loads(writes.read_text(encoding="utf-8"))
+    if backend is not None:
+        args["backend"] = backend
     _run("ratify", args)
 
 
@@ -442,6 +451,24 @@ def serve(
     max_per_probe: Annotated[
         int | None, typer.Option(help="concurrent connections one CA-issued peer the registration does not name")
     ] = None,
+    signing_service_host: Annotated[
+        str | None,
+        typer.Option(help="the signing service's host name (remote-totp); all seven --signing-service-* or none"),
+    ] = None,
+    signing_service_port: Annotated[int | None, typer.Option(help="the signing service's port")] = None,
+    signing_service_ca: Annotated[
+        Path | None, typer.Option(help="the CA the signing service's certificate chains to")
+    ] = None,
+    signing_service_cert: Annotated[
+        Path | None, typer.Option(help="this store's client certificate for the service")
+    ] = None,
+    signing_service_key: Annotated[Path | None, typer.Option(help="the private key of that certificate")] = None,
+    signing_service_fpr: Annotated[
+        str | None, typer.Option(help="the key fingerprint of the signatures the service produces")
+    ] = None,
+    signing_service_timeout_s: Annotated[
+        float | None, typer.Option(help="one call's timeout to the service, not the owner's wait")
+    ] = None,
 ) -> None:
     """Run the store for this tenant (03b §2: one store container per tenant).
 
@@ -455,10 +482,20 @@ def serve(
     home, never constants in the binary) — writing them again here would be the second copy C-1 exists to prevent.
     `--port` keeps its default because the registration pins it.
 
+    **The signing service is optional and all-or-nothing** (card 54): the seven `--signing-service-*` options together
+    make `remote-totp` the store's default signer, beside the `--signer` file key, which stays the named fallback
+    (`ratify --backend software_key_ack`) and the only key graded software. Given in part, the store refuses to
+    start and names what is missing. None has a default (C-1): the deployment supplies them. The service's own
+    HTTPS client is `server/signer.py`'s, not the service package's, so the store's image carries no service.
+    `--signing-service-timeout-s` is one call's bound. The owner's wait plus one call must stay under the client
+    channel's timeout, so the store answers `signer.timeout` before its caller's channel gives up (R5); a value
+    outside that is refused at start, `signer.service-options`.
+
     Every `server.` import is inside this function on purpose: the client half installs without the `[server]`
     extra, and h11 is only in that extra.
     """
     import asyncio
+    import inspect
     import time
 
     from ..core import telemetry
@@ -468,13 +505,26 @@ def serve(
     from ..server.http import LIMITS, Limits, serve_forever, tls_context
     from ..server.journal import Journal
     from ..server.service import Registration, Service
-    from ..server.signer import Signer, SoftwareKey, SoftwareKeyAck
+    from ..server.signer import HttpsService, RemoteTotp, Signer, SoftwareKey, SoftwareKeyAck
     from ..server.store import Store
 
     # Before anything is built, so the store's own start-up is inside the trace when a deployment asked for one
     # (C-11). It installs nothing unless `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` are set, and `console` —
     # what K2's container uses for its first start — needs no collector and no network at all.
     telemetry.configure()
+
+    service_options = {
+        "--signing-service-host": signing_service_host,
+        "--signing-service-port": signing_service_port,
+        "--signing-service-ca": signing_service_ca,
+        "--signing-service-cert": signing_service_cert,
+        "--signing-service-key": signing_service_key,
+        "--signing-service-fpr": signing_service_fpr,
+        "--signing-service-timeout-s": signing_service_timeout_s,
+    }
+    missing = [name for name, v in service_options.items() if v is None]
+    if missing and len(missing) < len(service_options):
+        _refuse(Refusal("signer.service-options", "", f"the signing service needs all its options; missing: {missing}"))
 
     def clock() -> int:
         return int(time.time())
@@ -503,6 +553,44 @@ def serve(
         root=root,
         software_fprs=frozenset({ack.key_fpr}) if ack is not None else frozenset(),
     )
+    if (
+        signing_service_host is not None
+        and signing_service_port is not None
+        and signing_service_ca is not None
+        and signing_service_cert is not None
+        and signing_service_key is not None
+        and signing_service_fpr is not None
+        and signing_service_timeout_s is not None
+    ):
+        # Read after the store has loaded its config: the effective `poll_interval_ms` is the tenant's to set, and
+        # is read once here, so a change reaches a running store at its restart (the README says so).
+        remote = RemoteTotp(
+            HttpsService(
+                signing_service_host,
+                signing_service_port,
+                signing_service_ca,
+                signing_service_cert,
+                signing_service_key,
+                signing_service_timeout_s,
+            ),
+            signing_service_fpr,
+            int(store.eff["signer"]["remote-totp"]["poll_interval_ms"]),
+        )
+        # R5: the owner's wait plus one service call must stay under the client channel's timeout, so the store answers
+        # `signer.timeout` before its caller's channel gives up. Read from `Transport.__init__`'s signature, its one
+        # home, rather than writing the number a second time (C-1).
+        channel = float(inspect.signature(Transport.__init__).parameters["timeout"].default)
+        if not 0 < signing_service_timeout_s < channel - remote.timeout_s:
+            _refuse(
+                Refusal(
+                    "signer.service-options",
+                    "",
+                    f"--signing-service-timeout-s {signing_service_timeout_s} must be above 0 and below "
+                    f"{channel - remote.timeout_s}s: the owner's {remote.timeout_s}s wait plus one call must stay "
+                    f"under the client channel's {channel}s",
+                )
+            )
+        store.use_signer(remote)
     service = Service(Api(store), principals, tenant)
     limits = Limits(
         max_connections=LIMITS.max_connections if max_connections is None else max_connections,

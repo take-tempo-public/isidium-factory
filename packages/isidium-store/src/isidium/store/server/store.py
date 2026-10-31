@@ -12,6 +12,7 @@ import copy
 import datetime as _dt
 import json
 import re
+import time  # C-13: module scope; `Store.__init__` reads `time.monotonic` at construction; a builtin, nothing to defer
 import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -43,7 +44,7 @@ from . import refs as refs_mod
 from .gitrepo import CommitChange, Repo, blob_id
 from .identity import Caller, allowed
 from .journal import Journal
-from .signer import Display, Signer
+from .signer import Display, RemoteTotp, Signer
 
 CARD_RE = re.compile(r"^cards/(\d{4,})-[a-z0-9\-]*\.md$")
 Clock = Callable[[], int]
@@ -137,6 +138,14 @@ class Store:
             clock,
             signer,
         )
+        # Every signer this store holds, by backend name; `signer` stays the default one (card 54, R2). Seeded from the
+        # constructor's, so every caller that passes one signer is unchanged.
+        self.signers: dict[str, Signer] = {signer.backend: signer} if signer is not None else {}
+        # The clock the owner's wait is counted on (R5), and the moment the current call reached the store on it:
+        # `Api.call` sets `began` before it dispatches and resets it after, so it is None between calls. Neither needs
+        # a lock: every store call runs on the one Worker thread (`http.py`), and `monotonic` is a seam for the tests.
+        self.monotonic: Callable[[], float] = time.monotonic
+        self.began: float | None = None
         self.root = root
         self.identity = f"store@{tenant}"
         self.identity_enabled = identity_enabled
@@ -707,13 +716,34 @@ class Store:
             e["note"] = note
         return e
 
-    def _sign(self, value: str, at: str, display: Display) -> str:
+    def use_signer(self, signer: Signer) -> None:
+        """Hold one more signer, by its backend. `remote-totp` becomes the default when it is held (R2): the owner's
+        code on the phone is the signature a ratify waits for, and the file key is the fallback a caller names."""
+        self.signers[signer.backend] = signer
+        self.signer = self.signers.get("remote-totp", self.signer)
+
+    def _sign(self, value: str, at: str, display: Display, backend: str | None = None) -> str:
         if self.signer is None:
             raise Refusal("signer.unavailable", "", "no signer configured for this store")
-        r = cfg.use_backend(self.eff, self.signer.backend) if self.config_tree else None
+        name = self.signer.backend if backend is None else backend
+        r = cfg.use_backend(self.eff, name) if self.config_tree else None
         if r is not None:
             raise r
-        return self.signer.sign(self.tenant, value, self._epoch(at), display, self.time_skew())
+        # The default is `self.signer` itself, not a lookup: it is the attribute a store is built with and a caller may
+        # reassign, and the held map answers only a backend the caller named.
+        signer = self.signer if name == self.signer.backend else self.signers.get(name)
+        if signer is None:
+            raise Refusal(
+                "signer.backend-unavailable",
+                "signer.backends",
+                f"backend {name!r} is declared but this store holds no signer for it; held: {sorted(self.signers)}",
+            )
+        if isinstance(signer, RemoteTotp):
+            # The wait counts from the moment the call reached the store, so the store's own work before the submit
+            # (the fetch, the compose, the row lock) is inside the bound the client channel's timeout sits above (R5,
+            # C10). Only `RemoteTotp` takes it: the `Signer` protocol is unchanged, and no other backend waits.
+            return signer.sign(self.tenant, value, self._epoch(at), display, self.time_skew(), started=self.began)
+        return signer.sign(self.tenant, value, self._epoch(at), display, self.time_skew())
 
     def _require(self, caller: Caller, call: str) -> None:
         """The grant check — one function over a matrix value (04 §2, the G7 seam)."""
@@ -2036,12 +2066,18 @@ class Store:
             since,
         )
 
-    def ratify(self, writes: Sequence[int | WriteRequest], caller: Caller, dry_run: bool = False) -> dict[str, Any]:
+    def ratify(
+        self,
+        writes: Sequence[int | WriteRequest],
+        caller: Caller,
+        dry_run: bool = False,
+        backend: str | None = None,
+    ) -> dict[str, Any]:
         """`ratify(writes: [WriteRequest], dry_run)`: the sitting's batch is a list of typed writes under one
         signature; an int member is the `ratify(ids)` shorthand. One transaction — the row lock is taken BEFORE the
         entries are composed and held across the signer's round trip (C1) — N entries with the store's `at`, one
         batch hash, one signer call, one manifest, one journal row, one commit. The dry run is the same function
-        minus the signature and the writes."""
+        minus the signature and the writes. `backend` names the signer for this sitting (None: the store's default)."""
         self._require(caller, "ratify:dry-run" if dry_run else "ratify")
         # **`main` first, at this door** [K12, 2026-09-08 — the bridge's finding 2]. The members below resolve their
         # refs against the tree this clone holds, and until K12 the only sync was `_apply`'s — which the dry run
@@ -2124,7 +2160,7 @@ class Store:
                 else chain.genesis("policy", self.tenant, self.policy_schema_version()),
                 man,
             )
-            man["sig"] = self._sign(bh, at, result["display"])  # the row lock is held across this round trip
+            man["sig"] = self._sign(bh, at, result["display"], backend)  # the row lock is held across this round trip
             for m in members:  # the CAS re-check after the round trip (trivially true under the lock; stated)
                 if m.before is not None and self.docs.get(m.path) is not m.before:
                     raise Refusal("write.stale", m.path, "changed during the signing round trip")

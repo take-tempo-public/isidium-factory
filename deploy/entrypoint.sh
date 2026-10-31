@@ -120,6 +120,28 @@ set -- serve \
   --port "$PORT"
 [ -z "${ISIDIUM_SIGNER:-}" ] || set -- "$@" --signer "$ISIDIUM_SIGNER"
 
+# ---- the signing service, when the deployment names one (card 54) -------------------------------------------------
+# Whether the store signs through the service is ISIDIUM_SIGNING_SERVICE_HOST's one decision; unset, the file key is
+# the only signer and nothing below runs. Set, the rest must be too, and the three files must be there: a store that
+# was meant to sign through the owner's phone and started without it would sign with the file key and say nothing.
+if [ -n "${ISIDIUM_SIGNING_SERVICE_HOST:-}" ]; then
+  [ -n "${ISIDIUM_SIGNING_SERVICE_PORT:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_PORT — the service's API port"
+  [ -n "${ISIDIUM_SIGNING_SERVICE_FPR:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_FPR — the key fingerprint the service signs under"
+  [ -n "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_TIMEOUT_S — one call's timeout"
+  SERVICE_DIR="${ISIDIUM_SIGNING_SERVICE_DIR:-/etc/isidium/signing-service}"   # the image layout the compose file mounts to, like ISIDIUM_TLS_DIR
+  [ -f "$SERVICE_DIR/ca.crt.pem" ] || fail "no signing-service CA at $SERVICE_DIR/ca.crt.pem — the service's certificate must chain to it"
+  [ -f "$SERVICE_DIR/store-client.crt.pem" ] || fail "no client certificate at $SERVICE_DIR/store-client.crt.pem — the service answers only a named caller"
+  [ -f "$SERVICE_DIR/store-client.key.pem" ] || fail "no client key at $SERVICE_DIR/store-client.key.pem"
+  set -- "$@" \
+    --signing-service-host "$ISIDIUM_SIGNING_SERVICE_HOST" \
+    --signing-service-port "$ISIDIUM_SIGNING_SERVICE_PORT" \
+    --signing-service-ca "$SERVICE_DIR/ca.crt.pem" \
+    --signing-service-cert "$SERVICE_DIR/store-client.crt.pem" \
+    --signing-service-key "$SERVICE_DIR/store-client.key.pem" \
+    --signing-service-fpr "$ISIDIUM_SIGNING_SERVICE_FPR" \
+    --signing-service-timeout-s "$ISIDIUM_SIGNING_SERVICE_TIMEOUT_S"
+fi
+
 # The admission numbers (`--max-connections`, `--max-per-caller`, `--max-per-probe`) are deliberately not passed:
 # `server/http.Limits` is their one home (Q4, C-1), and writing them here would be the second copy.
 exec isidium "$@"

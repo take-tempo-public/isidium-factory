@@ -1417,7 +1417,9 @@ rm -f ./*.csr ./*.ext && cd ..
 **The page's certificate must be one the phone trusts**, or the phone's browser will not open the page: install
 `ca.crt.pem` on the phone as a user CA certificate, and dial the name the page certificate carries. The signing key is
 the service's own Ed25519 key, made the way *The store's signing key* is: `openssl genpkey -algorithm ed25519 -out
-signing.pem`. Its public half is what the tenants pin as the ratifier.
+signing.pem`. **Its public half is not the tenant's pin:** the file key stays pinned as the ratifier (a swap would unverify
+every signature made under the old pin), and the service's key is enrolled beside it as a binding, by the owner, in a
+later card. Until then a card ratified through the service is signed but reads *unverified* on a real tenant.
 
 ### The settings file
 
@@ -1499,6 +1501,53 @@ A store's remote-totp client submits `{tenant, hash, display}` to the API and po
 page with its tenant, the value's hash, and the display exactly as the service received it, and the Approve and Decline
 buttons share one code field. Both need a valid code: a stranger who reaches the page can neither sign nor cancel a
 request. A request nobody answers expires after `request_lifetime_s`, and `max_wrong_codes` wrong codes decline it.
+
+### The store's half: signing a ratification through the service (card 54)
+
+A store given the service's address signs through it **by default**: `isidium ratify --sign` submits the sitting to the
+service and waits (up to ten minutes, on the store's one worker thread) for the owner to enter the code on the phone.
+The file key (`ISIDIUM_SIGNER`) stays a named fallback, never the default: `isidium ratify --sign --backend
+software_key_ack`. A card signed through the service is **not** software-grade; a card signed by the file key is, and
+the factory's dispatch refuses it unless the tenant allows software-grade work. A service that declines or times out
+leaves nothing signed and nothing journaled, and ratify answers `signer.declined` or `signer.timeout`.
+
+Only `isidium ratify` takes `--backend` (card 54's R2). Every other signing act (a born-ratified write, a config-policy
+write, a repair) signs with the store's default, which is the service once it is configured.
+
+`serve` takes seven options, all or none (a partial set stops the store at start, `signer.service-options`, naming what
+is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is set:
+
+| Environment | `serve` option | What it is |
+|---|---|---|
+| `ISIDIUM_SIGNING_SERVICE_HOST` | `--signing-service-host` | the name the service's API certificate carries, e.g. `signer.example.invalid` |
+| `ISIDIUM_SIGNING_SERVICE_PORT` | `--signing-service-port` | the API's published port |
+| `ISIDIUM_SIGNING_SERVICE_FPR` | `--signing-service-fpr` | the key fingerprint the service signs under (the bare key fingerprint, not the `ed25519:` form the pin uses) |
+| `ISIDIUM_SIGNING_SERVICE_TIMEOUT_S` | `--signing-service-timeout-s` | the client's per-socket-operation timeout (not a whole-call deadline, and not the owner's wait): the owner's 600 s wait plus one call must stay under the client channel's 660 s for a service that answers each call within it, so `0` or less, or `60` or more, is refused at start (`signer.service-options`); keep it small |
+| `./signing-service/ca.crt.pem` | `--signing-service-ca` | the service's CA, which the service's certificate must chain to |
+| `./signing-service/store-client.crt.pem` | `--signing-service-cert` | the store's client certificate, issued by that CA |
+| `./signing-service/store-client.key.pem` | `--signing-service-key` | its private key |
+
+Issue the store's client certificate from the **service's** CA (*Two listeners*, above; the `store-client` leaf), put its
+RFC 4514 subject in the service's `callers`, and mount the three files read-only at `./signing-service/`. Unset
+`ISIDIUM_SIGNING_SERVICE_HOST` and the store is what it was: the file key alone.
+
+**The order matters.** `poll_interval_ms` is read from the effective `signer.remote-totp` once, when `serve` starts, so a
+change takes effect at the next restart. And a tenant declares its backends in its own signed config: tenant #0 declares
+`signer.backends = ["software_key_ack"]`, and a store holding the service refuses every default-signed act
+(`signer.backend-unavailable`) until the tenant declares `["remote-totp", "software_key_ack"]`. That config-policy write
+is signed by whatever the store's default signer is, and once the service is configured that is the service's key. No
+binding holds that key until card 56, so the very write that declares `remote-totp` would read unverified. So make it
+**before** the service is configured, while the file key is the only signer and the pin signs it; then set the
+`ISIDIUM_SIGNING_SERVICE_*` variables and restart. For the same reason a tenant is initialized
+(`isidium init`) with the file key alone, before the service is configured: the file key is the pin.
+
+```sh
+# in deploy/.env, after the tenant has declared both backends; nothing here is a real host
+ISIDIUM_SIGNING_SERVICE_HOST=signer.example.invalid
+ISIDIUM_SIGNING_SERVICE_PORT=8443
+ISIDIUM_SIGNING_SERVICE_FPR=<the service key fingerprint>
+ISIDIUM_SIGNING_SERVICE_TIMEOUT_S=30
+```
 
 ## What is not here yet
 

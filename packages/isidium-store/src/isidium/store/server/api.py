@@ -205,7 +205,7 @@ class Api:
                 if path is None:
                     raise Refusal("show.unknown", str(cid))
                 writes.append(WriteRequest(path, _document(doc_in, allocated_id=cid), _table(w, "base"), w.get("ref")))
-        return self.store.ratify(writes, caller, dry_run=dry)
+        return self.store.ratify(writes, caller, dry_run=dry, backend=_str(args, "backend") or None)
 
     # ---- reads ---------------------------------------------------------------------------------------------------
 
@@ -355,6 +355,13 @@ class Api:
     def call(self, name: str, caller: Caller, args: Mapping[str, Any]) -> Any:
         if name not in self.CALLS:
             raise Refusal("api.unknown-call", name, "the surface carries: " + ", ".join(self.CALLS))
-        if name == "write_set":
-            return self.write_set(caller, _need_int(args, "card"), _list_of_str(args, "set"), args.get("ref"))
-        return getattr(self, name)(caller, args)
+        # The first line every verb crosses on the channel's path: the owner's wait in a signing verb (write, ratify,
+        # repair) counts from the moment the call reached the store, not from the submit (R5, C10). Reset in `finally`
+        # so a later call never inherits this one's start.
+        self.store.began = self.store.monotonic()
+        try:
+            if name == "write_set":
+                return self.write_set(caller, _need_int(args, "card"), _list_of_str(args, "set"), args.get("ref"))
+            return getattr(self, name)(caller, args)
+        finally:
+            self.store.began = None
