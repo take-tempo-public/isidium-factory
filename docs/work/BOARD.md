@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -65,9 +65,9 @@ none
 - **49** · The PR watcher becomes a witness: it records what it sees and wakes the owning run, and acts on nothing · ratified · blocked_by[48] · software-grade · depends_on 48 · (derived)
 - **50** · The witness wakes the dispatcher when the line is free; the dispatcher checks its signed cap, picks, and wakes the run · ratified · blocked_by[46, 49] · software-grade · depends_on 46,49 · (derived)
 - **52** · The signing service signs a request only after the owner's Aegis code for that request, and answers only callers holdin… · closed · software-grade · (derived)
-- **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · dispatched · software-grade · depends_on 52 · (derived)
+- **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · closed · software-grade · depends_on 52 · (derived)
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · closed · software-grade · depends_on 52 · (derived)
-- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ratified · blocked_by[54] · software-grade · depends_on 54 · (derived)
+- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ready · software-grade · depends_on 54 · (derived)
 - **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · ready · software-grade · (derived)
 - **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · ready · software-grade · depends_on 55 · (derived)
 - **62** · The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit… · ready · software-grade · (derived)
@@ -80,6 +80,7 @@ none
 - **72** · The ratify dry run refuses what the signed act refuses · draft · (derived)
 - **73** · A signed card is dispatchable without a hand land · draft · (derived)
 - **74** · No tracked text file holds CRLF: a rule, a CI check, and the one-time normalisation · draft · (derived)
+- **75** · The signing service's remaining gaps: init pins the file key, the timeout leaves a post-signature margin, the entrypoin… · draft · (derived)
 
 ## Blocked
 
