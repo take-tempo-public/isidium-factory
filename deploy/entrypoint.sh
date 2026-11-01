@@ -137,7 +137,7 @@ set -- serve \
 if [ -n "${ISIDIUM_SIGNING_SERVICE_HOST:-}" ]; then
   [ -n "${ISIDIUM_SIGNING_SERVICE_PORT:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_PORT — the service's API port"
   [ -n "${ISIDIUM_SIGNING_SERVICE_FPR:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_FPR — the key fingerprint the service signs under"
-  [ -n "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_TIMEOUT_S — the per-socket-operation timeout of each request to the service, in seconds; with the owner's 600 s wait and a 30 s post-signature margin it must stay under the client channel's 660 s, so below 30"
+  [ -n "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_TIMEOUT_S — the setting bounds the wait for the owner (600 s plus this plus a 30 s post-signature margin must stay under the client channel's 660 s, so below 30), and a single round trip to the service is held only by the per-call timeout, per socket operation, in seconds"
   SERVICE_DIR="${ISIDIUM_SIGNING_SERVICE_DIR:-/etc/isidium/signing-service}"   # the image layout the compose file mounts to, like ISIDIUM_TLS_DIR
   [ -f "$SERVICE_DIR/ca.crt.pem" ] || fail "no signing-service CA at $SERVICE_DIR/ca.crt.pem — the service's certificate must chain to it"
   [ -f "$SERVICE_DIR/store-client.crt.pem" ] || fail "no client certificate at $SERVICE_DIR/store-client.crt.pem — the service answers only a named caller"
