@@ -2,7 +2,7 @@
 schema = 1
 id = 56
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an Aegis code"
 shape = "bdd"
@@ -53,7 +53,7 @@ because = "checked when filing: chain.binding_holds (core/chain.py:205) checks m
 [[guidance.constraints]]
 id = "C2"
 text = "Store.bind's realm path is reused, not copied, where it fits"
-because = "checked when filing: Store.bind (store.py:1083) is today's only binding writer, called from tests"
+because = "checked when filing: Store.bind (store.py:1113) is today's only binding writer, called from tests"
 
 [[guidance.constraints]]
 id = "C3"
@@ -116,5 +116,6 @@ Ruled [owner, 2026-10-27]: enrolment by a 'Binding, signed twice'. The store che
 history = [
   { seq = 1, at = "2026-10-27T16:39:55Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c2335b4ec4d4740e8418f41f129519f76dfdf8ab18b8063088614b1236612734", h = "sha256:869ec4d08ade04f1f0c5e380a8c2d3e8a9952714fa15048025cfb6f37ff9f98b" },
   { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c2335b4ec4d4740e8418f41f129519f76dfdf8ab18b8063088614b1236612734", h = "sha256:fe69d68470cb59169c283765df228158517f7ea6507e1d0d3a6a6f0ed27173df", batch = 74 },
+  { seq = 3, at = "2026-11-01T00:11:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status"], build = "sha256:e58388d240030d43842d10b611d2f549663013abf5e5d8ecd0244c3c6481ac32", h = "sha256:86bbdfc5875e18ccf530c8f74d0813102605e73bb6c8d859eca0589dfb547005", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:IddOhuGL5XFNq6f1eJUSo7TsBPX7wTnSqsJjA8JlQf1qHMMvqT898QCucOzOq7aAL8e41WX8/yOmd3cHghtgDg==" },
 ]
 ```
