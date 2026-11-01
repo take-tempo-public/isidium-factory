@@ -67,7 +67,7 @@ none
 - **52** · The signing service signs a request only after the owner's Aegis code for that request, and answers only callers holdin… · closed · software-grade · (derived)
 - **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · closed · software-grade · depends_on 52 · (derived)
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · closed · software-grade · depends_on 52 · (derived)
-- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · draft · software-grade · depends_on 54 · (derived)
+- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · ready · software-grade · depends_on 54 · (derived)
 - **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · ready · software-grade · (derived)
 - **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · ready · software-grade · depends_on 55 · (derived)
 - **62** · The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit… · ready · software-grade · (derived)

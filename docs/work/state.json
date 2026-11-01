@@ -2314,12 +2314,12 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "7183b33ae28dfac62a8d3c19f0fea7017e4323a7",
+        "commit": "6f75f51ead02df9878f425dbfae44d68cbcd1ac9",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
-            "blob": "299a0f35df474213fe7971bc163daf7664ebb603",
+            "blob": "34e8f781467840834e16d5b2b246e6a0ffe33e80",
             "path": "packages/isidium-store/src/isidium/store/server/store.py"
           },
           {
@@ -2327,23 +2327,23 @@
             "path": "packages/isidium-store/src/isidium/store/core/chain.py"
           },
           {
-            "blob": "17e5c5bea88e034dcb88a94bec9285d8628c0dc6",
+            "blob": "1686dbc9c44b95a09496da123ec204fabc5d1567",
             "path": "packages/isidium-store/src/isidium/store/server/api.py"
           },
           {
-            "blob": "922088b891b27e34bea99f14783ddbccfc165a19",
+            "blob": "63b310e44ce2d80d01eec5609e32ae8f909f6e1a",
             "path": "packages/isidium-store/src/isidium/store/client/cli.py"
           },
           {
-            "blob": "926550308ddb2351b04ca9c68ab9068169a9f464",
+            "blob": "ef39be0a07ca31213dcbd48f0abc442c295c5a36",
             "path": "packages/isidium-store/src/isidium/store/server/signer.py"
           }
         ],
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:86bbdfc5875e18ccf530c8f74d0813102605e73bb6c8d859eca0589dfb547005",
-        "seq": 3
+        "h": "sha256:32c9b7e4ed60db918a18f8d0c76eed93befe290c8d923d2de5ad0e65aabdebc7",
+        "seq": 4
       },
       "runs": []
     },
@@ -2795,10 +2795,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:f0ad63f097f0cddaf85f4c81963fc8b1561f471e10ab7a66345793f6498b6c0d",
-    "seq": 460
+    "h": "sha256:4e714831cd18c4c31d9ac15b9337bf53f4204701b462f411de9269cc098a0464",
+    "seq": 462
   },
-  "landed_at": "2026-11-01T00:11:21Z",
-  "ledger_cursor": "dc211bbce7c630983a2116bd3e737b4c14a35e66",
+  "landed_at": "2026-11-01T00:11:55Z",
+  "ledger_cursor": "6f75f51ead02df9878f425dbfae44d68cbcd1ac9",
   "schema": 2
 }
