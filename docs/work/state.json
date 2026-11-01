@@ -2681,8 +2681,28 @@
       "runs": []
     },
     "0075": {
-      "closures": [],
-      "execution": "dispatched",
+      "closures": [
+        {
+          "at": "2026-11-01T05:43:13Z",
+          "closure_id": "f-r-66",
+          "evidence": [
+            "sha256:8537b7bd81c51aba6ab4ee0670a2b59f38bb223d0e2c747fcf078fd991f655b4",
+            "0a30c2e176dc5fba68a4d9e3bf2e63bab95aeb30"
+          ],
+          "kind": "factory",
+          "outcome": "met",
+          "verdicts": {
+            "S1": "pass",
+            "S2": "pass",
+            "S3": "pass",
+            "S4": "pass",
+            "S5": "pass"
+          },
+          "verified": true,
+          "verified_against": "sha256:746e4b211d5aab2b4e97d23d87aab5012ea56e4fc9368bfc94d07f156d25b161"
+        }
+      ],
+      "execution": "closed",
       "fingerprint": {
         "commit": "171393e341ca7f40bfcd4dbce3221e332c5b746f",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2719,7 +2739,16 @@
         "h": "sha256:b1cec89c9f2d5c818cddfa267dfd5a5bd367751ff61d4213c54490b01a839173",
         "seq": 2
       },
-      "runs": []
+      "runs": [
+        {
+          "batch": null,
+          "build_hash": "sha256:746e4b211d5aab2b4e97d23d87aab5012ea56e4fc9368bfc94d07f156d25b161",
+          "cost_micro": 11187362,
+          "duration_ms": 1115640,
+          "outcome": "complete",
+          "run_id": "r-66"
+        }
+      ]
     },
     "0076": {
       "closures": [],
@@ -2924,17 +2953,18 @@
       "3d85d4629ea38aee843ca1e50e64e40f931dd574abae30da76762af00788eabd",
       "f300160dfd793778525bb26a5bd50bee29300416647919d227312590a70bbb63",
       "f08d43e12966ddf33bbb2de7626a7c9efa8298ab969c31e1a431e9560fecd225",
-      "cf1cb2e20cfce86871efa8a8f3b74356dad1a8459678607ea8bf0d21150781ca"
+      "cf1cb2e20cfce86871efa8a8f3b74356dad1a8459678607ea8bf0d21150781ca",
+      "632b8f269c4dd5cec6c79ead50771a27990d11ae308e7638353557e5eb3820a9"
     ],
     "overflow": 0,
-    "run_id": "maintenance"
+    "run_id": "r-66"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:f2951fea26aa32d72dbfbe0d3035fd2b19b52260a16e09d52171ac96b5820e3a",
-    "seq": 484
+    "h": "sha256:29708a0d34ed472470800910b39b0ad408716a0b0b542ebd9e7dcd2d6a099181",
+    "seq": 485
   },
-  "landed_at": "2026-11-01T05:40:13Z",
-  "ledger_cursor": "0a30c2e176dc5fba68a4d9e3bf2e63bab95aeb30",
+  "landed_at": "2026-11-01T05:40:20Z",
+  "ledger_cursor": "22eda6c0ec45d0c44295f74064c144f3bde0e40a",
   "schema": 2
 }
