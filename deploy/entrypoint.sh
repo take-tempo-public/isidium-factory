@@ -15,6 +15,16 @@ fail() { echo "isidium: $1" >&2; exit 2; }
 [ -n "${ISIDIUM_ORIGIN:-}" ] || fail "set ISIDIUM_ORIGIN — the tenant repository this store clones and pushes to"
 [ -n "${ISIDIUM_ROOT:-}" ] || fail "set ISIDIUM_ROOT — the tracking root this tenant adopted, e.g. docs/work/"
 
+# A partial signing-service setting is refused before anything else is read (card 75, R4). ISIDIUM_SIGNING_SERVICE_HOST
+# is the one decision whether the store signs through the service, so a PORT, FPR or TIMEOUT_S set without it would
+# start a store that signs with the file key alone, silently, when its operator meant the owner's phone. Three lines,
+# not a loop over variable names: no `eval`, and each message names the variable that is set.
+if [ -z "${ISIDIUM_SIGNING_SERVICE_HOST:-}" ]; then
+  [ -z "${ISIDIUM_SIGNING_SERVICE_PORT:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_PORT is set and ISIDIUM_SIGNING_SERVICE_HOST is not — set ISIDIUM_SIGNING_SERVICE_HOST, or unset the other ISIDIUM_SIGNING_SERVICE_* variables"
+  [ -z "${ISIDIUM_SIGNING_SERVICE_FPR:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_FPR is set and ISIDIUM_SIGNING_SERVICE_HOST is not — set ISIDIUM_SIGNING_SERVICE_HOST, or unset the other ISIDIUM_SIGNING_SERVICE_* variables"
+  [ -z "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_TIMEOUT_S is set and ISIDIUM_SIGNING_SERVICE_HOST is not — set ISIDIUM_SIGNING_SERVICE_HOST, or unset the other ISIDIUM_SIGNING_SERVICE_* variables"
+fi
+
 # `0.0.0.0` is written here rather than defaulted in the store because in a container it *is* the deployment's
 # answer: the container's network namespace is the boundary and the runtime publishes the port. Written down, in the
 # file an operator reads, is the difference between a decision and an accident.
@@ -127,7 +137,7 @@ set -- serve \
 if [ -n "${ISIDIUM_SIGNING_SERVICE_HOST:-}" ]; then
   [ -n "${ISIDIUM_SIGNING_SERVICE_PORT:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_PORT — the service's API port"
   [ -n "${ISIDIUM_SIGNING_SERVICE_FPR:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_FPR — the key fingerprint the service signs under"
-  [ -n "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_TIMEOUT_S — one call's timeout"
+  [ -n "${ISIDIUM_SIGNING_SERVICE_TIMEOUT_S:-}" ] || fail "ISIDIUM_SIGNING_SERVICE_HOST is set; set ISIDIUM_SIGNING_SERVICE_TIMEOUT_S — the per-socket-operation timeout of each request to the service, in seconds; with the owner's 600 s wait and a 30 s post-signature margin it must stay under the client channel's 660 s, so below 30"
   SERVICE_DIR="${ISIDIUM_SIGNING_SERVICE_DIR:-/etc/isidium/signing-service}"   # the image layout the compose file mounts to, like ISIDIUM_TLS_DIR
   [ -f "$SERVICE_DIR/ca.crt.pem" ] || fail "no signing-service CA at $SERVICE_DIR/ca.crt.pem — the service's certificate must chain to it"
   [ -f "$SERVICE_DIR/store-client.crt.pem" ] || fail "no client certificate at $SERVICE_DIR/store-client.crt.pem — the service answers only a named caller"

@@ -53,9 +53,11 @@ services:
       # when the tenant's ratifier is a realm rather than a key on this disk.
       ISIDIUM_SIGNER: ${ISIDIUM_SIGNER-/etc/isidium/signer.key.pem}
       # The signing service (remote-totp), all four or none. **Unset means the file key alone**, which is how a tenant
-      # is initialized and how it adopts `signer.backends = [remote-totp, software_key_ack]` (the README's order).
-      # Set, the store signs by default through the service and waits for the owner's code; the file key stays the
-      # named fallback. The entrypoint refuses a partial set. No default here: the address is the deployment's.
+      # adopts `signer.backends = [remote-totp, software_key_ack]` (the README's order); `init` signs with the file
+      # key either way. Set, the store signs by default through the service and waits for the owner's code; the file
+      # key stays the named fallback. The entrypoint refuses a partial set, both ways: PORT, FPR or TIMEOUT_S set
+      # without ISIDIUM_SIGNING_SERVICE_HOST is refused naming ISIDIUM_SIGNING_SERVICE_HOST, and HOST set without the
+      # other three is refused naming the missing one. No default here: the address is the deployment's.
       ISIDIUM_SIGNING_SERVICE_HOST: ${ISIDIUM_SIGNING_SERVICE_HOST-}
       ISIDIUM_SIGNING_SERVICE_PORT: ${ISIDIUM_SIGNING_SERVICE_PORT-}
       ISIDIUM_SIGNING_SERVICE_FPR: ${ISIDIUM_SIGNING_SERVICE_FPR-}
