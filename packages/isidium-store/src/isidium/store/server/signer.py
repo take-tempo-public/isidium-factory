@@ -149,9 +149,10 @@ class RemoteTotp:
         runs from `started` — the moment the store received the call, which `Store._sign` passes in, so the store's own
         work before the submit counts — or from the submit when no start is given. Every poll, the first included,
         starts before the deadline. So for a service that answers each call within c in total (R5's condition) the
-        whole wait is at most `timeout_s` plus c, and `serve` keeps that sum under the client channel's timeout: the
-        store answers `signer.timeout` before its caller's channel gives up. A service that trickles a single call
-        past c is outside that bound. `sleep` and `monotonic` are seams for the tests, not policy."""
+        whole wait is at most `timeout_s` plus c, and `serve` keeps that sum plus the store's post-signature margin
+        (`store.POST_SIGNATURE_MARGIN_S`: the fetch, commit and push after the signature) under the client channel's
+        timeout: the store answers `signer.timeout` before its caller's channel gives up. A service that trickles a
+        single call past c is outside that bound. `sleep` and `monotonic` are seams for the tests, not policy."""
         self.backend = "remote-totp"
         self.service, self.key_fpr = service, key_fpr
         self.poll_interval_ms, self.timeout_s, self._sleep = poll_interval_ms, timeout_s, sleep

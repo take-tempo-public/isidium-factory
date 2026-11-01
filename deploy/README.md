@@ -1511,18 +1511,29 @@ software_key_ack`. A card signed through the service is **not** software-grade; 
 the factory's dispatch refuses it unless the tenant allows software-grade work. A service that declines or times out
 leaves nothing signed and nothing journaled, and ratify answers `signer.declined` or `signer.timeout`.
 
-Only `isidium ratify` takes `--backend` (card 54's R2). Every other signing act (a born-ratified write, a config-policy
-write, a repair) signs with the store's default, which is the service once it is configured.
+Only `isidium ratify` takes `--backend` (card 54's R2). Every other signing act signs with the store's default, which
+is the service once it is configured, so **each of these waits for the owner's code on the phone** (card 75):
+
+- a born-ratified write (a card created already `ratified`);
+- a config-policy write (`isidium write --config`);
+- a repair (`isidium repair`);
+- and every owner-signed write: closing a card with `accept --close`, releasing a hold, an owner status move, and a
+  gated edit to a ratified card.
+
+What these sign reads **unverified** until the owner enrols the service's key (card 56, `isidium enrol-signer`,
+below). `isidium init` is not among them: it signs the genesis with the pinned file key whether or not the service is
+configured, and never waits for the phone.
 
 `serve` takes seven options, all or none (a partial set stops the store at start, `signer.service-options`, naming what
-is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is set:
+is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is set, and refuses to start when
+`ISIDIUM_SIGNING_SERVICE_PORT`, `_FPR` or `_TIMEOUT_S` is set and the host is not, naming `ISIDIUM_SIGNING_SERVICE_HOST`:
 
 | Environment | `serve` option | What it is |
 |---|---|---|
 | `ISIDIUM_SIGNING_SERVICE_HOST` | `--signing-service-host` | the name the service's API certificate carries, e.g. `signer.example.invalid` |
 | `ISIDIUM_SIGNING_SERVICE_PORT` | `--signing-service-port` | the API's published port |
 | `ISIDIUM_SIGNING_SERVICE_FPR` | `--signing-service-fpr` | the key fingerprint the service signs under (the bare key fingerprint, not the `ed25519:` form the pin uses) |
-| `ISIDIUM_SIGNING_SERVICE_TIMEOUT_S` | `--signing-service-timeout-s` | the client's per-socket-operation timeout (not a whole-call deadline, and not the owner's wait): the owner's 600 s wait plus one call must stay under the client channel's 660 s for a service that answers each call within it, so `0` or less, or `60` or more, is refused at start (`signer.service-options`); keep it small |
+| `ISIDIUM_SIGNING_SERVICE_TIMEOUT_S` | `--signing-service-timeout-s` | the per-socket-operation timeout of each request to the service (not a whole-call deadline: a single round trip is held only by this per-call timeout). It bounds the wait for the owner only together with the owner's 600 s wait and a 30 s margin for the store's work after the signature (the fetch, commit and push), which must stay under the client channel's 660 s, so `0` or less, or `30` or more, is refused at start (`signer.service-options`); keep it small |
 | `./signing-service/ca.crt.pem` | `--signing-service-ca` | the service's CA, which the service's certificate must chain to |
 | `./signing-service/store-client.crt.pem` | `--signing-service-cert` | the store's client certificate, issued by that CA |
 | `./signing-service/store-client.key.pem` | `--signing-service-key` | its private key |
@@ -1538,15 +1549,16 @@ change takes effect at the next restart. And a tenant declares its backends in i
 is signed by whatever the store's default signer is, and once the service is configured that is the service's key. No
 binding holds that key until the owner enrols it (below), so the very write that declares `remote-totp` would read unverified. So make it
 **before** the service is configured, while the file key is the only signer and the pin signs it; then set the
-`ISIDIUM_SIGNING_SERVICE_*` variables and restart. For the same reason a tenant is initialized
-(`isidium init`) with the file key alone, before the service is configured: the file key is the pin.
+`ISIDIUM_SIGNING_SERVICE_*` variables and restart. `isidium init` needs no such ordering: it
+signs the genesis with the pinned file key whether or not the service is configured, so a store holding the service
+still initialises without the phone and without pinning the service's key.
 
 ```sh
 # in deploy/.env, after the tenant has declared both backends; nothing here is a real host
 ISIDIUM_SIGNING_SERVICE_HOST=signer.example.invalid
 ISIDIUM_SIGNING_SERVICE_PORT=8443
 ISIDIUM_SIGNING_SERVICE_FPR=<the service key fingerprint>
-ISIDIUM_SIGNING_SERVICE_TIMEOUT_S=30
+ISIDIUM_SIGNING_SERVICE_TIMEOUT_S=10
 ```
 
 ### Enrolling the service's key (card 56)

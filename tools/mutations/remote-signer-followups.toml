@@ -1,0 +1,38 @@
+# The signing service's follow-up mutations (card 75) -- R1's genesis signer, R2's post-signature margin, R4's partial-setting refusal (M1-M3).
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
+# in the FOREGROUND. `tools/mutate.py` runs the whole suite and takes no test path, on purpose, so a kill counts for
+# this card only when a test in tests/store/test_remote_signer_followups.py is in the failure list it prints:
+#
+#   python tools/mutate.py tools/mutations/remote-signer-followups.toml --show M1     # the diff that would run; runs nothing
+#   python tools/mutate.py tools/mutations/remote-signer-followups.toml M1
+#
+# What each kill proves, and the test that kills it (each by this card's file alone):
+#   M1  R1  `init` signs on the store's default signer, not the pinned file key -> test_remote_signer_followups.py::
+#           test_init_signs_with_the_pinned_file_key (the genesis is signed by the service's key and its stub is asked)
+#   M2  R2  the post-signature margin is dropped from the accepted maximum       -> test_remote_signer_followups.py::
+#           test_serve_refuses_a_timeout_that_leaves_no_margin (top + margin/2 is accepted)
+#   M3  R4  the partial-setting refusal is dropped from the entrypoint           -> test_remote_signer_followups.py::
+#           test_the_entrypoint_refuses_a_partial_service_setting (PORT alone reaches `no registration`)
+
+
+[[mutation]]
+id = "M1"
+label = "init signs the genesis on the default signer -- a store holding the service waits for the phone, or pins the service's key"
+file = "packages/isidium-store/src/isidium/store/server/store.py"
+find = "return self._write_policy(tree, None, owner, backend=backend)"
+replace = "return self._write_policy(tree, None, owner)"
+
+[[mutation]]
+id = "M2"
+label = "the post-signature margin is not subtracted -- a timeout that leaves no room for the fetch, commit and push is accepted"
+file = "packages/isidium-store/src/isidium/store/client/cli.py"
+find = "ceiling = channel - remote.timeout_s - POST_SIGNATURE_MARGIN_S"
+replace = "ceiling = channel - remote.timeout_s"
+
+[[mutation]]
+id = "M3"
+label = "the entrypoint no longer refuses PORT, FPR or TIMEOUT_S set without the host -- a file-key-only store starts silently"
+file = "deploy/entrypoint.sh"
+find = 'if [ -z "${ISIDIUM_SIGNING_SERVICE_HOST:-}" ]; then'
+replace = "if false; then"

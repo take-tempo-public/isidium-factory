@@ -50,6 +50,12 @@ CARD_RE = re.compile(r"^cards/(\d{4,})-[a-z0-9\-]*\.md$")
 Clock = Callable[[], int]
 SCENARIO_RUNNER_KIND = {"test-marker": "test", "command": "command", "http": "http", "file-assert": "file"}
 
+# What the store still does after the owner's signature has arrived: the ratify's apply fetches `main`, commits and
+# pushes (r-63 F3). `serve` keeps the owner's wait, the service-call timeout and this margin under the client channel's
+# timeout, so the caller hears the store's answer before its own channel gives up. 30 s is generous on purpose: K9
+# measured a fetch of `main` at 1.6 s median and 2.7 s at worst, and the push is a similar round trip.
+POST_SIGNATURE_MARGIN_S = 30.0
+
 
 @dataclass(frozen=True)
 class NewCard:
@@ -1028,7 +1034,12 @@ class Store:
     # ---- the policy file -----------------------------------------------------------------------------------------
 
     def _write_policy(
-        self, tree: Mapping[str, Any], base: Mapping[str, Any] | None, caller: Caller, ref: derive.Ref = None
+        self,
+        tree: Mapping[str, Any],
+        base: Mapping[str, Any] | None,
+        caller: Caller,
+        ref: derive.Ref = None,
+        backend: str | None = None,
     ) -> WriteResult:
         cur = {"seq": self.policy[-1]["seq"], "h": self.policy[-1]["h"]} if self.policy else None
         if cur != (dict(base) if base is not None else None):
@@ -1082,7 +1093,7 @@ class Store:
                 "answers_added": [],
                 "entries_since": [],
             }
-            entry["sig"] = self._sign(entry["h"], at, [("config.toml", act, entry["build"], display)])
+            entry["sig"] = self._sign(entry["h"], at, [("config.toml", act, entry["build"], display)], backend)
             wr, _blobs, deferred = self._commit_policy(entry, caller, at)
         except Refusal:
             self._set_config(previous)  # refused before the row: nothing happened, and the tree says so
@@ -1320,11 +1331,26 @@ class Store:
         # and a genesis cannot move with it. Written only when the adopted version declares the key (04 §4.1).
         if any(r["name"] == "chain_opened_under" for r in self.registry.get(f"config@{tree['schema']}")["scalars"]):
             tree["chain_opened_under"] = tree["schema"]
+        # **The genesis is signed by the file key, never by the service** (r-63 F2). A store holding the signing service
+        # has it as its default signer, whose key no binding holds yet and whose signature waits for the owner's phone;
+        # the pin is the file key (A1), so the act that opens the chain is the file key's, named here. A store without
+        # the service signs with its one signer, exactly as before.
+        genesis_signer, backend = self.signer, None
+        if self.signer is not None and self.signer.backend == "remote-totp":
+            genesis_signer = self.signers.get("software_key_ack")
+            if genesis_signer is None:
+                raise Refusal(
+                    "init.no-ratifier",
+                    "",
+                    "init signs the genesis with the pinned file key, and this store holds none (its only signer is "
+                    "the remote-totp service)",
+                )
+            backend = genesis_signer.backend
         if not self.identity_enabled:
             if ratifier_fpr is None:
-                if self.signer is None:
+                if genesis_signer is None:
                     raise Refusal("init.no-ratifier", "", "identity is disabled and no ratifier key is pinned")
-                ratifier_fpr = self.signer.key_fpr
+                ratifier_fpr = genesis_signer.key_fpr
             tree["ratification"] = {"pin": "ed25519:" + ratifier_fpr}
         if software_key_ack is not None:
             tree.setdefault("ratification", {})["software_key_ack"] = software_key_ack
@@ -1335,7 +1361,7 @@ class Store:
         # The manifest declared by the version this chain adopts, never a copy in the binary (C-1, ruled
         # 2026-08-29). `tree["schema"]` is set at the top of this same dict, so the version cannot drift from it.
         tree["governed"] = self.registry.defaults_of(f"config@{tree['schema']}")["governed"]
-        return self._write_policy(tree, None, owner)
+        return self._write_policy(tree, None, owner, backend=backend)
 
     # ---- show (1.2) ----------------------------------------------------------------------------------------------
 

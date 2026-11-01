@@ -479,7 +479,12 @@ def serve(
         str | None, typer.Option(help="the key fingerprint of the signatures the service produces")
     ] = None,
     signing_service_timeout_s: Annotated[
-        float | None, typer.Option(help="one call's timeout to the service, not the owner's wait")
+        float | None,
+        typer.Option(
+            help="the per-socket-operation timeout of each request to the service; it bounds the wait for the owner "
+            "only together with the owner's wait and the post-signature margin, and a single round trip is held "
+            "by this per-call timeout alone"
+        ),
     ] = None,
 ) -> None:
     """Run the store for this tenant (03b §2: one store container per tenant).
@@ -499,9 +504,11 @@ def serve(
     (`ratify --backend software_key_ack`) and the only key graded software. Given in part, the store refuses to
     start and names what is missing. None has a default (C-1): the deployment supplies them. The service's own
     HTTPS client is `server/signer.py`'s, not the service package's, so the store's image carries no service.
-    `--signing-service-timeout-s` is one call's bound. The owner's wait plus one call must stay under the client
-    channel's timeout, so the store answers `signer.timeout` before its caller's channel gives up (R5); a value
-    outside that is refused at start, `signer.service-options`.
+    `--signing-service-timeout-s` bounds the wait for the owner, together with the owner's wait and the store's
+    post-signature margin (`POST_SIGNATURE_MARGIN_S`: the fetch, commit and push of the ratify's apply) — those three
+    must stay under the client channel's timeout, so the store answers `signer.timeout` before its caller's channel
+    gives up (R5, r-63 F3). A single round trip is held only by the per-call timeout, a per-socket-operation one; a
+    value outside that is refused at start, `signer.service-options`.
 
     Every `server.` import is inside this function on purpose: the client half installs without the `[server]`
     extra, and h11 is only in that extra.
@@ -518,7 +525,7 @@ def serve(
     from ..server.journal import Journal
     from ..server.service import Registration, Service
     from ..server.signer import HttpsService, RemoteTotp, Signer, SoftwareKey, SoftwareKeyAck
-    from ..server.store import Store
+    from ..server.store import POST_SIGNATURE_MARGIN_S, Store
 
     # Before anything is built, so the store's own start-up is inside the trace when a deployment asked for one
     # (C-11). It installs nothing unless `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` are set, and `console` —
@@ -588,18 +595,19 @@ def serve(
             signing_service_fpr,
             int(store.eff["signer"]["remote-totp"]["poll_interval_ms"]),
         )
-        # R5: the owner's wait plus one service call must stay under the client channel's timeout, so the store answers
-        # `signer.timeout` before its caller's channel gives up. Read from `Transport.__init__`'s signature, its one
-        # home, rather than writing the number a second time (C-1).
+        # R5: the owner's wait, the per-call timeout and the store's post-signature work must stay under the client
+        # channel's timeout, so the store answers `signer.timeout` before its caller's channel gives up. The channel is
+        # read from `Transport.__init__`'s signature, its one home, rather than writing the number a second time (C-1).
         channel = float(inspect.signature(Transport.__init__).parameters["timeout"].default)
-        if not 0 < signing_service_timeout_s < channel - remote.timeout_s:
+        ceiling = channel - remote.timeout_s - POST_SIGNATURE_MARGIN_S
+        if not 0 < signing_service_timeout_s < ceiling:
             _refuse(
                 Refusal(
                     "signer.service-options",
                     "",
-                    f"--signing-service-timeout-s {signing_service_timeout_s} must be above 0 and below "
-                    f"{channel - remote.timeout_s}s: the owner's {remote.timeout_s}s wait plus one call must stay "
-                    f"under the client channel's {channel}s",
+                    f"--signing-service-timeout-s {signing_service_timeout_s} must be above 0 and below {ceiling}s: "
+                    f"the owner's {remote.timeout_s}s wait, this per-call timeout and {POST_SIGNATURE_MARGIN_S}s for "
+                    f"the fetch, commit and push after the signature must stay under the client channel's {channel}s",
                 )
             )
         store.use_signer(remote)
