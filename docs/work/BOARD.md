@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -67,7 +67,7 @@ none
 - **52** · The signing service signs a request only after the owner's Aegis code for that request, and answers only callers holdin… · closed · software-grade · (derived)
 - **54** · The store signs a ratification through the remote-totp service, and the file key stays as a named fallback · closed · software-grade · depends_on 52 · (derived)
 - **55** · The signing service shows each request on a phone page and takes the Aegis code there, and ships as its own container i… · closed · software-grade · depends_on 52 · (derived)
-- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · dispatched · software-grade · depends_on 54 · (derived)
+- **56** · The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an … · closed · software-grade · depends_on 54 · (derived)
 - **57** · A run's second mutation check holds the first one's mutations: none withdrawn, none weakened, and no kill read off a de… · ready · software-grade · (derived)
 - **61** · The signing service starts from a read-only key mount, says plainly who can cancel a request, stops cleanly on its firs… · ready · software-grade · depends_on 55 · (derived)
 - **62** · The store reads a merge commit's changes against its first parent only, so a merged branch cut before a governed commit… · ready · software-grade · (derived)
@@ -81,10 +81,10 @@ none
 - **73** · A signed card is dispatchable without a hand land · draft · (derived)
 - **74** · No tracked text file holds CRLF: a rule, a CI check, and the one-time normalisation · draft · (derived)
 - **75** · The signing service's remaining gaps: init pins the file key, the timeout leaves a post-signature margin, the entrypoin… · ready · software-grade · (derived)
-- **76** · Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and … · ratified · blocked_by[56] · software-grade · depends_on 56 · (derived)
-- **77** · A policy chain names the service key the code gate protects, owner grants count only for it, and the realm carve-out is… · draft · blocked_by[56] · depends_on 56 · (derived)
-- **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · draft · blocked_by[56] · depends_on 56 · (derived)
-- **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · draft · blocked_by[56] · depends_on 56 · (derived)
+- **76** · Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and … · ready · software-grade · depends_on 56 · (derived)
+- **77** · A policy chain names the service key the code gate protects, owner grants count only for it, and the realm carve-out is… · draft · depends_on 56 · (derived)
+- **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · draft · depends_on 56 · (derived)
+- **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · draft · depends_on 56 · (derived)
 
 ## Blocked
 
