@@ -169,6 +169,7 @@ class Store:
         # documents are indexed so `show card` never scans the set for them (E3's shape, for the other direction).
         self._kids: dict[int, set[int]] = {}
         self._blob: dict[str, str] = {}  # path -> the blob id of the bytes the store holds (E4)
+        self._kind_memo: dict[tuple[str, str, str], chain.BindingKind | None] = {}  # (h, previous h, pin) -> kind
         self._build: dict[str, str] = {}  # card path -> its build hash (E1: hashed once, cached by blob)
         self.signed_doc: dict[str, Document] = {}  # path -> the document at its last signed entry (X1, E5)
         self._doc_schemas: dict[str, DocSchema] = {}
@@ -1110,6 +1111,23 @@ class Store:
         wr = WriteResult("config.toml", entry, {"seq": entry["seq"], "h": entry["h"]}, int(jrow["seq"]), sha)
         return wr, blobs, deferred
 
+    def _binding_entry(self, caller: Caller, ref: Mapping[str, Any], at: str) -> Entry:
+        """A `binding` entry in the policy chain, unsigned: `ref = Binding{...}`, chained onto the head. The one
+        composer behind both the realm's `bind` and the owner's `enrol_signer` (card 56, C2)."""
+        act, fields = derive.recompute_table(self.config_tree, self.config_tree, [], ref, is_policy=True)
+        e = self._entry(len(self.policy) + 1, at, caller, act, fields, self.policy_build(), dict(ref))
+        e["h"] = chain.link(
+            self.policy[-1]["h"] if self.policy else chain.genesis("policy", self.tenant, self.policy_schema_version()),
+            e,
+        )
+        return e
+
+    def _commit_binding(self, e: Entry, caller: Caller, at: str) -> WriteResult:
+        """Commit a signed binding entry; `main` may lag (Q18), and the result says so."""
+        wr, _blobs, deferred = self._commit_policy(e, caller, at)
+        wr.landed = self._landing(deferred)
+        return wr
+
     def bind(self, realm_signer: Signer, key_fpr: str, grant: str, frm: str, until: str | None = None) -> Entry:
         """The realm's act (1.12, 1.15): a `binding` entry in the policy chain, `ref = Binding{...}`, signed
         `sign(realm ‖ h_binding)` with the realm's key — `by` is the realm's service principal (K-20)."""
@@ -1117,13 +1135,8 @@ class Store:
         ref: dict[str, Any] = {"key_fpr": key_fpr, "grant": grant, "tenant": self.tenant, "from": frm}
         if until is not None:
             ref["until"] = until
-        act, fields = derive.recompute_table(self.config_tree, self.config_tree, [], ref, is_policy=True)
         realm = Caller(canon.nfc(self.realm_principal).lower(), "owner")
-        e = self._entry(len(self.policy) + 1, at, realm, act, fields, self.policy_build(), ref)
-        e["h"] = chain.link(
-            self.policy[-1]["h"] if self.policy else chain.genesis("policy", self.tenant, self.policy_schema_version()),
-            e,
-        )
+        e = self._binding_entry(realm, ref, at)
         e["sig"] = realm_signer.sign(
             realm.principal,
             str(e["h"]),
@@ -1131,9 +1144,89 @@ class Store:
             [("config.toml", "binding", e["build"], {"binding": dict(ref)})],
             self.time_skew(),
         )
-        _wr, _blobs, deferred = self._commit_policy(e, realm, at)
-        self._landing(deferred)  # the entry is the realm's act and is returned whole; `main` may lag (Q18)
+        self._commit_binding(e, realm, at)  # the entry is the realm's act and is returned whole
         return e
+
+    def _pin_signer(self) -> Signer:
+        """The signer that holds the pinned key: the pin's signature is not a backend choice, so it is made by the held
+        `software_key_ack` signer directly (as `bind` calls its signer), and only if that signer IS the pin."""
+        pin = str((self.eff.get("ratification") or {}).get("pin", ""))
+        if not pin or self.identity_enabled:
+            raise Refusal("signer.no-pin", "ratification.pin", "enrolment is signed by the pinned key; none is pinned")
+        file = self.signers.get("software_key_ack")
+        if file is None or file.key_fpr != pin.split(":", 1)[-1]:
+            raise Refusal("signer.pin-mismatch", "ratification.pin", "this store holds no signer for the pinned key")
+        return file
+
+    def enrol_signer(self, caller: Caller, revoke: str | None = None) -> WriteResult:
+        """The owner's enrolment of the signing service's key (card 56): a `binding` entry signed by the pinned key and
+        co-signed by the bound key itself, after the owner's code (R1, R2); with `revoke`, a binding with `until` = now
+        for that key, signed by the pinned key alone (R5). Owner-only by its absence from the grant matrix.
+
+        The pin's signature is made first and the co-signature second, across the owner's wait: the file key is
+        instant, so `at` stays inside its skew, and a declined or timed-out co-signature raises before anything is
+        committed. The service's fingerprint is asked for before `h` exists because it is inside the chain content."""
+        self._require(caller, "enrol-signer")
+        pin_signer = self._pin_signer()
+        grant = "owner"
+        if revoke is not None:
+            frm = self._held_from(revoke, grant)
+            at = self.now()
+            e = self._binding_entry(
+                caller, {"key_fpr": revoke, "grant": grant, "tenant": self.tenant, "from": frm, "until": at}, at
+            )
+            shown = [("config.toml", "binding", e["build"], {"binding": dict(e["ref"])})]
+            e["sig"] = pin_signer.sign(self.tenant, str(e["h"]), self._epoch(at), shown, self.time_skew())
+            return self._commit_binding(e, caller, at)
+        remote = self.signers.get("remote-totp")
+        if not isinstance(remote, RemoteTotp):
+            raise Refusal("signer.backend-unavailable", "signer.backends", "enrolment needs the remote-totp signer")
+        fpr = remote.service_key()
+        at = self.now()
+        e = self._binding_entry(caller, {"key_fpr": fpr, "grant": grant, "tenant": self.tenant, "from": at}, at)
+        e["sig"] = pin_signer.sign(
+            self.tenant,
+            str(e["h"]),
+            self._epoch(at),
+            [("config.toml", "binding", e["build"], {"binding": dict(e["ref"])})],
+            self.time_skew(),
+        )
+        enrolment = {"key_fpr": fpr, "tenant": self.tenant, "grant": grant}
+        e["cosig"] = self._sign(
+            str(e["h"]), at, [("config.toml", "enrolment", e["build"], {"enrolment": enrolment})], "remote-totp"
+        )
+        return self._commit_binding(e, caller, at)
+
+    def _held_from(self, key_fpr: str, grant: str) -> str:
+        """The `from` of the grant holding for `key_fpr` now, or `signer.not-bound`: a revocation ends what exists."""
+        at = self.now()
+        if not chain.binding_holds(self.policy, key_fpr, grant, at, self._binding_kind):
+            raise Refusal("signer.not-bound", key_fpr, "no binding holds for this key")
+        grants = [
+            str(e["ref"]["from"])
+            for i, e in enumerate(self.policy)
+            if e.get("act") == "binding"
+            and isinstance(e.get("ref"), Mapping)
+            and e["ref"].get("key_fpr") == key_fpr
+            and e["ref"].get("grant") == grant
+            and str(e["ref"].get("from", "")) <= at
+            and self._binding_kind(e, str(self.policy[i - 1]["h"]) if i else "") == "grant"
+        ]
+        return grants[-1]
+
+    def _binding_kind(self, e: Mapping[str, Any], prev_h: str) -> chain.BindingKind | None:
+        """What a binding entry is worth (card 56, C1). The realm's `bind` writes the entries whose `by` is the realm's
+        principal and they keep today's membership-only meaning (R4). Every other binding needs the pin's signature
+        and the bound key's co-signature, so `chain.binding_kind` checks them: one sha256 and two Ed25519 verifies,
+        memoised by `h` because a policy entry never changes once appended (it is append-only), so each owner-authored
+        binding is verified once per process rather than on every `verify_entry` a projection makes."""
+        if str(e.get("by", "")) == canon.nfc(self.realm_principal).lower():
+            return "grant"
+        pin = str((self.eff.get("ratification") or {}).get("pin", "")).split(":", 1)[-1]
+        key = (str(e.get("h", "")), prev_h, pin)  # the pin is in the key: a policy write may move it
+        if key not in self._kind_memo:
+            self._kind_memo[key] = chain.binding_kind(e, prev_h, self.tenant, pin)
+        return self._kind_memo[key]
 
     # ---- record-slot documents (the inbox) -----------------------------------------------------------------------
 
@@ -1915,7 +2008,7 @@ class Store:
             return False
         fpr = chain.parse_sig(sig)[1]
         pin = str((self.eff.get("ratification") or {}).get("pin", ""))
-        return chain.binding_holds(self.policy, fpr, "owner", str(e["at"])) or (
+        return chain.binding_holds(self.policy, fpr, "owner", str(e["at"]), self._binding_kind) or (
             pin.split(":", 1)[-1] == fpr and not self.identity_enabled
         )
 

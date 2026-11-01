@@ -34,6 +34,7 @@ ENTRY_KEY_ORDER: Final[tuple[str, ...]] = (
     "note",
     "h",
     "sig",
+    "cosig",
     "batch",
 )
 # 2.1 — the scalar keys' mutual order (4.3: "every write emits all scalar keys first, among themselves in the

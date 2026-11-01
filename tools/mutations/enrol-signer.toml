@@ -1,0 +1,49 @@
+# The signed-twice binding's mutations (card 56) -- R3's rule that a binding without both signatures grants nothing (M1-M4).
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
+# in the FOREGROUND. `tools/mutate.py` runs the whole suite and takes no test path, on purpose, so a kill counts for
+# this card only when tests/store/test_enrol_signer.py::test_a_half_signed_binding_grants_nothing is in the failure
+# list it prints (C4):
+#
+#   python tools/mutate.py tools/mutations/enrol-signer.toml --show M1     # the diff that would run; runs nothing
+#   python tools/mutate.py tools/mutations/enrol-signer.toml M1
+#
+# What each kill proves, and the case of test_a_half_signed_binding_grants_nothing that kills it:
+#   M1  R3  a binding with no co-signature counts as a grant        -> "no co-signature" (the pin alone enrols a key: A1)
+#   M2  R3  a co-signature by another key than the bound one is accepted -> "a co-signature by another key"
+#   M3  R3  the co-signature is not verified, only its label read    -> "a co-signature labelled with the key but
+#           made by another"
+#   M4  R3  the binding need not be signed by the pinned key          -> "not signed by the pin"
+
+
+[[mutation]]
+id = "M1"
+label = "a binding with no co-signature is counted as a grant -- the pinned key alone enrols"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = """    if not isinstance(cosig, str):
+        return None
+"""
+replace = """    if not isinstance(cosig, str):
+        return "grant"
+"""
+
+[[mutation]]
+id = "M2"
+label = "a co-signature by another key is accepted -- its fingerprint is not compared with the bound key's"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = 'if cosig_fpr != ref.get("key_fpr"):'
+replace = "if False:"
+
+[[mutation]]
+id = "M3"
+label = "the co-signature is not verified -- a signature labelled with the bound key's fingerprint is believed"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = "if not verify_sig(cosig, tenant, h):"
+replace = "if False:"
+
+[[mutation]]
+id = "M4"
+label = "the binding need not be signed by the pinned key -- any key's signature, with the co-signature, enrols"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = "if parse_sig(sig)[1] != pin_fpr:"
+replace = "if False:"

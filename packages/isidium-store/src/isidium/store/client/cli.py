@@ -2,8 +2,8 @@
 and nothing else is guaranteed; every other isidium part is a group that dispatches to `isidium-<part>` on PATH (the
 `git-*` / `cargo-*` convention), so the umbrella never knows which language a part is written in.
 
-    isidium init | install | write | show | check | ratify | suggest | disposition | repair | hook | verify
-            | serve | mcp
+    isidium init | install | write | show | check | ratify | suggest | disposition | repair | enrol-signer | hook
+            | verify | serve | mcp
     isidium <part> <args…>        → exec isidium-<part> (memory, factory, …)
 
 Output is JSON by default (agents and scripts read it); `--text` renders the human form of the board and of the
@@ -381,6 +381,18 @@ def repair(
     if journal:
         args["journal"] = journal
     _run("repair", args)
+
+
+@app.command("enrol-signer")
+def enrol_signer(
+    revoke: Annotated[
+        str, typer.Option(help="end the grant of this key fingerprint from now; signed by the pinned key alone")
+    ] = "",
+) -> None:
+    """Enrol the signing service's key (card 56): the store binds it with an entry signed by the pinned key and
+    co-signed by the service's key after your Aegis code, shown on the service's page as a key enrolment. `--revoke
+    <key_fpr>` writes the binding that ends that key's grant from now; it needs no code."""
+    _run("enrol_signer", {"revoke": revoke} if revoke else {})
 
 
 # ---- the tenant-side commands ------------------------------------------------------------------------------------
