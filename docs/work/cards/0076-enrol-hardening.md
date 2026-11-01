@@ -2,7 +2,7 @@
 schema = 1
 id = 76
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and the README says what the code gate does and does not protect"
 shape = "bdd"
@@ -95,5 +95,6 @@ r-65 (card 56) review, owner ruling 2026-11-01: push r-65 as is; F2, F3, F5, F6 
 ```toml
 history = [
   { seq = 1, at = "2026-11-01T04:30:26Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:89db35ef0dfa8f00c291f52cc1c8aad3ab88475ac6b8faa04e8ce35436d5920a", h = "sha256:ee2ddc13ead5c01510dadd64b593b69772e97741ea44315aca9190d1571509c3" },
+  { seq = 2, at = "2026-11-01T04:37:33Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:89db35ef0dfa8f00c291f52cc1c8aad3ab88475ac6b8faa04e8ce35436d5920a", h = "sha256:957c85d5324ccc4fa9ffa3d838855281949be8d7918cf43143a4d93a7cab26e0", batch = 87 },
 ]
 ```

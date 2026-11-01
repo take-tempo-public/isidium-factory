@@ -2,7 +2,7 @@
 schema = 1
 id = 75
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing service's remaining gaps: init pins the file key, the timeout leaves a post-signature margin, the entrypoint refuses a partial setting, and the docs say what waits"
 shape = "bdd"
@@ -99,5 +99,6 @@ r-63 (card 54, PR #121, merged 2026-10-31): review findings F2-F6 left open by t
 ```toml
 history = [
   { seq = 1, at = "2026-10-31T19:32:10Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:746e4b211d5aab2b4e97d23d87aab5012ea56e4fc9368bfc94d07f156d25b161", h = "sha256:5e482a641e225348e1a779038778ed0e8e54e25c823e3ff7c713bcd1f81b1ce7" },
+  { seq = 2, at = "2026-11-01T04:37:33Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:746e4b211d5aab2b4e97d23d87aab5012ea56e4fc9368bfc94d07f156d25b161", h = "sha256:b1cec89c9f2d5c818cddfa267dfd5a5bd367751ff61d4213c54490b01a839173", batch = 87 },
 ]
 ```
