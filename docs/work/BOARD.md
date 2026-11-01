@@ -1,6 +1,6 @@
 # Board
 
-WIP 1/1 · inbox 0
+WIP 0/1 · inbox 0
 
 ## Queue
 
@@ -81,7 +81,7 @@ none
 - **73** · A signed card is dispatchable without a hand land · draft · (derived)
 - **74** · No tracked text file holds CRLF: a rule, a CI check, and the one-time normalisation · draft · (derived)
 - **75** · The signing service's remaining gaps: init pins the file key, the timeout leaves a post-signature margin, the entrypoin… · closed · software-grade · (derived)
-- **76** · Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and … · parked · software-grade · depends_on 56 · (derived)
+- **76** · Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and … · draft · software-grade · depends_on 56 · (derived)
 - **77** · A policy chain names the service key the code gate protects, owner grants count only for it, and the realm carve-out is… · draft · depends_on 56 · (derived)
 - **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · draft · depends_on 56 · (derived)
 - **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · draft · depends_on 56 · (derived)

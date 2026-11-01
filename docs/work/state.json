@@ -2752,7 +2752,7 @@
     },
     "0076": {
       "closures": [],
-      "execution": "parked",
+      "execution": null,
       "fingerprint": {
         "commit": "5d772a2da35fcbae2c241159524374f7484e52dc",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2774,14 +2774,20 @@
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:3ee95c93da6b055d8430d7150bfbffb44edac41d89512499c62010d662d0974d",
-        "seq": 4
+        "h": "sha256:80c40da0dbf597bf187e17d55b44bc7704dc8978985810b83ea09ad028f702c1",
+        "seq": 5
       },
       "runs": [
         {
           "ended_at": "2026-11-01T05:54:25Z",
           "outcome": "parked",
-          "responses": [],
+          "responses": [
+            {
+              "act": "demoted",
+              "at": "2026-11-01T06:51:41Z",
+              "card_seq": 5
+            }
+          ],
           "run_id": "r-67"
         }
       ]
@@ -2966,14 +2972,14 @@
       "3686673fee539206d0cc94f4c19c0f4a7a0159fa96f21e0d2a0bfe41859bde7e"
     ],
     "overflow": 0,
-    "run_id": "r-67"
+    "run_id": "maintenance"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:46986995ddf07e9caf9bdb48fdc7b94c3515696a9b0a2c01d723183086c7f740",
-    "seq": 491
+    "h": "sha256:b0cf328f9fe035bb706253b79dfe61402809fb579344e3ae3a3f8330a1aa00fd",
+    "seq": 493
   },
-  "landed_at": "2026-11-01T05:45:44Z",
-  "ledger_cursor": "531f9940d778311a5523d0000fe05014114a57b0",
+  "landed_at": "2026-11-01T06:51:41Z",
+  "ledger_cursor": "ee70fe383f25a3b41bbc8ef720ea78dc57728afd",
   "schema": 2
 }
