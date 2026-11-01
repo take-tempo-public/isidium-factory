@@ -2851,10 +2851,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:06a9f8ba73d29a6a0445f2bd58cf79d0bd5c4bea46ec733291d129f9142d18ee",
-    "seq": 478
+    "h": "sha256:8314553a0bd637b8413a4b7d263ca117c4055b451516cb960ac71fe7d4a5dcb9",
+    "seq": 479
   },
-  "landed_at": "2026-11-01T04:30:48Z",
-  "ledger_cursor": "60fcd8b0e855ebb829b6584f99ac7e3bd7449eff",
+  "landed_at": "2026-11-01T04:37:07Z",
+  "ledger_cursor": "9c16890243ff77fffb114cd1097457b4b2437c3b",
   "schema": 2
 }
