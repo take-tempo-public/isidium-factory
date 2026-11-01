@@ -1526,7 +1526,8 @@ configured, and never waits for the phone.
 
 `serve` takes seven options, all or none (a partial set stops the store at start, `signer.service-options`, naming what
 is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is set, and refuses to start when
-`ISIDIUM_SIGNING_SERVICE_PORT`, `_FPR` or `_TIMEOUT_S` is set and the host is not, naming `ISIDIUM_SIGNING_SERVICE_HOST`:
+`ISIDIUM_SIGNING_SERVICE_PORT`, `_FPR` or `_TIMEOUT_S` is set and the host is not, naming
+`ISIDIUM_SIGNING_SERVICE_HOST`:
 
 | Environment | `serve` option | What it is |
 |---|---|---|
@@ -1538,20 +1539,20 @@ is missing). The entrypoint passes them when `ISIDIUM_SIGNING_SERVICE_HOST` is s
 | `./signing-service/store-client.crt.pem` | `--signing-service-cert` | the store's client certificate, issued by that CA |
 | `./signing-service/store-client.key.pem` | `--signing-service-key` | its private key |
 
-Issue the store's client certificate from the **service's** CA (*Two listeners*, above; the `store-client` leaf), put its
-RFC 4514 subject in the service's `callers`, and mount the three files read-only at `./signing-service/`. Unset
+Issue the store's client certificate from the **service's** CA (*Two listeners*, above; the `store-client` leaf), put
+its RFC 4514 subject in the service's `callers`, and mount the three files read-only at `./signing-service/`. Unset
 `ISIDIUM_SIGNING_SERVICE_HOST` and the store is what it was: the file key alone.
 
-**The order matters.** `poll_interval_ms` is read from the effective `signer.remote-totp` once, when `serve` starts, so a
-change takes effect at the next restart. And a tenant declares its backends in its own signed config: tenant #0 declares
-`signer.backends = ["software_key_ack"]`, and a store holding the service refuses every default-signed act
+**The order matters.** `poll_interval_ms` is read from the effective `signer.remote-totp` once, when `serve` starts, so
+a change takes effect at the next restart. And a tenant declares its backends in its own signed config: tenant #0
+declares `signer.backends = ["software_key_ack"]`, and a store holding the service refuses every default-signed act
 (`signer.backend-unavailable`) until the tenant declares `["remote-totp", "software_key_ack"]`. That config-policy write
 is signed by whatever the store's default signer is, and once the service is configured that is the service's key. No
-binding holds that key until the owner enrols it (below), so the very write that declares `remote-totp` would read unverified. So make it
-**before** the service is configured, while the file key is the only signer and the pin signs it; then set the
-`ISIDIUM_SIGNING_SERVICE_*` variables and restart. `isidium init` needs no such ordering: it
-signs the genesis with the pinned file key whether or not the service is configured, so a store holding the service
-still initialises without the phone and without pinning the service's key.
+binding holds that key until the owner enrols it (below), so the very write that declares `remote-totp` would read
+unverified. So make it **before** the service is configured, while the file key is the only signer and the pin signs it;
+then set the `ISIDIUM_SIGNING_SERVICE_*` variables and restart. `isidium init` needs no such ordering: it signs the
+genesis with the pinned file key whether or not the service is configured, so a store holding the service still
+initialises without the phone and without pinning the service's key.
 
 ```sh
 # in deploy/.env, after the tenant has declared both backends; nothing here is a real host
@@ -1564,7 +1565,13 @@ ISIDIUM_SIGNING_SERVICE_TIMEOUT_S=10
 ### Enrolling the service's key (card 56)
 
 A store that holds the service signs with a key no binding holds yet, so what it signs reads `unverified` until the
-owner enrols that key. With the store running under the `ISIDIUM_SIGNING_SERVICE_*` variables:
+owner enrols that key.
+
+**Bump `STORE_COMMIT` before the first `isidium enrol-signer`.** The binding it writes carries `cosig`, and an older
+store image cannot read a `config.toml` that holds one: move `STORE_COMMIT` (*Gating a tenant's `main`*, above) and the
+store's image to a commit from card 56 on first.
+
+With the store running under the `ISIDIUM_SIGNING_SERVICE_*` variables:
 
 ```sh
 isidium enrol-signer
@@ -1576,6 +1583,10 @@ key's fingerprint, the tenant and the grant (`owner`). Enter the Aegis code ther
 into the policy chain, signed by the pinned file key and co-signed by the service's key itself (`cosig`, outside the
 chain content as `sig` is). A binding with only one of the two signatures grants nothing, and a tenant keeps the
 pin at one key: the service's key is bound beside it, not pinned. The realm's own bindings are unchanged.
+
+**What the code gate does and does not protect.** The co-signature proves possession of the bound key, not that an
+Aegis code was entered for this key. Anything that can read the file key and append to the policy chain can still enrol
+a key of its own, until a later card names the gated key (the owner's ruling, 2026-11-01).
 
 ```sh
 isidium enrol-signer --revoke <the service key fingerprint>

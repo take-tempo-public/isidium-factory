@@ -217,7 +217,8 @@ def binding_kind(entry: Mapping[str, Any], prev_h: str, tenant: str, pin_fpr: st
     an unchanged `h` is a different entry and counts for nothing. A co-signature by another key than the one in
     `ref.key_fpr` proves nothing about that key, so the fingerprint is compared as well as the signature verified.
     A pin-only entry that opens or extends a grant is `None`: the pin alone is exactly what anything that can read
-    the file key holds, and it may end a grant but never open one."""
+    the file key holds, and it may end a grant but never open one. A pin-only `until` earlier than the entry's own `at`
+    is `None` too: a revocation cannot reach back past the moment it was made."""
     h = entry.get("h")
     ref = entry.get("ref")
     sig = entry.get("sig")
@@ -234,7 +235,11 @@ def binding_kind(entry: Mapping[str, Any], prev_h: str, tenant: str, pin_fpr: st
         return None
     cosig = entry.get("cosig")
     if "until" in ref:
-        return "revoke" if cosig is None else None
+        # A revoke dated before its own `at` would end the grant in the past, so it is not one (card 76, R2; r-65 F5).
+        at = entry.get("at")
+        if cosig is not None or not isinstance(at, str) or str(ref["until"]) < at:
+            return None
+        return "revoke"
     if not isinstance(cosig, str):
         return None
     try:
