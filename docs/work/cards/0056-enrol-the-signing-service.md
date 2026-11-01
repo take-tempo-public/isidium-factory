@@ -2,14 +2,14 @@
 schema = 1
 id = 56
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an Aegis code"
 shape = "bdd"
 depends_on = [54]
 effort = "default"
-refs = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/core/chain.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-store/src/isidium/store/client/cli.py", "packages/isidium-store/src/isidium/store/server/signer.py"]
-surfaces = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/core/chain.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-store/src/isidium/store/server/identity.py", "packages/isidium-store/src/isidium/store/client/cli.py", "packages/isidium-store/src/isidium/store/server/signer.py", "packages/isidium-signer/src/isidium/signer/service.py", "packages/isidium-signer/src/isidium/signer/http.py", "deploy/README.md", "tests/store/test_enrol_signer.py", "tools/mutations/enrol-signer.toml"]
+refs = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/core/chain.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-store/src/isidium/store/client/cli.py", "packages/isidium-store/src/isidium/store/server/signer.py", "packages/isidium-store/src/isidium/store/core/grammar.py"]
+surfaces = ["packages/isidium-store/src/isidium/store/server/store.py", "packages/isidium-store/src/isidium/store/core/chain.py", "packages/isidium-store/src/isidium/store/server/api.py", "packages/isidium-store/src/isidium/store/server/identity.py", "packages/isidium-store/src/isidium/store/client/cli.py", "packages/isidium-store/src/isidium/store/server/signer.py", "packages/isidium-signer/src/isidium/signer/service.py", "packages/isidium-signer/src/isidium/signer/http.py", "deploy/README.md", "tests/store/test_enrol_signer.py", "tools/mutations/enrol-signer.toml", "packages/isidium-store/src/isidium/store/core/grammar.py"]
 priority = "P0"
 
 [narrative]
@@ -70,6 +70,11 @@ id = "C9"
 text = "every file this card changes passes ruff check, ruff format --check and mypy --strict, by path"
 because = "r-38 and r-39 each lost a whole run to a one-line style miss"
 
+[[guidance.constraints]]
+id = "C10"
+text = "core/grammar.py gains exactly one change: \"cosig\" after \"sig\" in ENTRY_KEY_ORDER; tests/store/test_enrol_signer.py proves an entry carrying cosig round-trips through emit and parse, and that entries without it still parse and emit unchanged"
+because = "r-64 parked (plan): ENTRY_KEY_ORDER is the whole allowlist, emit_entry drops any other key and the parsers refuse it; the owner ruled option 1 (add the surface) 2026-11-01"
+
 [[acceptance.scenarios]]
 id = "S1"
 kind = "test-marker"
@@ -118,5 +123,6 @@ history = [
   { seq = 2, at = "2026-10-28T05:06:12Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c2335b4ec4d4740e8418f41f129519f76dfdf8ab18b8063088614b1236612734", h = "sha256:fe69d68470cb59169c283765df228158517f7ea6507e1d0d3a6a6f0ed27173df", batch = 74 },
   { seq = 3, at = "2026-11-01T00:11:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status"], build = "sha256:e58388d240030d43842d10b611d2f549663013abf5e5d8ecd0244c3c6481ac32", h = "sha256:86bbdfc5875e18ccf530c8f74d0813102605e73bb6c8d859eca0589dfb547005", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:IddOhuGL5XFNq6f1eJUSo7TsBPX7wTnSqsJjA8JlQf1qHMMvqT898QCucOzOq7aAL8e41WX8/yOmd3cHghtgDg==" },
   { seq = 4, at = "2026-11-01T00:11:55Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e58388d240030d43842d10b611d2f549663013abf5e5d8ecd0244c3c6481ac32", h = "sha256:32c9b7e4ed60db918a18f8d0c76eed93befe290c8d923d2de5ad0e65aabdebc7", batch = 84 },
+  { seq = 5, at = "2026-11-01T02:59:30Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "refs", "status", "surfaces"], build = "sha256:2986d29428f829d055a27810ac937c6d065c65b431aa02dfb2327b604cee7bf0", h = "sha256:36dbe77ed60db22a9264f5b5f15634bd77c37006ce7e0d1a2679d0126351a247", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:G9mRs6Q40gbqwcvSbyVG91uQ5GQXKr5TUWMWXVgNp9dwhWlOQ4YWTa+Pi/pR5y63qSkpFZbllvdzfqjQSVcwDw==" },
 ]
 ```
