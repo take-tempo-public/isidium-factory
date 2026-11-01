@@ -2,7 +2,7 @@
 schema = 1
 id = 56
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The owner enrols the signing service's key with a binding signed twice: by the pinned key, and by the service after an Aegis code"
 shape = "bdd"
@@ -124,5 +124,6 @@ history = [
   { seq = 3, at = "2026-11-01T00:11:21Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status"], build = "sha256:e58388d240030d43842d10b611d2f549663013abf5e5d8ecd0244c3c6481ac32", h = "sha256:86bbdfc5875e18ccf530c8f74d0813102605e73bb6c8d859eca0589dfb547005", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:IddOhuGL5XFNq6f1eJUSo7TsBPX7wTnSqsJjA8JlQf1qHMMvqT898QCucOzOq7aAL8e41WX8/yOmd3cHghtgDg==" },
   { seq = 4, at = "2026-11-01T00:11:55Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:e58388d240030d43842d10b611d2f549663013abf5e5d8ecd0244c3c6481ac32", h = "sha256:32c9b7e4ed60db918a18f8d0c76eed93befe290c8d923d2de5ad0e65aabdebc7", batch = 84 },
   { seq = 5, at = "2026-11-01T02:59:30Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "refs", "status", "surfaces"], build = "sha256:2986d29428f829d055a27810ac937c6d065c65b431aa02dfb2327b604cee7bf0", h = "sha256:36dbe77ed60db22a9264f5b5f15634bd77c37006ce7e0d1a2679d0126351a247", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:G9mRs6Q40gbqwcvSbyVG91uQ5GQXKr5TUWMWXVgNp9dwhWlOQ4YWTa+Pi/pR5y63qSkpFZbllvdzfqjQSVcwDw==" },
+  { seq = 6, at = "2026-11-01T03:00:00Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:2986d29428f829d055a27810ac937c6d065c65b431aa02dfb2327b604cee7bf0", h = "sha256:ef684b0f860aca1365428cfa9a9fb8553e29ebf82e124c2da40b37bdef6c05af", batch = 85 },
 ]
 ```
