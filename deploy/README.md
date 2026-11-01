@@ -1536,7 +1536,7 @@ change takes effect at the next restart. And a tenant declares its backends in i
 `signer.backends = ["software_key_ack"]`, and a store holding the service refuses every default-signed act
 (`signer.backend-unavailable`) until the tenant declares `["remote-totp", "software_key_ack"]`. That config-policy write
 is signed by whatever the store's default signer is, and once the service is configured that is the service's key. No
-binding holds that key until card 56, so the very write that declares `remote-totp` would read unverified. So make it
+binding holds that key until the owner enrols it (below), so the very write that declares `remote-totp` would read unverified. So make it
 **before** the service is configured, while the file key is the only signer and the pin signs it; then set the
 `ISIDIUM_SIGNING_SERVICE_*` variables and restart. For the same reason a tenant is initialized
 (`isidium init`) with the file key alone, before the service is configured: the file key is the pin.
@@ -1548,6 +1548,29 @@ ISIDIUM_SIGNING_SERVICE_PORT=8443
 ISIDIUM_SIGNING_SERVICE_FPR=<the service key fingerprint>
 ISIDIUM_SIGNING_SERVICE_TIMEOUT_S=30
 ```
+
+### Enrolling the service's key (card 56)
+
+A store that holds the service signs with a key no binding holds yet, so what it signs reads `unverified` until the
+owner enrols that key. With the store running under the `ISIDIUM_SIGNING_SERVICE_*` variables:
+
+```sh
+isidium enrol-signer
+```
+
+The store asks the service for its key's fingerprint (`POST /key`) and refuses `signer.wrong-key`, submitting nothing,
+if it is not `ISIDIUM_SIGNING_SERVICE_FPR`. The request then appears on the phone page as a **key enrolment**: the
+key's fingerprint, the tenant and the grant (`owner`). Enter the Aegis code there. The store writes one `binding` entry
+into the policy chain, signed by the pinned file key and co-signed by the service's key itself (`cosig`, outside the
+chain content as `sig` is). A binding with only one of the two signatures grants nothing, and a tenant keeps the
+pin at one key: the service's key is bound beside it, not pinned. The realm's own bindings are unchanged.
+
+```sh
+isidium enrol-signer --revoke <the service key fingerprint>
+```
+
+writes a binding with `until` = now for that key, signed by the pinned key alone and needing no code. Signatures made
+before it still verify; later ones read `unverified`. The store must still hold the file key (`--signer`) for either.
 
 ## What is not here yet
 

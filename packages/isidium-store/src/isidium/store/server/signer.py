@@ -22,7 +22,7 @@ import time  # module scope: `RemoteTotp`'s defaults (`time.sleep`, `time.monoto
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -121,6 +121,14 @@ class RemoteTotpContract(Protocol):
     def poll(self, request_id: str) -> str | None: ...
 
 
+@runtime_checkable
+class KeyedService(Protocol):
+    """A service that can announce the key it signs with (card 56, R1). Kept apart from `RemoteTotpContract` so a
+    stand-in that only submits and polls still satisfies the contract."""
+
+    def announce_key(self) -> str: ...
+
+
 class RemoteTotp:
     def __init__(
         self,
@@ -171,6 +179,17 @@ class RemoteTotp:
             self._sleep(min(self.poll_interval_ms / 1000, left))
         raise Refusal("signer.timeout", "", f"remote-totp request {rid} not approved within {self.timeout_s}s")
 
+    def service_key(self) -> str:
+        """The key fingerprint the service announces, checked against the configured one before anything is
+        submitted (card 56, R1): an enrolment binds the key the service holds, so a service that announces another
+        key than `--signing-service-fpr` is refused here and no request reaches its page."""
+        if not isinstance(self.service, KeyedService):
+            raise Refusal("signer.backend-unavailable", "", "this service cannot announce its key")
+        fpr = self.service.announce_key()
+        if fpr != self.key_fpr:
+            raise Refusal("signer.wrong-key", "", f"the service announces key {fpr}, not the configured {self.key_fpr}")
+        return fpr
+
     def _verified(self, sig: str, tenant: str, value: str) -> str:
         """A signature the service produced is checked before it is used (R6): it parses, it is by the configured
         service key (`--signing-service-fpr`), and it verifies over `tenant ‖ value`. A failure is refused in the
@@ -192,11 +211,12 @@ class HttpsService:
     """`RemoteTotpContract` over HTTPS: one connection per call, the service's certificate verified against `ca`
     (hostname checking on, TLS 1.3 floor) and this client's certificate presented. Every argument is required.
 
-    The wire is `isidium.signer.http.HttpsService`'s: `POST /submit {tenant, value, at_epoch, display, time_skew_s}`
-    answers `{request_id}`; `POST /poll {request_id}` answers `{sig}`, `null` while pending. A non-200 carrying a
-    `rule` is rebuilt as that `Refusal`; anything else is `signer.malformed`. `timeout_s` is http.client's
-    per-socket-operation timeout (connect, each send, each receive), not a whole-call deadline, and not the owner's
-    whole wait: that is `RemoteTotp`'s."""
+    The wire is `isidium.signer.http.HttpsService`'s: `POST /key {}` answers `{key_fpr}`;
+    `POST /submit {tenant, value, at_epoch, display, time_skew_s}` answers `{request_id}`;
+    `POST /poll {request_id}` answers `{sig}`, `null` while pending. A non-200 carrying a `rule` is rebuilt as that
+    `Refusal`; anything else is `signer.malformed`. `timeout_s` is http.client's per-socket-operation timeout
+    (connect, each send, each receive), not a whole-call deadline, and not the owner's whole wait: that is
+    `RemoteTotp`'s."""
 
     def __init__(self, host: str, port: int, ca: Path, cert: Path, key: Path, timeout_s: float) -> None:
         import ssl  # C-13: only a store given a signing service pays for `ssl`, `http.client` and `json`
@@ -238,6 +258,12 @@ class HttpsService:
             raise Refusal("signer.malformed", "", "the service's answer is not an object")
         return payload
 
+    def announce_key(self) -> str:
+        payload = self._post("/key", {})
+        if not isinstance(payload.get("key_fpr"), str):
+            raise Refusal("signer.malformed", "", "the service's answer to /key carries no key_fpr")
+        return str(payload["key_fpr"])
+
     def submit(self, tenant: str, value: str, at_epoch: int, display: Display, time_skew_s: int | None = None) -> str:
         payload = self._post(
             "/submit",
@@ -274,6 +300,7 @@ class DevStubService:
         decline: bool = False,
     ) -> None:
         self.key, self.clock, self.time_skew_s = key, clock or (lambda: int(time.time())), time_skew_s
+        self.key_public_fpr = key.public.key_fpr
         self.approve_after, self.decline = approve_after, decline
         self.requests: dict[str, tuple[str, str, Display, int]] = {}
         self.received: list[Display] = []
@@ -284,6 +311,9 @@ class DevStubService:
         self.requests[rid] = (tenant, value, display, 0)
         self.received.append(display)
         return rid
+
+    def announce_key(self) -> str:
+        return self.key_public_fpr
 
     def poll(self, request_id: str) -> str | None:
         tenant, value, display, polls = self.requests[request_id]

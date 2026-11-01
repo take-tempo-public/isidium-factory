@@ -312,6 +312,14 @@ class Api:
             journal=_str(args, "journal"),
         )
 
+    # ---- enrol-signer (card 56) -------------------------------------------------------------------------------------
+
+    def enrol_signer(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
+        """The owner enrols the signing service's key, or with `revoke` ends that key's grant. Runs under `call`, so the
+        owner's wait for the code is bounded from the call's first line, as a ratify's is."""
+        r = self.store.enrol_signer(caller, _str(args, "revoke"))
+        return {"entry": r.entry, "commit": r.commit, "journal_seq": r.journal_seq, "landed": r.landed}
+
     # ---- init (04 §3) ---------------------------------------------------------------------------------------------
 
     def init(self, caller: Caller, args: Mapping[str, Any]) -> dict[str, Any]:
@@ -346,6 +354,7 @@ class Api:
         "repair",
         "land",
         "dispatch",
+        "enrol_signer",
     )
 
     # Nine of the ten verbs cross this surface. `accept` never does [L3, Q-W2 ruled 2026-09-09]: it runs the card's

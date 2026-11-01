@@ -1,4 +1,4 @@
-"""The signing service's two HTTPS halves: the API listener (`submit`, `poll`) and the client that speaks to it.
+"""The signing service's two HTTPS halves: the API listener (`submit`, `poll`, `key`) and the client that speaks to it.
 
 **The listener** terminates TLS 1.3 itself and requires a client certificate the service's CA issued, as the store's
 `tls_context` does (not imported: C4). The handshake runs in the per-connection thread, so a slow peer stalls its own
@@ -6,8 +6,9 @@ thread and not the accept loop, and a peer whose handshake fails is closed witho
 that passes the handshake is a caller only if its certificate's subject (RFC 4514) is named in the settings; that is
 checked once the request line and headers are parsed and before any body byte is read, and an unnamed peer gets a
 403 `signer.unknown-caller` and nothing reaches the service. The stdlib's `http.server` owns the HTTP grammar; one
-request per connection (`Connection: close`). `approve` and `decline` are not on this listener: the code is
-entered on the service's own page (`page.py`, which asks no client certificate), never over this API.
+request per connection (`Connection: close`). `key` announces the fingerprint of the key the service signs with
+(card 56: the owner's enrolment binds it). `approve` and `decline` are not on this listener: the code is entered on
+the service's own page (`page.py`, which asks no client certificate), never over this API.
 
 **The client**, `HttpsService`, implements `RemoteTotpContract` against it, so `RemoteTotp` signs through a running
 service. A refusal the service sent is rebuilt as the typed `Refusal` it was raised as.
@@ -90,7 +91,7 @@ class _Handler(BaseHTTPRequestHandler):
         return True
 
     def do_POST(self) -> None:
-        if self.path not in ("/submit", "/poll"):
+        if self.path not in ("/submit", "/poll", "/key"):
             self._refuse(404, "signer.not-found")
             return
         try:
@@ -104,7 +105,10 @@ class _Handler(BaseHTTPRequestHandler):
         self._consumed = True
         try:
             payload = json.loads(body)
-            result = self._submit(payload) if self.path == "/submit" else self._poll(payload)
+            if self.path == "/key":
+                result = {"key_fpr": self._listener.service.key_fpr}
+            else:
+                result = self._submit(payload) if self.path == "/submit" else self._poll(payload)
         except (ValueError, KeyError, TypeError):
             self._refuse(400, "signer.malformed", "the body is not the request this endpoint takes")
             return
@@ -259,6 +263,9 @@ class HttpsService:
             },
         )
         return str(payload["request_id"])
+
+    def announce_key(self) -> str:
+        return str(self._post("/key", {})["key_fpr"])
 
     def poll(self, request_id: str) -> str | None:
         sig = self._post("/poll", {"request_id": request_id})["sig"]

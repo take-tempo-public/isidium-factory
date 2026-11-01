@@ -26,7 +26,10 @@ from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from .canon import canonical_json, sha256_hex
 from .refusal import Refusal
 
-CHAIN_EXCLUDED: Final[tuple[str, ...]] = ("h", "sig", "batch")  # 5.5: c = every key except h, sig, batch
+# 5.5: c = every key except h, sig, batch, cosig. `cosig` is a binding's second signature, by the bound key itself
+# over the same `tenant \n h` as `sig`: made after `h` exists, so like `sig` it cannot be inside what `h` hashes
+# (card 56, C3).
+CHAIN_EXCLUDED: Final[tuple[str, ...]] = ("h", "sig", "batch", "cosig")
 SIG_ALGS: Final[tuple[str, ...]] = ("ed25519", "ecdsa-p256")  # 5.6, closed
 DocType = Literal["card", "inbox", "policy", "page", "journal"]
 # 03b §3 / 5.5: every non-card genesis carries the document type's OWN registry schema version; the registry loader
@@ -202,18 +205,87 @@ def verify_sig(sig: str, tenant: str, value: str, keys: KeyRing | None = None) -
     return key.verify(sig_bytes(tenant, value), raw)
 
 
-def binding_holds(policy_entries: Sequence[Mapping[str, Any]], key_fpr: str, grant: str, at: str) -> bool:
-    """Membership, not validity (1.12): look the key up at (key_fpr, at) in the policy chain's `binding` entries —
-    `act = "binding"`, the record in `ref`, `until` absent while open. A past act is judged against the binding that
-    held then: the latest binding record for that key and grant whose `from` ≤ `at`, and `at` < its `until`."""
+BindingKind = Literal["grant", "revoke"]
+BindingKindOf = Callable[[Mapping[str, Any], str], BindingKind | None]  # (entry, previous entry's h) -> its kind
+
+
+def binding_kind(entry: Mapping[str, Any], prev_h: str, tenant: str, pin_fpr: str) -> BindingKind | None:
+    """What an owner-authored `binding` entry is worth, by its signatures (card 56, R3; A1): `grant` when the pinned
+    key signed it and the bound key co-signed it, `revoke` when the pinned key alone signed an `until`, else `None`.
+
+    Both signatures are over `tenant \\n h`, so `h` is first recomputed from the entry's content: a `ref` edited under
+    an unchanged `h` is a different entry and counts for nothing. A co-signature by another key than the one in
+    `ref.key_fpr` proves nothing about that key, so the fingerprint is compared as well as the signature verified.
+    A pin-only entry that opens or extends a grant is `None`: the pin alone is exactly what anything that can read
+    the file key holds, and it may end a grant but never open one."""
+    h = entry.get("h")
+    ref = entry.get("ref")
+    sig = entry.get("sig")
+    if not isinstance(h, str) or not isinstance(ref, Mapping) or not isinstance(sig, str):
+        return None
+    if link(prev_h, entry) != h:
+        return None
+    try:
+        if parse_sig(sig)[1] != pin_fpr:
+            return None
+    except Refusal:
+        return None
+    if not verify_sig(sig, tenant, h):
+        return None
+    cosig = entry.get("cosig")
+    if "until" in ref:
+        return "revoke" if cosig is None else None
+    if not isinstance(cosig, str):
+        return None
+    try:
+        cosig_fpr = parse_sig(cosig)[1]
+    except Refusal:
+        return None
+    if cosig_fpr != ref.get("key_fpr"):
+        return None
+    if not verify_sig(cosig, tenant, h):
+        return None
+    return "grant"
+
+
+def binding_holds(
+    policy_entries: Sequence[Mapping[str, Any]],
+    key_fpr: str,
+    grant: str,
+    at: str,
+    kind_of: BindingKindOf | None = None,
+) -> bool:
+    """Membership (1.12): look the key up at (key_fpr, at) in the policy chain's `binding` entries — `act = "binding"`,
+    the record in `ref`, `until` absent while open. A past act is judged against the binding that held then: the
+    latest binding record for that key and grant whose `from` ≤ `at`, and `at` < its `until`.
+
+    **A binding counts only if its signatures say so** (card 56, C1). `kind_of(entry, previous_h)` classifies each
+    binding entry — `grant`, `revoke` or `None` — and a `None` entry is skipped as if it were not in the chain. A
+    `grant` is the record above. A `revoke` ends the held grant from its `until` on and never opens one, which is
+    what lets the pinned key alone revoke (R5) without being able to enrol (A1). With `kind_of=None` every binding is
+    a `grant`: the realm's, and every caller that has no signatures to check, keep today's membership-only answer.
+    Cost: the classifier is the caller's (it verifies two signatures per owner-authored binding, and memoises them);
+    this walk adds one pass over the chain per call, as before."""
     held: Mapping[str, Any] | None = None
-    for e in policy_entries:
+    ended = False
+    prev_h = ""
+    for i, e in enumerate(policy_entries):
+        before_h, prev_h = prev_h, str(e.get("h", ""))
         if e.get("act") != "binding":
             continue
         b = e.get("ref")
         if not isinstance(b, Mapping) or b.get("key_fpr") != key_fpr or b.get("grant") != grant:
             continue
+        kind: BindingKind | None = "grant"
+        if kind_of is not None:
+            kind = kind_of(e, before_h) if i > 0 else None  # a binding at index 0 has no previous entry to link from
+        if kind is None:
+            continue
+        if kind == "revoke":
+            if held is not None and at >= str(b.get("until", "")):
+                ended = True
+            continue
         if str(b.get("from", "")) > at:
             continue
-        held = b
-    return held is not None and ("until" not in held or at < str(held["until"]))
+        held, ended = b, False
+    return held is not None and not ended and ("until" not in held or at < str(held["until"]))
