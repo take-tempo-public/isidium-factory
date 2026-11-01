@@ -2927,14 +2927,14 @@
       "cf1cb2e20cfce86871efa8a8f3b74356dad1a8459678607ea8bf0d21150781ca"
     ],
     "overflow": 0,
-    "run_id": "r-66"
+    "run_id": "maintenance"
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:01ad04c507413ce4506ea8e378717225c2f041ff08c48992b1872d0654d3dbb4",
-    "seq": 483
+    "h": "sha256:f2951fea26aa32d72dbfbe0d3035fd2b19b52260a16e09d52171ac96b5820e3a",
+    "seq": 484
   },
-  "landed_at": "2026-11-01T04:41:06Z",
-  "ledger_cursor": "5ec3f1e1fb590eb33b3eb6e6e54c2fdc168a7313",
+  "landed_at": "2026-11-01T05:40:13Z",
+  "ledger_cursor": "0a30c2e176dc5fba68a4d9e3bf2e63bab95aeb30",
   "schema": 2
 }
