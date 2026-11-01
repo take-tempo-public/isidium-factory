@@ -2754,9 +2754,9 @@
       "closures": [],
       "execution": null,
       "fingerprint": {
-        "commit": "171393e341ca7f40bfcd4dbce3221e332c5b746f",
+        "commit": "5d772a2da35fcbae2c241159524374f7484e52dc",
         "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ratified_seq": 2,
+        "ratified_seq": 4,
         "refs_resolved": [
           {
             "blob": "686a7a0ee805a8e71c8261c7883b050aeb1f60d9",
@@ -2767,15 +2767,15 @@
             "path": "tests/store/test_enrol_signer.py"
           },
           {
-            "blob": "50989e913e21bb7f7f1b1d39bc3d68209120dde8",
+            "blob": "64322b03bb2d89dc871b766218d8a6820ea85be8",
             "path": "deploy/README.md"
           }
         ],
         "validator_version": "v3"
       },
       "history_head": {
-        "h": "sha256:14f38b884da3f7ef33653f178a9495bc204cf4a15bc163354975b1d40591bf4b",
-        "seq": 3
+        "h": "sha256:3ee95c93da6b055d8430d7150bfbffb44edac41d89512499c62010d662d0974d",
+        "seq": 4
       },
       "runs": []
     },
@@ -2961,10 +2961,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:9514dd1d2b20604e65489fa54f423331153759d807f30cb69bfab52356f76439",
-    "seq": 487
+    "h": "sha256:9c7fd9a0a4d5fca371e44161455f233e157e92d808e54c1553162eba0f461cb1",
+    "seq": 489
   },
-  "landed_at": "2026-11-01T05:44:47Z",
-  "ledger_cursor": "251c9016095cf9508b595a8033c3969decc7a516",
+  "landed_at": "2026-11-01T05:45:13Z",
+  "ledger_cursor": "5d772a2da35fcbae2c241159524374f7484e52dc",
   "schema": 2
 }
