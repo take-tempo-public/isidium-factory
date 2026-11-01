@@ -2,7 +2,7 @@
 schema = 1
 id = 76
 kind = "story"
-status = "ratified"
+status = "draft"
 source = "session"
 title = "Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and the README says what the code gate does and does not protect"
 shape = "bdd"
@@ -49,6 +49,16 @@ because = "card 61's rule"
 id = "C9"
 text = "every file this card changes passes ruff check, ruff format --check and mypy --strict, by path"
 because = "r-38 and r-39 each lost a whole run to a one-line style miss"
+
+[[guidance.constraints]]
+id = "C10"
+text = "S2's legitimate pin-only revoke control writes until equal to the entry's own at: through the store's own path (enrol() then enrol(revoke=fpr)) or a hand-built _binding_entry whose ref until is the at it is given; it is never built from forge(..., until=st.now()), because the test clock advances 7 s per call (tests/store/conftest.py:41-43) and forge reads it again for its own at"
+because = "r-67 parked at the plan gate (round 2, judge): the control's until fell 7 s before its at, so the new guard rejected a correct revoke and S2 was red on correct code"
+
+[[guidance.constraints]]
+id = "C11"
+text = "every fact the plan cites about the worktree (a line number, a line length, how many times a helper reads the clock) is measured in the worktree and the measurement named in the plan"
+because = "r-67 round 1 assumed the overlong README line was in the enrolment section (it is line 1550, in 'The order matters'); round 2 assumed forge reads the clock once"
 
 [[acceptance.scenarios]]
 id = "S1"
@@ -98,5 +108,6 @@ history = [
   { seq = 2, at = "2026-11-01T04:37:33Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:89db35ef0dfa8f00c291f52cc1c8aad3ab88475ac6b8faa04e8ce35436d5920a", h = "sha256:957c85d5324ccc4fa9ffa3d838855281949be8d7918cf43143a4d93a7cab26e0", batch = 87 },
   { seq = 3, at = "2026-11-01T05:44:47Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["status"], build = "sha256:89db35ef0dfa8f00c291f52cc1c8aad3ab88475ac6b8faa04e8ce35436d5920a", h = "sha256:14f38b884da3f7ef33653f178a9495bc204cf4a15bc163354975b1d40591bf4b" },
   { seq = 4, at = "2026-11-01T05:45:13Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:89db35ef0dfa8f00c291f52cc1c8aad3ab88475ac6b8faa04e8ce35436d5920a", h = "sha256:3ee95c93da6b055d8430d7150bfbffb44edac41d89512499c62010d662d0974d", batch = 88 },
+  { seq = 5, at = "2026-11-01T06:51:41Z", by = "amodal1@users.noreply.github.com", act = "demoted", fields = ["guidance", "status"], build = "sha256:a7c044d34c2026c2d458adad37932f16e7078578c288ad771c29f2a1b7105674", h = "sha256:80c40da0dbf597bf187e17d55b44bc7704dc8978985810b83ea09ad028f702c1", sig = "ed25519:5a6c85e20ab2a6eecc5d6df4f873f9af746b98a33d923c3302a900c365984ae8:yafmiKcDZbOqo9shev/FINlIPBQ2jBCJ4r1DdodT9K4xSuGDgfsoQFXTasvU+S4LbkFcZhbdY7UDNrrcGXcBBg==" },
 ]
 ```
