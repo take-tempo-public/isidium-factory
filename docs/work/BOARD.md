@@ -85,6 +85,7 @@ none
 - **77** · A policy chain names the service key the code gate protects, owner grants count only for it, and the realm carve-out is… · draft · depends_on 56 · (derived)
 - **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · draft · depends_on 56 · (derived)
 - **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · draft · depends_on 56 · (derived)
+- **80** · The signing-service follow-up checks bite: the one-call-bound checker sees wrapped lines, the README lists the judging-… · draft · (derived)
 
 ## Blocked
 
