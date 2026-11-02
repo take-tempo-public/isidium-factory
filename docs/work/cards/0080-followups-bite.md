@@ -2,7 +2,7 @@
 schema = 1
 id = 80
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The signing-service follow-up checks bite: the one-call-bound checker sees wrapped lines, the README lists the judging-ref write, S5 fails on the base README, init respects identity mode, and the revoke guard is described as it is"
 shape = "bdd"
@@ -100,5 +100,6 @@ r-66 (card 75, PR #124) review F2-F5 left open by the owner's ruling to merge as
 ```toml
 history = [
   { seq = 1, at = "2026-11-02T03:14:54Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:3d0c6b2d9e430d935357b0cf969b6018b68170a89b6e0f8ad69bcf569bd27747", h = "sha256:2297b64dd905c205412c32c48aff6a348a7d7b4a0e8b89defe25d14a974c0099" },
+  { seq = 2, at = "2026-11-02T03:19:00Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:3d0c6b2d9e430d935357b0cf969b6018b68170a89b6e0f8ad69bcf569bd27747", h = "sha256:870fbfa6237263eee1bd02dbde4dd2f0e07ccc7f07dc9de0a220ab1f7306e6cf", batch = 90 },
 ]
 ```

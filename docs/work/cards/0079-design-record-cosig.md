@@ -2,7 +2,7 @@
 schema = 1
 id = 79
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only end a grant"
 shape = "bdd"
@@ -57,5 +57,6 @@ r-65 (card 56) review suggestion 3: the code comment at chain.py:29-32 is the on
 ```toml
 history = [
   { seq = 1, at = "2026-11-01T04:30:48Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:23a12152ec38d187b92d1759424fde70272523c345f38f623533bf0cd0703529", h = "sha256:0f8a0895a6edd7c215326b8a6732dfc06dcb4759026718ee5d90ee611f51fe8b" },
+  { seq = 2, at = "2026-11-02T03:19:00Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:23a12152ec38d187b92d1759424fde70272523c345f38f623533bf0cd0703529", h = "sha256:53dae9b9ace08c92079ad285145634b68900c62197598b606e743b1917b1135a", batch = 90 },
 ]
 ```

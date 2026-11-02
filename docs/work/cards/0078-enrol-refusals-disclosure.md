@@ -2,7 +2,7 @@
 schema = 1
 id = 78
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503"
 shape = "bdd"
@@ -57,5 +57,6 @@ r-65 (card 56) review F4, owner ruling 2026-11-01: schedule a follow-up card.
 ```toml
 history = [
   { seq = 1, at = "2026-11-01T04:30:41Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:c1bd4d6efa33c3bbc509fc65561ff221e6577347d6dc1549ab3b91b41ebbb2e8", h = "sha256:a56ef9059f470ee921b6c5a47a0c86ec7dfac8d2b3357b3bd53823971347becb" },
+  { seq = 2, at = "2026-11-02T03:19:00Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:c1bd4d6efa33c3bbc509fc65561ff221e6577347d6dc1549ab3b91b41ebbb2e8", h = "sha256:696c80e6bf388de3401c54f8087bb0b08e020cd1ac0c850c11501a41ede802e4", batch = 90 },
 ]
 ```
