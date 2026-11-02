@@ -1,0 +1,32 @@
+# The enrolment hardening's mutations (card 76) -- R1's pinned-key signature check (M1) and R2's backdated pin-only revoke (M2).
+#
+# Kept because a mutation set is evidence: it says which properties were proven and by which test. Run one at a time,
+# in the FOREGROUND, by the host's mutation step -- the builder does not run it. `tools/mutate.py` runs the whole suite
+# and takes no test path, on purpose, so a kill counts for this card only when the named test in
+# tests/store/test_enrol_hardening.py is in the failure list it prints (C4):
+#
+#   python tools/mutate.py tools/mutations/enrol-hardening.toml --show M1     # the diff that would run; runs nothing
+#   python tools/mutate.py tools/mutations/enrol-hardening.toml M1
+#
+# What each kill proves, and the test that kills it:
+#   M1  R1  the pinned key's signature is not verified, only its label read -> test_a_binding_with_a_bad_pin_signature_grants_nothing
+#   M2  R2  a pin-only revoke dated before its own `at` is taken            -> test_a_backdated_pin_only_revoke_is_not_taken
+
+
+[[mutation]]
+id = "M1"
+label = "the pinned key's signature is not verified -- a binding labelled with the pin's fingerprint is believed"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = """    if not verify_sig(sig, tenant, h):
+        return None
+"""
+replace = """    if False:
+        return None
+"""
+
+[[mutation]]
+id = "M2"
+label = "a pin-only revoke dated before its own at is taken -- it ends the grant in the past"
+file = "packages/isidium-store/src/isidium/store/core/chain.py"
+find = 'str(ref["until"]) < at'
+replace = "False"
