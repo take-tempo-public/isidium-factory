@@ -82,7 +82,7 @@ none
 - **74** · No tracked text file holds CRLF: a rule, a CI check, and the one-time normalisation · draft · (derived)
 - **75** · The signing service's remaining gaps: init pins the file key, the timeout leaves a post-signature margin, the entrypoin… · closed · software-grade · (derived)
 - **76** · Enrolment hardening: the pin signature is guarded by a test and a mutation, a pin-only revoke cannot be backdated, and … · closed · software-grade · depends_on 56 · (derived)
-- **77** · A policy entry names the service key the code gate protects, owner grants count only for it, and the realm carve-out ne… · draft · depends_on 56 · (derived)
+- **77** · A policy entry names the service key the code gate protects, owner grants count only for it, and the realm carve-out ne… · ready · software-grade · depends_on 56 · (derived)
 - **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · ready · software-grade · depends_on 56 · (derived)
 - **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · ready · software-grade · depends_on 56 · (derived)
 - **80** · The signing-service follow-up checks bite: the one-call-bound checker sees wrapped lines, the README lists the judging-… · ready · software-grade · (derived)

@@ -2823,10 +2823,41 @@
     "0077": {
       "closures": [],
       "execution": null,
-      "fingerprint": null,
+      "fingerprint": {
+        "commit": "0cd49a8003ca45b3455b2017140122b59e90dd78",
+        "ext_schema_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ratified_seq": 3,
+        "refs_resolved": [
+          {
+            "blob": "e66bbd03865081926f9f7fa0f3ea3799d28b3edb",
+            "path": "packages/isidium-store/src/isidium/store/core/chain.py"
+          },
+          {
+            "blob": "c101e7ce8462f2a8053e6e9ad024f8d749acf917",
+            "path": "packages/isidium-store/src/isidium/store/server/store.py"
+          },
+          {
+            "blob": "ed39768d4f0cca6ea916319c53c88766669ea748",
+            "path": "packages/isidium-store/src/isidium/store/core/derive.py"
+          },
+          {
+            "blob": "792645111ce5bf87a681d159c62445780bc151b8",
+            "path": "packages/isidium-store/src/isidium/store/registry/config.py"
+          },
+          {
+            "blob": "26fc28d7e36844eab1980b750e36252d885b734f",
+            "path": "tests/store/test_remote_signer.py"
+          },
+          {
+            "blob": "a96ef2f3d9475b083dc34ff71e893723ea8fe8e4",
+            "path": "tests/store/test_enrol_signer.py"
+          }
+        ],
+        "validator_version": "v3"
+      },
       "history_head": {
-        "h": "sha256:4a878544332c866d156df726121c28259174eedc40d8f5b1f5481bc62b63451b",
-        "seq": 2
+        "h": "sha256:f63ab32cdad9ca31df735ba6c98ee4c14c8af7e3a50b7e882159d36c8f5140cb",
+        "seq": 3
       },
       "runs": []
     },
@@ -3079,10 +3110,10 @@
   },
   "integrity": {},
   "journal_head": {
-    "h": "sha256:356f81d81b8f79e3f7563dbe5251d2535bb589b7f528de69bf0b750b6300f9f4",
-    "seq": 506
+    "h": "sha256:9f0d537dfa7f6ce5b8328a13bc90876f0887da7ee9dc9f30eef09a39f6eb978f",
+    "seq": 508
   },
-  "landed_at": "2026-11-03T14:51:20Z",
-  "ledger_cursor": "0c1c6372c8d96eee7d15f95e6ac64c746c140f43",
+  "landed_at": "2026-11-03T15:29:42Z",
+  "ledger_cursor": "0cd49a8003ca45b3455b2017140122b59e90dd78",
   "schema": 2
 }
