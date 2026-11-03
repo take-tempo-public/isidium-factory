@@ -2,7 +2,7 @@
 schema = 1
 id = 77
 kind = "story"
-status = "draft"
+status = "ratified"
 source = "session"
 title = "A policy entry names the service key the code gate protects, owner grants count only for it, and the realm carve-out needs identity mode"
 shape = "bdd"
@@ -118,5 +118,6 @@ r-65 (card 56) review F1 and A1. Owner rulings 2026-11-03: Part 1 the fingerprin
 history = [
   { seq = 1, at = "2026-11-01T04:30:34Z", by = "amodal1@users.noreply.github.com", act = "created", fields = ["acceptance", "depends_on", "effort", "guidance", "id", "kind", "narrative", "priority", "refs", "rules", "schema", "scope", "shape", "source", "status", "surfaces", "title"], build = "sha256:6e3ec12d04fcdbed59a78a03c8157fd386de16255872b999bfbf8cb34f337cee", h = "sha256:2c7c90331571c2370318c5136b9383b992f5ead5f33c1b7ca0e8e348afd72d6d" },
   { seq = 2, at = "2026-11-03T14:50:40Z", by = "amodal1@users.noreply.github.com", act = "amended", fields = ["acceptance", "guidance", "refs", "rules", "scope", "surfaces", "title"], build = "sha256:bb920690693aa2a6d29f7a79c1938cdec2413dd3ccfb655d084dec9fad4f09bc", h = "sha256:4a878544332c866d156df726121c28259174eedc40d8f5b1f5481bc62b63451b" },
+  { seq = 3, at = "2026-11-03T15:29:42Z", by = "amodal1@users.noreply.github.com", act = "ratified", fields = ["status"], build = "sha256:bb920690693aa2a6d29f7a79c1938cdec2413dd3ccfb655d084dec9fad4f09bc", h = "sha256:f63ab32cdad9ca31df735ba6c98ee4c14c8af7e3a50b7e882159d36c8f5140cb", batch = 91 },
 ]
 ```
