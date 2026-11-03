@@ -86,6 +86,7 @@ none
 - **78** · The enrolment refusals have disclosure rows, so a caller's own bad argument is not reported as a retryable 503 · ready · software-grade · depends_on 56 · (derived)
 - **79** · The design record describes cosig, the grant and revoke binding kinds, and the rule that a pin-only binding can only en… · ready · software-grade · depends_on 56 · (derived)
 - **80** · The signing-service follow-up checks bite: the one-call-bound checker sees wrapped lines, the README lists the judging-… · ready · software-grade · (derived)
+- **81** · Once the service key is gated the file key stops being an owner key for later entries, and a recovery path exists that … · draft · blocked_by[77] · depends_on 77 · (derived)
 
 ## Blocked
 
